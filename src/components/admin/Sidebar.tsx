@@ -12,6 +12,7 @@ import {
   LogOut,
   X,
   ShieldCheck,
+  AlertTriangle,
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
@@ -99,6 +100,7 @@ export default function Sidebar({ isMobileOpen = false, onClose }: SidebarProps)
   const { profile, signOut } = useAuth()
   const navigate = useNavigate()
   const [reviewBadge, setReviewBadge] = useState<number>(0)
+  const [isSignOutOpen, setIsSignOutOpen] = useState(false)
 
   useEffect(() => {
     async function loadReviewCount() {
@@ -115,7 +117,18 @@ export default function Sidebar({ isMobileOpen = false, onClose }: SidebarProps)
     loadReviewCount()
   }, [])
 
+  // Warn before accidental tab close / refresh
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [])
+
   const handleSignOut = async () => {
+    setIsSignOutOpen(false)
     await signOut()
     navigate('/login', { replace: true, state: {} })
   }
@@ -241,7 +254,7 @@ export default function Sidebar({ isMobileOpen = false, onClose }: SidebarProps)
           </div>
 
           <button
-            onClick={handleSignOut}
+            onClick={() => setIsSignOutOpen(true)}
             className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-900 rounded-lg transition-colors flex-shrink-0"
             title="Keluar dari akun admin"
           >
@@ -249,6 +262,50 @@ export default function Sidebar({ isMobileOpen = false, onClose }: SidebarProps)
           </button>
         </div>
       </aside>
+
+      {/* ─── Admin Logout Confirmation Modal ─── */}
+      {isSignOutOpen && (
+        <div
+          className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setIsSignOutOpen(false) }}
+        >
+          <div className="bg-white rounded-2xl border border-neutral-200 shadow-2xl max-w-sm w-full p-6 space-y-5 animate-fade-in">
+            {/* Icon + Title */}
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-neutral-100 border border-neutral-200 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle size={20} className="text-neutral-700" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-neutral-900 leading-snug">
+                  Yakin ingin keluar dari halaman Admin?
+                </h3>
+                <p className="text-xs text-neutral-500 mt-1.5 leading-relaxed">
+                  Pastikan pekerjaan Anda sudah selesai sebelum melanjutkan.
+                </p>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setIsSignOutOpen(false)}
+                className="flex-1 py-2.5 bg-white hover:bg-neutral-50 text-neutral-800 text-xs font-semibold rounded-xl border border-neutral-200 transition-colors"
+              >
+                Tetap di Halaman
+              </button>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="flex-1 py-2.5 bg-neutral-900 hover:bg-black text-white text-xs font-semibold rounded-xl shadow-sm transition-colors flex items-center justify-center gap-2"
+              >
+                <LogOut size={13} />
+                Ya, Keluar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

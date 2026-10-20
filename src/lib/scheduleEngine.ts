@@ -378,3 +378,61 @@ export function getDayName(dateStr: string): string {
   const date = parseISO(dateStr)
   return days[getDay(date)]
 }
+
+// ─────────────────────────────────────────────────────────────
+// Get next attendance step info after a completed step.
+//
+// Returns:
+//   { type: AttendanceType, label: string, startTime: string, note?: string }
+//   or null if all attendance is done for today.
+//
+// Used to display "Presensi berikutnya: Istirahat pukul 12.00 WIB"
+// after a successful check-in.
+// ─────────────────────────────────────────────────────────────
+export interface NextAttendanceInfo {
+  type: AttendanceType
+  label: string
+  startTime: string   // HH:mm
+  note?: string
+}
+
+export function getNextAttendanceInfo(
+  category: 'CS' | 'Security',
+  completedTypes: AttendanceType[],
+  shift: ShiftType | null,
+  workDateStr: string,
+): NextAttendanceInfo | null {
+  const hasMasuk     = completedTypes.includes('masuk')
+  const hasIstirahat = completedTypes.includes('istirahat')
+  const hasPulang    = completedTypes.includes('pulang')
+
+  // All done
+  if (hasPulang) return null
+
+  if (category === 'CS') {
+    const cs = getCSScheduleSync()
+    if (!hasMasuk) {
+      return { type: 'masuk', label: 'Presensi Masuk', startTime: cs.masuk.start }
+    }
+    if (!hasIstirahat) {
+      return { type: 'istirahat', label: 'Presensi Istirahat', startTime: cs.istirahat.start }
+    }
+    return { type: 'pulang', label: 'Presensi Pulang', startTime: cs.pulang.start }
+  }
+
+  // Security
+  if (!shift) return null
+  const s = getSecuritySchedule(workDateStr, shift)
+
+  if (!hasMasuk) {
+    return { type: 'masuk', label: 'Presensi Masuk', startTime: s.start }
+  }
+  // Security has no istirahat step — after masuk, next is pulang
+  const note = s.end_next_day ? '(H+1)' : undefined
+  return {
+    type: 'pulang',
+    label: 'Presensi Pulang',
+    startTime: s.end,
+    note,
+  }
+}

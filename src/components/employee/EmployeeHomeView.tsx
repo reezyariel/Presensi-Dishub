@@ -19,6 +19,7 @@ import {
   getScheduleInfo,
   getCSScheduleSync,
   preloadSchedules,
+  getNextAttendanceInfo,
 } from '../../lib/scheduleEngine'
 import type { AttendanceRecord, ShiftType } from '../../types/attendance'
 import TakeAttendanceModal from '../../pages/attendance/TakeAttendanceModal'
@@ -226,6 +227,15 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
   const displayName = employeeProfile?.full_name || profile?.full_name || 'Pegawai'
   const roleLabel = category === 'CS' ? 'Customer Service' : 'Security / Keamanan'
 
+  // Derive next attendance info from today's completed records
+  const completedTypes = [
+    ...(todayRecords.masuk     ? ['masuk']     : []),
+    ...(todayRecords.istirahat ? ['istirahat'] : []),
+    ...(todayRecords.pulang    ? ['pulang']    : []),
+  ] as ('masuk' | 'istirahat' | 'pulang')[]
+
+  const nextInfo = getNextAttendanceInfo(category, completedTypes, selectedShift, today)
+
   // Clock display
   const timeStr = currentTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
 
@@ -354,6 +364,16 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
                 </button>
               ) : !todayRecords.pulang ? (
                 <div className="space-y-3">
+                  {/* CS: show Istirahat button if not yet taken */}
+                  {category === 'CS' && !todayRecords.istirahat && (
+                    <button
+                      onClick={() => handleOpenTakeModal('istirahat')}
+                      className="w-full py-3.5 bg-white hover:bg-neutral-50 text-neutral-800 font-bold text-sm rounded-xl border border-neutral-200 flex items-center justify-center gap-3 transition-all shadow-sm active:scale-[0.99]"
+                    >
+                      <Camera size={18} />
+                      <span>Absen Istirahat</span>
+                    </button>
+                  )}
                   <button
                     onClick={() => handleOpenTakeModal('pulang')}
                     className="w-full py-3.5 bg-neutral-900 hover:bg-black text-white font-bold text-sm rounded-xl flex items-center justify-center gap-3 transition-all shadow-sm active:scale-[0.99]"
@@ -383,6 +403,69 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
                 </div>
               )}
             </div>
+
+            {/* ── Next Attendance Banner ── */}
+            {!isLoading && (
+              <div className={`mt-4 rounded-xl border px-4 py-3.5 flex items-start gap-3 ${
+                todayRecords.pulang
+                  ? 'bg-neutral-50 border-neutral-200'
+                  : todayRecords.masuk
+                  ? 'bg-neutral-900 border-neutral-800'
+                  : 'bg-neutral-50 border-neutral-200'
+              }`}>
+                {todayRecords.pulang ? (
+                  // All done
+                  <>
+                    <div className="w-7 h-7 rounded-full bg-white border border-neutral-200 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <Check size={14} strokeWidth={2.8} className="text-neutral-700" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-neutral-700">Semua presensi hari ini selesai</p>
+                      <p className="text-[11px] text-neutral-500 mt-0.5">Sampai jumpa besok. Istirahat yang cukup!</p>
+                    </div>
+                  </>
+                ) : nextInfo ? (
+                  // Show next step
+                  <>
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                      todayRecords.masuk ? 'bg-white/10 text-white' : 'bg-neutral-100 text-neutral-600'
+                    }`}>
+                      <Clock size={13} />
+                    </div>
+                    <div>
+                      <p className={`text-[11px] font-semibold ${
+                        todayRecords.masuk ? 'text-neutral-400' : 'text-neutral-500'
+                      }`}>
+                        {todayRecords.masuk ? 'Presensi berikutnya' : 'Presensi hari ini dimulai'}
+                      </p>
+                      <p className={`text-xs font-bold mt-0.5 ${
+                        todayRecords.masuk ? 'text-white' : 'text-neutral-900'
+                      }`}>
+                        {nextInfo.label} pukul {nextInfo.startTime.replace(':', '.')} WIB
+                        {nextInfo.note ? ` ${nextInfo.note}` : ''}
+                      </p>
+                      <p className={`text-[10px] mt-0.5 ${
+                        todayRecords.masuk ? 'text-neutral-500' : 'text-neutral-400'
+                      }`}>
+                        Pastikan Anda melakukan presensi sesuai jadwal.
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  // No next info (schedule not configured)
+                  <>
+                    <div className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <AlertCircle size={13} className="text-neutral-400" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-neutral-700">Jadwal belum dikonfigurasi</p>
+                      <p className="text-[11px] text-neutral-500 mt-0.5">Hubungi Admin untuk mengatur jadwal presensi.</p>
+                    </div>
+                  </>
+                ))}
+              </div>
+            )}
+
           </div>
 
           {/* B. Recent Attendance Records (Desktop: Table, Mobile: Cards) */}
