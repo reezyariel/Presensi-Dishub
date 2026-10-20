@@ -1,0 +1,157 @@
+@import 'leaflet/dist/leaflet.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-neutral-200;
+  }
+
+  html {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: #fafafa;
+    color: #171717;
+  }
+
+  body {
+    @apply bg-neutral-50 text-neutral-900 min-h-screen selection:bg-neutral-900 selection:text-white;
+  }
+
+  :root {
+    --sidebar-width: 260px;
+    --header-height: 64px;
+  }
+}
+
+@layer components {
+  /* Scrollbar styling */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-neutral-300 rounded-full;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    @apply bg-neutral-400;
+  }
+
+  /* Monochrome Badges */
+  .badge-tepat-waktu {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-neutral-100 text-neutral-800 border border-neutral-300;
+  }
+  .badge-terlambat {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-neutral-900 text-white;
+  }
+  .badge-perlu-periksa {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-neutral-200 text-neutral-900 border border-neutral-400;
+  }
+  .badge-cs {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-neutral-100 text-neutral-900 border border-neutral-200;
+  }
+  .badge-security {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-neutral-900 text-white;
+  }
+
+  /* Clean Monochrome Card */
+  .card {
+    @apply bg-white rounded-2xl border border-neutral-200/90 shadow-[0_1px_3px_rgba(0,0,0,0.03)];
+  }
+
+  /* Admin desktop layout */
+  .admin-sidebar {
+    width: var(--sidebar-width);
+    @apply fixed top-0 left-0 h-full bg-[#0f0f10] border-r border-neutral-800/80 z-40 flex flex-col transition-transform duration-300 ease-in-out;
+  }
+
+  .admin-main {
+    @apply min-h-screen flex flex-col md:pl-[260px] w-full min-w-0 bg-neutral-50/70 transition-all duration-300;
+  }
+
+  .admin-header {
+    height: var(--header-height);
+    @apply bg-white/95 backdrop-blur-md border-b border-neutral-200/80 flex items-center px-6 lg:px-8 sticky top-0 z-30;
+  }
+
+  .admin-content {
+    @apply flex-1 p-6 lg:p-8 w-full max-w-7xl mx-auto space-y-6 min-w-0;
+  }
+
+  /* Nav item */
+  .nav-item {
+    @apply flex items-center gap-3 px-3.5 py-2.5 mx-2 rounded-xl text-xs font-medium text-neutral-400 hover:text-white hover:bg-neutral-800/60 transition-all duration-150;
+  }
+  .nav-item.active {
+    @apply bg-neutral-800 text-white font-semibold;
+  }
+  .nav-item.active svg {
+    @apply text-white;
+  }
+
+  /* Clean monochrome Form Inputs */
+  .form-input {
+    @apply w-full px-3.5 py-2.5 border border-neutral-200 rounded-xl text-sm text-neutral-900 bg-white transition-all duration-150
+           placeholder:text-neutral-400
+           focus:outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900;
+  }
+
+  .form-label {
+    @apply block text-xs font-semibold text-neutral-700 mb-1.5;
+  }
+
+  /* Clean Monochrome Buttons */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-neutral-900 hover:bg-black text-white text-xs font-semibold rounded-xl transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm active:scale-[0.99];
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white hover:bg-neutral-100 text-neutral-800 text-xs font-semibold rounded-xl border border-neutral-200 transition-all duration-150 active:scale-[0.99];
+  }
+  .btn-dark-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-neutral-800 hover:bg-neutral-900 text-white text-xs font-semibold rounded-xl transition-all duration-150 active:scale-[0.99];
+  }
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-neutral-900 hover:bg-black text-white text-xs font-semibold rounded-xl border border-neutral-700 transition-all duration-150;
+  }
+
+  /* Monochrome Data Table */
+  .data-table {
+    @apply w-full text-sm text-left;
+  }
+  .data-table thead {
+    @apply bg-neutral-50/80 border-b border-neutral-200;
+  }
+  .data-table th {
+    @apply px-4 py-3 text-xs font-semibold text-neutral-600 uppercase tracking-wider whitespace-nowrap;
+  }
+  .data-table td {
+    @apply px-4 py-3 text-xs text-neutral-800 border-b border-neutral-100;
+  }
+  .data-table tbody tr {
+    @apply transition-colors duration-100 hover:bg-neutral-50/80;
+  }
+  .data-table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+
+  /* Mobile App Shell (for Employee Pages) */
+  .employee-mobile-frame {
+    @apply min-h-screen bg-white text-neutral-900 flex flex-col pb-20 max-w-md mx-auto relative sm:border-x sm:border-neutral-200 sm:shadow-lg;
+  }
+}
+
+/* Page animation */
+.page-enter {
+  animation: fade-in 0.2s ease-out;
+}
+
+/* Leaflet Map in Monochrome container */
+.leaflet-container {
+  font-family: inherit;
+  border-radius: 1rem;
+}
