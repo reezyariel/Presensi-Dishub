@@ -7,7 +7,7 @@ import { useEffect, useState, useCallback } from 'react'
 import {
   CheckCircle, Clock,
   Search, AlertTriangle, ShieldCheck,
-  CheckCircle2, X, MapPin, Camera, RefreshCw
+  CheckCircle2, X, MapPin, Camera, RefreshCw, Trash2
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
@@ -36,6 +36,11 @@ export default function ReviewPage() {
     belum: 0,
     sudah: 0,
   })
+  const [deleteModalRecord, setDeleteModalRecord] = useState<AttendanceRecord | null>(null)
+  const [deleteReason, setDeleteReason] = useState('')
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [successBanner, setSuccessBanner] = useState<string | null>(null)
 
   // Load counts for all 3 tabs
   const loadTabCounts = useCallback(async () => {
@@ -99,10 +104,7 @@ export default function ReviewPage() {
 
   const handleUpdateStatus = async () => {
     if (!activeModalRecord || !profile) return
-    if (!actionNotes.trim()) {
-      alert('Catatan / alasan pemeriksaan wajib diisi sebelum menyimpan perubahan status.')
-      return
-    }
+    if (!actionNotes.trim()) return
     setIsSubmitting(true)
     try {
       const oldValues = {
@@ -114,7 +116,6 @@ export default function ReviewPage() {
         admin_notes: actionNotes.trim(),
       }
 
-      // Update attendance record
       const { error: updateErr } = await supabase
         .from('attendance_records')
         .update({
@@ -126,7 +127,6 @@ export default function ReviewPage() {
 
       if (updateErr) throw updateErr
 
-      // Log in audit log with mandatory justification
       await supabase.from('attendance_audit_logs').insert({
         attendance_record_id: activeModalRecord.id,
         admin_id: profile.id,
@@ -137,16 +137,100 @@ export default function ReviewPage() {
       })
 
       setActiveModalRecord(null)
+      setSuccessBanner('Status presensi berhasil diperbarui.')
+      setTimeout(() => setSuccessBanner(null), 3500)
       await loadData()
     } catch {
-      alert('Gagal memperbarui status pemeriksaan. Silakan coba lagi.')
+      // silent — status update errors visible through no-change
     } finally {
       setIsSubmitting(false)
     }
   }
 
+  const openDeleteModal = (record: AttendanceRecord) => {
+    setDeleteModalRecord(record)
+    setDeleteReason('')
+    setDeleteError(null)
+  }
+
+  const handleDeleteRecord = async () => {
+    if (!deleteModalRecord || !profile) return
+    if (!deleteReason.trim()) {
+      setDeleteError('Alasan penghapusan wajib diisi.')
+      return
+    }
+    setIsDeleting(true)
+    setDeleteError(null)
+
+    // Capture reference before async ops (closure safety)
+    const recordSnapshot = deleteModalRecord
+
+    try {
+      // Use atomic RPC: audit log + delete in single transaction on server.
+      // admin_id is taken from auth.uid() inside the RPC — not from frontend.
+      const { data, error: rpcError } = await supabase.rpc(
+        'admin_delete_attendance_record',
+        {
+          p_record_id: recordSnapshot.id,
+          p_reason:    deleteReason.trim(),
+        }
+      )
+
+      // RPC transport error (network, auth session expired, etc.)
+      if (rpcError) {
+        console.error('[ReviewPage] RPC transport error:', rpcError)
+        setDeleteError(
+          rpcError.message.includes('permission') || rpcError.message.includes('denied')
+            ? 'Anda tidak memiliki izin untuk menghapus rekaman ini.'
+            : `Koneksi gagal: ${rpcError.message}`
+        )
+        return
+      }
+
+      // RPC returned business-logic error (not_found, not_admin, etc.)
+      if (!data?.success) {
+        const code = data?.error_code ?? 'UNKNOWN'
+        const detail = data?.error ?? 'Penghapusan gagal di server.'
+        console.error('[ReviewPage] RPC business error:', code, detail)
+
+        const userMsg: Record<string, string> = {
+          'NOT_AUTHENTICATED': 'Sesi login habis. Silakan login ulang.',
+          'NOT_ADMIN':         'Hanya Administrator yang dapat menghapus rekaman.',
+          'RECORD_NOT_FOUND':  'Rekaman tidak ditemukan — mungkin sudah dihapus sebelumnya.',
+          'REASON_REQUIRED':   'Alasan penghapusan wajib diisi.',
+        }
+        setDeleteError(userMsg[code] ?? `Gagal menghapus rekaman (${code}).`)
+        return
+      }
+
+      // Success — update UI without page reload
+      setDeleteModalRecord(null)
+      setSuccessBanner(
+        `Rekaman presensi ${recordSnapshot.employee_name} berhasil dihapus dan dicatat di audit log.`
+      )
+      setTimeout(() => setSuccessBanner(null), 5000)
+      setRecords(prev => prev.filter(r => r.id !== recordSnapshot.id))
+      loadTabCounts()
+
+    } catch (e: unknown) {
+      // Unexpected JS-level error (should not normally reach here)
+      const msg = e instanceof Error ? e.message : String(e)
+      console.error('[ReviewPage] Unexpected delete error:', msg)
+      setDeleteError('Terjadi kesalahan tidak terduga. Silakan coba lagi.')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Success Banner */}
+      {successBanner && (
+        <div className="p-4 bg-neutral-900 text-white rounded-xl shadow-xs flex items-center gap-3 animate-fade-in">
+          <CheckCircle2 size={18} className="text-white flex-shrink-0" />
+          <span className="text-xs font-medium">{successBanner}</span>
+        </div>
+      )}
       {/* 1. Desktop Filter & Tab Card */}
       <div className="card p-5 space-y-4">
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
@@ -350,13 +434,22 @@ export default function ReviewPage() {
 
                     {/* Aksi */}
                     <td className="px-5 py-3.5 text-right">
-                      <button
-                        onClick={() => openActionModal(rec)}
-                        className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5 ml-auto shadow-2xs"
-                      >
-                        <ShieldCheck size={13} />
-                        <span>Tinjau</span>
-                      </button>
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <button
+                          onClick={() => openActionModal(rec)}
+                          className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5 shadow-2xs"
+                        >
+                          <ShieldCheck size={13} />
+                          <span>Tinjau</span>
+                        </button>
+                        <button
+                          onClick={() => openDeleteModal(rec)}
+                          className="p-1.5 rounded-lg border border-neutral-200 text-neutral-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-all"
+                          title="Hapus rekaman presensi ini"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -534,6 +627,105 @@ export default function ReviewPage() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalRecord && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-3xl border border-neutral-200 max-w-md w-full p-6 shadow-2xl space-y-5">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-red-50 border border-red-100 flex items-center justify-center">
+                  <Trash2 size={16} className="text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-neutral-900">Hapus Rekaman Presensi</h3>
+                  <p className="text-xs text-neutral-500">Tindakan ini tidak dapat dibatalkan</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setDeleteModalRecord(null)}
+                className="p-1.5 rounded-lg text-neutral-400 hover:text-black hover:bg-neutral-100 transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Record Details */}
+            <div className="p-3.5 bg-neutral-50 rounded-xl border border-neutral-200 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-neutral-500">Pegawai:</span>
+                <span className="font-bold text-neutral-900">{deleteModalRecord.employee_name}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-neutral-500">Divisi & Shift:</span>
+                <span className="font-semibold text-neutral-800">
+                  {deleteModalRecord.category} {deleteModalRecord.shift ? `• ${deleteModalRecord.shift}` : ''}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-neutral-500">Tipe Absensi:</span>
+                <span className="font-semibold text-neutral-800 capitalize">{deleteModalRecord.attendance_type}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-neutral-500">Waktu Tercatat:</span>
+                <span className="font-mono font-bold text-neutral-900">
+                  {formatJakartaDate(deleteModalRecord.work_date)} • {formatJakartaTime(new Date(deleteModalRecord.recorded_at))} WIB
+                </span>
+              </div>
+              {deleteModalRecord.reason && (
+                <div className="pt-1.5 border-t border-neutral-200">
+                  <span className="text-neutral-500">Alasan Karyawan:</span>
+                  <p className="mt-0.5 font-medium text-neutral-800">&ldquo;{deleteModalRecord.reason}&rdquo;</p>
+                </div>
+              )}
+            </div>
+
+            {/* Reason Input */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-neutral-800">
+                Alasan Penghapusan oleh Admin <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                rows={3}
+                placeholder="Contoh: Data duplikat, presensi tidak valid, permintaan HR..."
+                value={deleteReason}
+                onChange={e => { setDeleteReason(e.target.value); setDeleteError(null) }}
+                className="form-input text-xs py-2 resize-none w-full"
+              />
+              {deleteError && (
+                <p className="text-xs text-red-600 font-medium">{deleteError}</p>
+              )}
+              <p className="text-[10px] text-neutral-400">
+                Alasan ini akan direkam dalam log audit secara permanen sebelum penghapusan.
+              </p>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-neutral-100">
+              <button
+                type="button"
+                onClick={() => setDeleteModalRecord(null)}
+                className="btn-secondary text-xs py-2 px-4"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteRecord}
+                disabled={isDeleting}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /><span>Menghapus...</span></>
+                ) : (
+                  <><Trash2 size={13} /><span>Hapus Permanen</span></>
+                )}
+              </button>
             </div>
           </div>
         </div>

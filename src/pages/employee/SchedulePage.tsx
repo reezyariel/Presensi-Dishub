@@ -5,10 +5,10 @@
 // CS and Security shift info from real schedule engine
 // ============================================================
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { Clock, Info, Moon, Sunrise, Sunset, Calendar } from 'lucide-react'
-import { formatJakartaDate } from '../../lib/scheduleEngine'
+import { formatJakartaDate, getCSScheduleSync, getSecurityScheduleSync, preloadSchedules } from '../../lib/scheduleEngine'
 
 interface ShiftInfo {
   name: string
@@ -34,42 +34,60 @@ export default function SchedulePage() {
   const isThursdayFriday = dayOfWeek === 4 || dayOfWeek === 5
   const todayStr = formatJakartaDate(now)
 
+  // Load schedule cache on mount
+  useEffect(() => { preloadSchedules() }, [])
+
+  // Dynamic CS schedule from DB cache
+  const csRaw = getCSScheduleSync()
   const csSchedule = {
-    masukStart: '07.30',
-    masukEnd: '08.00',
-    istirahatStart: '12.00',
-    istirahatEnd: '13.00',
-    pulangStart: '16.00',
-    pulangEnd: '17.00',
+    masukStart:    csRaw.masuk.start.replace(':', '.'),
+    masukEnd:      csRaw.masuk.end.replace(':', '.'),
+    istirahatStart: csRaw.istirahat.start.replace(':', '.'),
+    istirahatEnd:   csRaw.istirahat.end.replace(':', '.'),
+    pulangStart:   csRaw.pulang.start.replace(':', '.'),
+    pulangEnd:     csRaw.pulang.end.replace(':', '.'),
   }
+
+  // Dynamic Security shifts from DB cache with Thu/Fri offset
+  const secRaw = getSecurityScheduleSync()
+  const offsetMin = isThursdayFriday ? secRaw.thursday_friday_shift_minutes : 0
+
+  const addMin = (time: string, min: number): string => {
+    const [h, m] = time.split(':').map(Number)
+    const total = h * 60 + m + min
+    return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}.${String(total % 60).padStart(2, '0')}`
+  }
+  const fmt = (t: string) => t.replace(':', '.')
 
   const securityShifts: ShiftInfo[] = [
     {
       name: 'Shift I',
-      masuk: isThursdayFriday ? '08.00 WIB' : '07.30 WIB',
-      pulang: isThursdayFriday ? '16.30 WIB' : '16.00 WIB',
+      masuk: `${addMin(secRaw.shifts['Shift I'].start, offsetMin)} WIB`,
+      pulang: `${addMin(secRaw.shifts['Shift I'].end, offsetMin)} WIB`,
       period: 'Pagi',
       icon: Sunrise,
       note: 'Shift pagi reguler',
     },
     {
       name: 'Shift II',
-      masuk: isThursdayFriday ? '16.30 WIB' : '16.00 WIB',
-      pulang: isThursdayFriday ? '20.30 WIB' : '20.00 WIB',
+      masuk: `${addMin(secRaw.shifts['Shift II'].start, offsetMin)} WIB`,
+      pulang: `${addMin(secRaw.shifts['Shift II'].end, offsetMin)} WIB`,
       period: 'Sore',
       icon: Sunset,
       note: 'Shift sore reguler',
     },
     {
       name: 'Shift III',
-      masuk: isThursdayFriday ? '20.30 WIB' : '20.00 WIB',
-      pulang: isThursdayFriday ? '08.00 WIB (H+1)' : '07.30 WIB (H+1)',
+      masuk: `${addMin(secRaw.shifts['Shift III'].start, offsetMin)} WIB`,
+      pulang: `${addMin(secRaw.shifts['Shift III'].end, offsetMin)} WIB (H+1)`,
       period: 'Malam',
       icon: Moon,
       note: 'Shift malam, berakhir hari berikutnya',
       isMidnight: true,
     },
   ]
+  // suppress unused import warning
+  void fmt
 
   return (
     <div className="space-y-5">

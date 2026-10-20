@@ -62,9 +62,11 @@ export default function EmployeeSidebar({ category, isMobileOpen = false, onClos
         {/* Brand Header */}
         <div className="h-16 px-5 border-b border-neutral-100 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-neutral-900 text-white flex items-center justify-center">
-              <Clock size={16} strokeWidth={2.5} />
-            </div>
+            <img
+              src="/logo.jpg"
+              alt="ShiftTrack Logo"
+              className="w-8 h-8 rounded-lg object-cover flex-shrink-0"
+            />
             <div>
               <p className="text-sm font-bold text-neutral-900 leading-none">ShiftTrack</p>
               <p className="text-[10px] text-neutral-500 font-medium mt-0.5 leading-none">Portal Karyawan</p>

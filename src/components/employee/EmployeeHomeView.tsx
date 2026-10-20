@@ -17,6 +17,8 @@ import {
   formatJakartaDate,
   formatJakartaTime,
   getScheduleInfo,
+  getCSScheduleSync,
+  preloadSchedules,
 } from '../../lib/scheduleEngine'
 import type { AttendanceRecord, ShiftType } from '../../types/attendance'
 import TakeAttendanceModal from '../../pages/attendance/TakeAttendanceModal'
@@ -59,6 +61,11 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000)
     return () => clearInterval(timer)
+  }, [])
+
+  // Preload schedule cache so getCSScheduleSync/getSecurityScheduleSync have fresh data
+  useEffect(() => {
+    preloadSchedules()
   }, [])
 
   useEffect(() => {
@@ -193,17 +200,20 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
 
   const scheduleDisplay = useMemo(() => {
     if (category === 'CS') {
+      const cs = getCSScheduleSync()
+      const fmt = (s: string, e: string) => `${s.replace(':', '.')} – ${e.replace(':', '.')} WIB`
       return {
-        masuk: '07.30 – 08.00 WIB',
-        istirahat: '12.00 – 13.00 WIB',
-        pulang: '16.00 – 17.00 WIB',
+        masuk:     fmt(cs.masuk.start,     cs.masuk.end),
+        istirahat: fmt(cs.istirahat.start, cs.istirahat.end),
+        pulang:    fmt(cs.pulang.start,    cs.pulang.end),
       }
     } else {
       const sched = getScheduleInfo('Security', 'masuk', selectedShift, today)
+      const schedEnd = getScheduleInfo('Security', 'pulang', selectedShift, today)
       return {
-        masuk: sched ? `${sched.scheduledStart.replace(':', '.')} WIB` : '07.30 WIB',
+        masuk: sched ? `${sched.scheduledStart.replace(':', '.')} – ${sched.scheduledEnd.replace(':', '.')} WIB` : '07.30 – 08.00 WIB',
         istirahat: 'Shift Kerja Berlanjut',
-        pulang: sched ? `${sched.scheduledEnd.replace(':', '.')}${sched.isNextDay ? ' (H+1)' : ''} WIB` : '16.00 WIB',
+        pulang: schedEnd ? `${schedEnd.scheduledStart.replace(':', '.')}${schedEnd.isNextDay ? ' (H+1)' : ''} WIB` : '16.00 WIB',
       }
     }
   }, [category, selectedShift, today])

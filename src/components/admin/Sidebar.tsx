@@ -147,9 +147,11 @@ export default function Sidebar({ isMobileOpen = false, onClose }: SidebarProps)
         {/* Brand Header */}
         <div className="h-16 px-5 border-b border-neutral-800 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-white text-neutral-950 flex items-center justify-center font-bold text-sm shadow-xs">
-              <Clock size={18} strokeWidth={2.4} />
-            </div>
+            <img
+              src="/logo.jpg"
+              alt="ShiftTrack Logo"
+              className="w-8 h-8 rounded-lg object-cover flex-shrink-0"
+            />
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="font-bold text-sm tracking-tight text-white">ShiftTrack</span>

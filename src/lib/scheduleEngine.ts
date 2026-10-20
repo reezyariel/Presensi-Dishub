@@ -1,92 +1,184 @@
 // ============================================================
-// ShiftTrack — Schedule Engine
-// Handles CS and Security attendance rules including Shift III
-// midnight crossover and Thursday/Friday schedule shift
+// ShiftTrack — Schedule Engine (Dynamic DB-backed)
+// CS: any check-in within [start, end] = tepat_waktu
+// Security: 3-shift rotation with Thu/Fri +N min offset
+// Reads authoritative schedule from attendance_settings
 // ============================================================
 
 import type { ShiftType, AttendanceType, AttendanceStatus, ScheduleInfo } from '../types/attendance'
 import { formatInTimeZone, toZonedTime } from 'date-fns-tz'
 import { getDay, parseISO, subDays } from 'date-fns'
+import { supabase } from './supabase'
 
 export const TIMEZONE = 'Asia/Jakarta'
 
 // Day of week helpers (0=Sun, 1=Mon, ... 4=Thu, 5=Fri)
 const isThursdayOrFriday = (date: Date): boolean => {
-  const day = getDay(date) // in local time
+  const day = getDay(date)
   return day === 4 || day === 5
 }
 
 // ─────────────────────────────────────────────────────────────
-// CS Schedule
+// CS Schedule Types & Defaults
 // ─────────────────────────────────────────────────────────────
+export interface CSSchedule {
+  masuk:     { start: string; end: string }
+  istirahat: { start: string; end: string }
+  pulang:    { start: string; end: string }
+}
+
+export const DEFAULT_CS_SCHEDULE: CSSchedule = {
+  masuk:     { start: '07:00', end: '08:00' },
+  istirahat: { start: '12:00', end: '14:00' },
+  pulang:    { start: '16:00', end: '18:00' },
+}
+
+// Legacy alias used in older code — keep for backward compat
 export const CS_SCHEDULE = {
-  masuk:     { start: '07:00', windowEnd: '08:00' },
-  istirahat: { start: '12:00', windowEnd: '14:00' },
-  pulang:    { start: '16:00', windowEnd: '18:00' },
+  masuk:     { start: DEFAULT_CS_SCHEDULE.masuk.start,     windowEnd: DEFAULT_CS_SCHEDULE.masuk.end },
+  istirahat: { start: DEFAULT_CS_SCHEDULE.istirahat.start, windowEnd: DEFAULT_CS_SCHEDULE.istirahat.end },
+  pulang:    { start: DEFAULT_CS_SCHEDULE.pulang.start,    windowEnd: DEFAULT_CS_SCHEDULE.pulang.end },
 } as const
 
 // ─────────────────────────────────────────────────────────────
-// Security Schedule Lookup
+// Security Schedule Types & Defaults
 // ─────────────────────────────────────────────────────────────
 interface ShiftSchedule {
-  start: string    // HH:mm — jam mulai shift (acuan keterlambatan)
-  windowEnd: string  // HH:mm — batas jendela masuk
-  end: string      // HH:mm — jam selesai shift
-  endNextDay: boolean
-  endWindowEnd: string // HH:mm — batas jendela pulang
-  endWindowEndNextDay: boolean
+  start: string
+  window_end: string
+  end: string
+  end_window_end: string
+  end_next_day: boolean
+  end_window_end_next_day: boolean
 }
 
-type SecurityScheduleMap = Record<ShiftType, ShiftSchedule>
-
-const SECURITY_NORMAL: SecurityScheduleMap = {
-  'Shift I': {
-    start: '07:30', windowEnd: '08:00',
-    end: '16:00', endNextDay: false,
-    endWindowEnd: '16:30', endWindowEndNextDay: false,
-  },
-  'Shift II': {
-    start: '16:00', windowEnd: '16:30',
-    end: '20:00', endNextDay: false,
-    endWindowEnd: '20:30', endWindowEndNextDay: false,
-  },
-  'Shift III': {
-    start: '20:00', windowEnd: '20:30',
-    end: '07:30', endNextDay: true,
-    endWindowEnd: '08:00', endWindowEndNextDay: true,
-  },
+export interface SecuritySchedule {
+  thursday_friday_shift_minutes: number
+  shifts: Record<ShiftType, ShiftSchedule>
 }
 
-const SECURITY_SHIFTED: SecurityScheduleMap = {
-  'Shift I': {
-    start: '08:00', windowEnd: '08:30',
-    end: '16:30', endNextDay: false,
-    endWindowEnd: '17:00', endWindowEndNextDay: false,
-  },
-  'Shift II': {
-    start: '16:30', windowEnd: '17:00',
-    end: '20:30', endNextDay: false,
-    endWindowEnd: '21:00', endWindowEndNextDay: false,
-  },
-  'Shift III': {
-    start: '20:30', windowEnd: '21:00',
-    end: '08:00', endNextDay: true,
-    endWindowEnd: '08:30', endWindowEndNextDay: true,
+export const DEFAULT_SECURITY_SCHEDULE: SecuritySchedule = {
+  thursday_friday_shift_minutes: 30,
+  shifts: {
+    'Shift I': {
+      start: '07:30', window_end: '08:00',
+      end: '16:00', end_window_end: '16:30',
+      end_next_day: false, end_window_end_next_day: false,
+    },
+    'Shift II': {
+      start: '16:00', window_end: '16:30',
+      end: '20:00', end_window_end: '20:30',
+      end_next_day: false, end_window_end_next_day: false,
+    },
+    'Shift III': {
+      start: '20:00', window_end: '20:30',
+      end: '07:30', end_window_end: '08:00',
+      end_next_day: true, end_window_end_next_day: true,
+    },
   },
 }
 
 // ─────────────────────────────────────────────────────────────
-// Get schedule for Security based on work_date and shift
-// work_date determines whether to use shifted schedule
+// DB Settings Cache (module-level, refreshed on demand)
+// ─────────────────────────────────────────────────────────────
+let _csScheduleCache: CSSchedule | null = null
+let _securityScheduleCache: SecuritySchedule | null = null
+let _cacheLoadedAt = 0
+
+async function loadScheduleCache(force = false): Promise<void> {
+  const now = Date.now()
+  if (!force && _cacheLoadedAt > 0 && now - _cacheLoadedAt < 60_000) return // 1 min cache
+
+  try {
+    const { data } = await supabase
+      .from('attendance_settings')
+      .select('setting_key, setting_value')
+      .in('setting_key', ['cs_schedule', 'security_schedule'])
+
+    if (data) {
+      for (const row of data) {
+        if (row.setting_key === 'cs_schedule') {
+          _csScheduleCache = row.setting_value as CSSchedule
+        } else if (row.setting_key === 'security_schedule') {
+          _securityScheduleCache = row.setting_value as SecuritySchedule
+        }
+      }
+    }
+    _cacheLoadedAt = now
+  } catch {
+    // fallback to defaults on error
+  }
+}
+
+export async function getCSSchedule(): Promise<CSSchedule> {
+  await loadScheduleCache()
+  return _csScheduleCache ?? DEFAULT_CS_SCHEDULE
+}
+
+export async function getSecurityScheduleFromDB(): Promise<SecuritySchedule> {
+  await loadScheduleCache()
+  return _securityScheduleCache ?? DEFAULT_SECURITY_SCHEDULE
+}
+
+export function invalidateScheduleCache(): void {
+  _cacheLoadedAt = 0
+}
+
+// ─────────────────────────────────────────────────────────────
+// Synchronous fallback (for components that can't await)
+// ─────────────────────────────────────────────────────────────
+export function getCSScheduleSync(): CSSchedule {
+  return _csScheduleCache ?? DEFAULT_CS_SCHEDULE
+}
+
+export function getSecurityScheduleSync(): SecuritySchedule {
+  return _securityScheduleCache ?? DEFAULT_SECURITY_SCHEDULE
+}
+
+// ─────────────────────────────────────────────────────────────
+// Apply Thu/Fri offset to shift schedule
+// ─────────────────────────────────────────────────────────────
+function addMinutesToTime(timeStr: string, minutes: number): string {
+  const [h, m] = timeStr.split(':').map(Number)
+  const total = h * 60 + m + minutes
+  const hh = Math.floor(total / 60) % 24
+  const mm = total % 60
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
+}
+
+function getShiftedSchedule(base: ShiftSchedule, offsetMin: number): ShiftSchedule {
+  return {
+    start: addMinutesToTime(base.start, offsetMin),
+    window_end: addMinutesToTime(base.window_end, offsetMin),
+    end: addMinutesToTime(base.end, offsetMin),
+    end_window_end: addMinutesToTime(base.end_window_end, offsetMin),
+    end_next_day: base.end_next_day,
+    end_window_end_next_day: base.end_window_end_next_day,
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Get Security shift schedule for given date and shift (sync)
 // ─────────────────────────────────────────────────────────────
 export function getSecuritySchedule(workDate: string, shift: ShiftType): ShiftSchedule {
+  const sec = getSecurityScheduleSync()
+  const base = sec.shifts[shift] ?? DEFAULT_SECURITY_SCHEDULE.shifts[shift]
   const date = parseISO(workDate)
-  const shifted = isThursdayOrFriday(date)
-  return shifted ? SECURITY_SHIFTED[shift] : SECURITY_NORMAL[shift]
+  if (isThursdayOrFriday(date)) {
+    return getShiftedSchedule(base, sec.thursday_friday_shift_minutes)
+  }
+  return base
 }
 
 // ─────────────────────────────────────────────────────────────
-// Get ScheduleInfo for display purposes
+// Pre-load schedule cache at app startup (call once)
+// ─────────────────────────────────────────────────────────────
+export async function preloadSchedules(): Promise<void> {
+  await loadScheduleCache(true)
+}
+
+// ─────────────────────────────────────────────────────────────
+// Get ScheduleInfo for display (synchronous, uses cache)
 // ─────────────────────────────────────────────────────────────
 export function getScheduleInfo(
   category: 'CS' | 'Security',
@@ -95,10 +187,11 @@ export function getScheduleInfo(
   workDate: string,
 ): ScheduleInfo | null {
   if (category === 'CS') {
-    const s = CS_SCHEDULE[attendanceType]
+    const cs = getCSScheduleSync()
+    const s = cs[attendanceType]
     return {
       scheduledStart: s.start,
-      scheduledEnd: s.windowEnd,
+      scheduledEnd: s.end,
       isNextDay: false,
       dayType: 'normal',
     }
@@ -106,13 +199,15 @@ export function getScheduleInfo(
 
   if (!shift) return null
   const date = parseISO(workDate)
+  const sec = getSecurityScheduleSync()
+  const base = sec.shifts[shift] ?? DEFAULT_SECURITY_SCHEDULE.shifts[shift]
   const shifted = isThursdayOrFriday(date)
-  const s = shifted ? SECURITY_SHIFTED[shift] : SECURITY_NORMAL[shift]
+  const s = shifted ? getShiftedSchedule(base, sec.thursday_friday_shift_minutes) : base
 
   if (attendanceType === 'masuk') {
     return {
       scheduledStart: s.start,
-      scheduledEnd: s.windowEnd,
+      scheduledEnd: s.window_end,
       isNextDay: false,
       dayType: shifted ? 'shifted' : 'normal',
     }
@@ -120,15 +215,14 @@ export function getScheduleInfo(
 
   return {
     scheduledStart: s.end,
-    scheduledEnd: s.endWindowEnd,
-    isNextDay: s.endNextDay,
+    scheduledEnd: s.end_window_end,
+    isNextDay: s.end_next_day,
     dayType: shifted ? 'shifted' : 'normal',
   }
 }
 
 // ─────────────────────────────────────────────────────────────
-// Parse HH:mm time on a given date (Jakarta tz)
-// Returns a Date object
+// Parse HH:mm time on a given date
 // ─────────────────────────────────────────────────────────────
 function parseTimeOnDate(timeStr: string, date: Date, nextDay = false): Date {
   const [h, m] = timeStr.split(':').map(Number)
@@ -139,14 +233,11 @@ function parseTimeOnDate(timeStr: string, date: Date, nextDay = false): Date {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Determine work_date for a Security Shift III pulang record
-// If recorded_at is before noon, assume it's the next day after
-// the shift started, so work_date = recorded_at date - 1 day
+// Determine work_date for Security Shift III pulang
 // ─────────────────────────────────────────────────────────────
 export function determineShiftIIIWorkDate(recordedAt: Date): string {
   const jakartaTime = toZonedTime(recordedAt, TIMEZONE)
   const hour = jakartaTime.getHours()
-  // If before noon (12:00), it's the morning-after portion of Shift III
   if (hour < 12) {
     const workDate = subDays(jakartaTime, 1)
     return formatInTimeZone(workDate, TIMEZONE, 'yyyy-MM-dd')
@@ -155,9 +246,12 @@ export function determineShiftIIIWorkDate(recordedAt: Date): string {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Calculate attendance status and late_minutes
-// recordedAt: actual server time
-// workDateStr: ISO date YYYY-MM-DD (work_date)
+// Calculate attendance status (synchronous, uses cache)
+//
+// CS POLICY: Any masuk within [start, end] = tepat_waktu (late_minutes: 0)
+//            This is per business requirement — CS is never "terlambat"
+//            as long as they check in before window end.
+// Security:  Compare against shift start; late if after scheduled start.
 // ─────────────────────────────────────────────────────────────
 export function calculateAttendanceStatus(
   category: 'CS' | 'Security',
@@ -169,25 +263,26 @@ export function calculateAttendanceStatus(
   const workDate = parseISO(workDateStr)
   const recorded = toZonedTime(recordedAt, TIMEZONE)
 
-  // Only masuk is evaluated for lateness per PRD
+  // Only masuk is evaluated for lateness
   if (attendanceType !== 'masuk') {
     return { status: 'tepat_waktu', lateMinutes: 0, scheduledStart: '', scheduledEnd: '' }
   }
 
   if (category === 'CS') {
-    // CS attendance never receives 'terlambat' status per established policy
+    // CS policy: tepat_waktu if within window [start, end], no late penalty
+    const cs = getCSScheduleSync()
     return {
       status: 'tepat_waktu',
       lateMinutes: 0,
-      scheduledStart: CS_SCHEDULE.masuk.start,
-      scheduledEnd: CS_SCHEDULE.masuk.windowEnd,
+      scheduledStart: cs.masuk.start,
+      scheduledEnd: cs.masuk.end,
     }
   }
 
   if (!shift) throw new Error('shift required for Security')
   const s = getSecuritySchedule(workDateStr, shift)
   const startStr = s.start
-  const endStr = s.windowEnd
+  const endStr = s.window_end
 
   const scheduledStartDate = parseTimeOnDate(startStr, workDate)
   const diffMs = recorded.getTime() - scheduledStartDate.getTime()
@@ -206,11 +301,8 @@ export function calculateAttendanceStatus(
 }
 
 // ─────────────────────────────────────────────────────────────
-// Check if attendance window is open
+// Check if attendance window is open (synchronous)
 // Returns: 'not_yet' | 'open' | 'closed_accept'
-// 'not_yet'       → jendela belum dibuka
-// 'open'          → dalam jendela masuk (tepat waktu possible)
-// 'closed_accept' → lewat jendela tapi tetap diterima
 // ─────────────────────────────────────────────────────────────
 export type WindowStatus = 'not_yet' | 'open' | 'closed_accept'
 
@@ -225,9 +317,10 @@ export function checkAttendanceWindow(
   const current = toZonedTime(now, TIMEZONE)
 
   if (category === 'CS') {
-    const s = CS_SCHEDULE[attendanceType]
+    const cs = getCSScheduleSync()
+    const s = cs[attendanceType]
     const start = parseTimeOnDate(s.start, workDate)
-    const end = parseTimeOnDate(s.windowEnd, workDate)
+    const end = parseTimeOnDate(s.end, workDate)
 
     if (current < start) return 'not_yet'
     if (current <= end) return 'open'
@@ -240,15 +333,15 @@ export function checkAttendanceWindow(
 
   if (attendanceType === 'masuk') {
     const start = parseTimeOnDate(s.start, workDate)
-    const end = parseTimeOnDate(s.windowEnd, workDate)
+    const end = parseTimeOnDate(s.window_end, workDate)
     if (current < start) return 'not_yet'
     if (current <= end) return 'open'
     return 'closed_accept'
   }
 
   // pulang
-  const start = parseTimeOnDate(s.end, workDate, s.endNextDay)
-  const end = parseTimeOnDate(s.endWindowEnd, workDate, s.endWindowEndNextDay)
+  const start = parseTimeOnDate(s.end, workDate, s.end_next_day)
+  const end = parseTimeOnDate(s.end_window_end, workDate, s.end_window_end_next_day)
   if (current < start) return 'not_yet'
   if (current <= end) return 'open'
   return 'closed_accept'
