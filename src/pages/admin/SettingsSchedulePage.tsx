@@ -198,7 +198,8 @@ export default function SettingsSchedulePage() {
       for (const item of updates) {
         await supabase
           .from('attendance_settings')
-          .upsert(item, { onConflict: 'setting_key' })
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .upsert(item as any, { onConflict: 'setting_key' })
       }
       // Invalidate in-memory schedule cache so next check-in uses new config
       invalidateScheduleCache()

@@ -5,7 +5,7 @@
 // ============================================================
 
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Clock, Home, History, Calendar, User, LogOut, Shield, Headphones, X } from 'lucide-react'
+import { Home, History, Calendar, User, LogOut, Shield, Headphones, X } from 'lucide-react'
 import { useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { cn } from '../../lib/utils'

@@ -4,7 +4,7 @@
 // 100% real Supabase data, camera & attendance preserved
 // ============================================================
 
-import { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Calendar, Check, Clock, ChevronRight, Camera,
@@ -246,6 +246,69 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
     ? 'Sudah Check-In'
     : 'Belum Absen'
 
+  // Banner warna latar
+  const bannerBg = todayRecords.pulang
+    ? 'bg-neutral-50 border-neutral-200'
+    : todayRecords.masuk
+    ? 'bg-neutral-900 border-neutral-800'
+    : 'bg-neutral-50 border-neutral-200'
+
+  // Next Attendance Banner — dihitung sebelum render untuk menghindari nested ternary
+  let nextAttendanceBanner: React.ReactNode
+  if (todayRecords.pulang) {
+    nextAttendanceBanner = (
+      <>
+        <div className="w-7 h-7 rounded-full bg-white border border-neutral-200 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <Check size={14} strokeWidth={2.8} className="text-neutral-700" />
+        </div>
+        <div>
+          <p className="text-xs font-bold text-neutral-700">Semua presensi hari ini selesai</p>
+          <p className="text-[11px] text-neutral-500 mt-0.5">Sampai jumpa besok. Istirahat yang cukup!</p>
+        </div>
+      </>
+    )
+  } else if (nextInfo) {
+    nextAttendanceBanner = (
+      <>
+        <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
+          todayRecords.masuk ? 'bg-white/10 text-white' : 'bg-neutral-100 text-neutral-600'
+        }`}>
+          <Clock size={13} />
+        </div>
+        <div>
+          <p className={`text-[11px] font-semibold ${
+            todayRecords.masuk ? 'text-neutral-400' : 'text-neutral-500'
+          }`}>
+            {todayRecords.masuk ? 'Presensi berikutnya' : 'Presensi hari ini dimulai'}
+          </p>
+          <p className={`text-xs font-bold mt-0.5 ${
+            todayRecords.masuk ? 'text-white' : 'text-neutral-900'
+          }`}>
+            {nextInfo.label} pukul {nextInfo.startTime.replace(':', '.')} WIB
+            {nextInfo.note ? ` ${nextInfo.note}` : ''}
+          </p>
+          <p className={`text-[10px] mt-0.5 ${
+            todayRecords.masuk ? 'text-neutral-500' : 'text-neutral-400'
+          }`}>
+            Pastikan Anda melakukan presensi sesuai jadwal.
+          </p>
+        </div>
+      </>
+    )
+  } else {
+    nextAttendanceBanner = (
+      <>
+        <div className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <AlertCircle size={13} className="text-neutral-400" />
+        </div>
+        <div>
+          <p className="text-xs font-bold text-neutral-700">Jadwal belum dikonfigurasi</p>
+          <p className="text-[11px] text-neutral-500 mt-0.5">Hubungi Admin untuk mengatur jadwal presensi.</p>
+        </div>
+      </>
+    )
+  }
+
   return (
     <>
       {/* ─── Welcome strip (full width) ─── */}
@@ -406,63 +469,8 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
 
             {/* ── Next Attendance Banner ── */}
             {!isLoading && (
-              <div className={`mt-4 rounded-xl border px-4 py-3.5 flex items-start gap-3 ${
-                todayRecords.pulang
-                  ? 'bg-neutral-50 border-neutral-200'
-                  : todayRecords.masuk
-                  ? 'bg-neutral-900 border-neutral-800'
-                  : 'bg-neutral-50 border-neutral-200'
-              }`}>
-                {todayRecords.pulang ? (
-                  // All done
-                  <>
-                    <div className="w-7 h-7 rounded-full bg-white border border-neutral-200 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <Check size={14} strokeWidth={2.8} className="text-neutral-700" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-neutral-700">Semua presensi hari ini selesai</p>
-                      <p className="text-[11px] text-neutral-500 mt-0.5">Sampai jumpa besok. Istirahat yang cukup!</p>
-                    </div>
-                  </>
-                ) : nextInfo ? (
-                  // Show next step
-                  <>
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                      todayRecords.masuk ? 'bg-white/10 text-white' : 'bg-neutral-100 text-neutral-600'
-                    }`}>
-                      <Clock size={13} />
-                    </div>
-                    <div>
-                      <p className={`text-[11px] font-semibold ${
-                        todayRecords.masuk ? 'text-neutral-400' : 'text-neutral-500'
-                      }`}>
-                        {todayRecords.masuk ? 'Presensi berikutnya' : 'Presensi hari ini dimulai'}
-                      </p>
-                      <p className={`text-xs font-bold mt-0.5 ${
-                        todayRecords.masuk ? 'text-white' : 'text-neutral-900'
-                      }`}>
-                        {nextInfo.label} pukul {nextInfo.startTime.replace(':', '.')} WIB
-                        {nextInfo.note ? ` ${nextInfo.note}` : ''}
-                      </p>
-                      <p className={`text-[10px] mt-0.5 ${
-                        todayRecords.masuk ? 'text-neutral-500' : 'text-neutral-400'
-                      }`}>
-                        Pastikan Anda melakukan presensi sesuai jadwal.
-                      </p>
-                    </div>
-                  </>
-                ) : (
-                  // No next info (schedule not configured)
-                  <>
-                    <div className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <AlertCircle size={13} className="text-neutral-400" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-neutral-700">Jadwal belum dikonfigurasi</p>
-                      <p className="text-[11px] text-neutral-500 mt-0.5">Hubungi Admin untuk mengatur jadwal presensi.</p>
-                    </div>
-                  </>
-                ))}
+              <div className={`mt-4 rounded-xl border px-4 py-3.5 flex items-start gap-3 ${bannerBg}`}>
+                {nextAttendanceBanner}
               </div>
             )}
 
