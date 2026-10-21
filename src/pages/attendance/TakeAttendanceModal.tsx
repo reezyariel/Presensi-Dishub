@@ -21,7 +21,7 @@ import {
   type OfficeLocationConfig
 } from '../../lib/officeLocation'
 import { supabase } from '../../lib/supabase'
-import { formatJakartaTime, getScheduleInfo, todayJakarta } from '../../lib/scheduleEngine'
+import { formatJakartaTime, getScheduleInfo, todayJakarta, getCSScheduleSync } from '../../lib/scheduleEngine'
 import type { AttendanceRecord, AttendanceType, ShiftType } from '../../types/attendance'
 
 interface TakeAttendanceModalProps {
@@ -110,17 +110,20 @@ export default function TakeAttendanceModal({
   // Schedule Info
   const scheduleDisplay = useMemo(() => {
     if (category === 'CS') {
+      const cs = getCSScheduleSync()
+      const fmt = (s: string, e: string) => `${s.replace(':', '.')} – ${e.replace(':', '.')} WIB`
       return {
-        masuk: '07.00 - 08.00 WIB',
-        istirahat: '12.00 - 14.00 WIB',
-        pulang: '16.00 - 18.00 WIB',
+        masuk: fmt(cs.masuk.start, cs.masuk.end),
+        istirahat: fmt(cs.istirahat.start, cs.istirahat.end),
+        pulang: fmt(cs.pulang.start, cs.pulang.end),
       }
     } else {
       const sched = getScheduleInfo('Security', attendanceType, shift, today)
+      const schedEnd = getScheduleInfo('Security', 'pulang', shift, today)
       return {
         masuk: sched ? `${sched.scheduledStart.replace(':', '.')} WIB` : '07.30 WIB',
         istirahat: 'Shift Kerja Berlanjut',
-        pulang: sched ? `${sched.scheduledEnd.replace(':', '.')}${sched.isNextDay ? ' (H+1)' : ''} WIB` : '16.00 WIB',
+        pulang: schedEnd ? `${schedEnd.scheduledStart.replace(':', '.')}${schedEnd.isNextDay ? ' (H+1)' : ''} WIB` : '16.00 WIB',
       }
     }
   }, [category, shift, today, attendanceType])

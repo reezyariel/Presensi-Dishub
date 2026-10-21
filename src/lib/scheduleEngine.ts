@@ -5,7 +5,7 @@
 // Reads authoritative schedule from attendance_settings
 // ============================================================
 
-import type { ShiftType, AttendanceType, AttendanceStatus, ScheduleInfo } from '../types/attendance'
+import type { ShiftType, AttendanceType, AttendanceStatus, ScheduleInfo, AttendanceRecord } from '../types/attendance'
 import { formatInTimeZone, toZonedTime } from 'date-fns-tz'
 import { getDay, parseISO, subDays } from 'date-fns'
 import { supabase } from './supabase'
@@ -396,11 +396,17 @@ export interface NextAttendanceInfo {
   note?: string
 }
 
+export function getTimeInMinutes(timeStr: string): number {
+  const [h, m] = timeStr.split(':').map(Number)
+  return h * 60 + m
+}
+
 export function getNextAttendanceInfo(
   category: 'CS' | 'Security',
   completedTypes: AttendanceType[],
   shift: ShiftType | null,
   workDateStr: string,
+  now: Date = new Date(),
 ): NextAttendanceInfo | null {
   const hasMasuk     = completedTypes.includes('masuk')
   const hasIstirahat = completedTypes.includes('istirahat')
@@ -411,10 +417,15 @@ export function getNextAttendanceInfo(
 
   if (category === 'CS') {
     const cs = getCSScheduleSync()
+    const jakartaNow = toZonedTime(now, TIMEZONE)
+    const currentMinutes = jakartaNow.getHours() * 60 + jakartaNow.getMinutes()
+    const istirahatEndMins = getTimeInMinutes(cs.istirahat.end)
+
     if (!hasMasuk) {
       return { type: 'masuk', label: 'Presensi Masuk', startTime: cs.masuk.start }
     }
-    if (!hasIstirahat) {
+    // If break was missed and istirahat period ended, next attendance is pulang
+    if (!hasIstirahat && currentMinutes <= istirahatEndMins) {
       return { type: 'istirahat', label: 'Presensi Istirahat', startTime: cs.istirahat.start }
     }
     return { type: 'pulang', label: 'Presensi Pulang', startTime: cs.pulang.start }
@@ -436,3 +447,274 @@ export function getNextAttendanceInfo(
     note,
   }
 }
+
+// ─────────────────────────────────────────────────────────────
+// Authoritative Attendance Button State Engine
+// Controls exact appearance, availability, and scheduling messages
+// for employee attendance actions (CS & Security)
+// ─────────────────────────────────────────────────────────────
+export type AttendanceButtonState =
+  | {
+      status: 'workday_holiday'
+      title: string
+      message: string
+    }
+  | {
+      status: 'waiting_masuk'
+      title: string
+      startTime: string
+      message: string
+    }
+  | {
+      status: 'can_masuk'
+      title: string
+      startTime: string
+      endTime: string
+    }
+  | {
+      status: 'waiting_istirahat'
+      title: string
+      startTime: string
+      message: string
+    }
+  | {
+      status: 'can_istirahat'
+      title: string
+      startTime: string
+      endTime: string
+    }
+  | {
+      status: 'waiting_pulang'
+      title: string
+      startTime: string
+      message: string
+      note?: string
+    }
+  | {
+      status: 'can_pulang'
+      title: string
+      startTime: string
+      note?: string
+    }
+  | {
+      status: 'completed'
+      title: string
+      message: string
+    }
+
+export function getAttendanceButtonState(
+  category: 'CS' | 'Security',
+  completedRecords: {
+    masuk: AttendanceRecord | null
+    istirahat: AttendanceRecord | null
+    pulang: AttendanceRecord | null
+  },
+  shift: ShiftType | null,
+  workDateStr: string,
+  now: Date = new Date(),
+): AttendanceButtonState {
+  // 1. If already checked out (pulang is done)
+  if (completedRecords.pulang) {
+    return {
+      status: 'completed',
+      title: 'Presensi Selesai',
+      message: 'Semua presensi hari ini sudah tercatat.',
+    }
+  }
+
+  const jakartaNow = toZonedTime(now, TIMEZONE)
+  const currentMinutes = jakartaNow.getHours() * 60 + jakartaNow.getMinutes()
+  const dayOfWeek = getDay(jakartaNow) // 0=Sun, 1=Mon, ..., 5=Fri, 6=Sat
+
+  // ─────────────────────────────────────────────────────────────
+  // CS Branch
+  // ─────────────────────────────────────────────────────────────
+  if (category === 'CS') {
+    const cs = getCSScheduleSync()
+    const masukStartMins = getTimeInMinutes(cs.masuk.start)
+    const istirahatStartMins = getTimeInMinutes(cs.istirahat.start)
+    const istirahatEndMins = getTimeInMinutes(cs.istirahat.end)
+    const pulangStartMins = getTimeInMinutes(cs.pulang.start)
+
+    // A. Before Check-In
+    if (!completedRecords.masuk) {
+      // Workday check: CS operates Monday - Friday (days 1 to 5)
+      const isWorkday = dayOfWeek >= 1 && dayOfWeek <= 5
+      if (!isWorkday) {
+        return {
+          status: 'workday_holiday',
+          title: 'Hari Libur (Bukan Hari Kerja CS)',
+          message: 'Layanan Customer Service beroperasi hari Senin sampai Jumat. Presensi tidak aktif di akhir pekan.',
+        }
+      }
+
+      // Check-in start time check
+      if (currentMinutes < masukStartMins) {
+        return {
+          status: 'waiting_masuk',
+          title: `Presensi Masuk Dibuka Pukul ${cs.masuk.start.replace(':', '.')} WIB`,
+          startTime: cs.masuk.start,
+          message: `Waktu check-in belum dimulai. Tombol akan aktif otomatis pukul ${cs.masuk.start.replace(':', '.')} WIB.`,
+        }
+      }
+
+      return {
+        status: 'can_masuk',
+        title: 'Ambil Foto & Absen Masuk',
+        startTime: cs.masuk.start,
+        endTime: cs.masuk.end,
+      }
+    }
+
+    // B. After Check-In, Haven't Checked Out
+    // Case 1: Haven't taken istirahat
+    if (!completedRecords.istirahat) {
+      // Before istirahat start time (e.g. before 12.00 WIB)
+      if (currentMinutes < istirahatStartMins) {
+        return {
+          status: 'waiting_istirahat',
+          title: `Presensi berikutnya: Istirahat pukul ${cs.istirahat.start.replace(':', '.')} WIB`,
+          startTime: cs.istirahat.start,
+          message: `Check-in berhasil. Tombol presensi istirahat akan aktif otomatis pukul ${cs.istirahat.start.replace(':', '.')} WIB.`,
+        }
+      }
+
+      // Within istirahat window (e.g. 12.00 - 14.00 WIB)
+      if (currentMinutes <= istirahatEndMins) {
+        return {
+          status: 'can_istirahat',
+          title: 'Ambil Foto & Absen Istirahat',
+          startTime: cs.istirahat.start,
+          endTime: cs.istirahat.end,
+        }
+      }
+
+      // Past istirahat window (> 14.00 WIB), missed break -> advance to pulang
+      if (currentMinutes < pulangStartMins) {
+        return {
+          status: 'waiting_pulang',
+          title: `Presensi berikutnya: Pulang pukul ${cs.pulang.start.replace(':', '.')} WIB`,
+          startTime: cs.pulang.start,
+          message: `Waktu istirahat telah berakhir. Tombol presensi pulang akan aktif pukul ${cs.pulang.start.replace(':', '.')} WIB.`,
+        }
+      }
+
+      return {
+        status: 'can_pulang',
+        title: 'Ambil Foto & Absen Pulang',
+        startTime: cs.pulang.start,
+      }
+    }
+
+    // Case 2: Already taken istirahat
+    if (currentMinutes < pulangStartMins) {
+      return {
+        status: 'waiting_pulang',
+        title: `Presensi berikutnya: Pulang pukul ${cs.pulang.start.replace(':', '.')} WIB`,
+        startTime: cs.pulang.start,
+        message: `Presensi istirahat telah tercatat. Tombol presensi pulang akan aktif pukul ${cs.pulang.start.replace(':', '.')} WIB.`,
+      }
+    }
+
+    return {
+      status: 'can_pulang',
+      title: 'Ambil Foto & Absen Pulang',
+      startTime: cs.pulang.start,
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Security Branch
+  // ─────────────────────────────────────────────────────────────
+  const currentShift = shift || 'Shift I'
+  const s = getSecuritySchedule(workDateStr, currentShift)
+  const masukStartMins = getTimeInMinutes(s.start)
+  const pulangStartMins = getTimeInMinutes(s.end)
+  const note = s.end_next_day ? '(H+1)' : undefined
+
+  // A. Before Check-In
+  if (!completedRecords.masuk) {
+    if (currentShift === 'Shift III') {
+      // Shift III evening check: starts e.g. 20:00 (or 20:30)
+      if (currentMinutes < masukStartMins && currentMinutes > 12 * 60) {
+        return {
+          status: 'waiting_masuk',
+          title: `Presensi Masuk Dibuka Pukul ${s.start.replace(':', '.')} WIB`,
+          startTime: s.start,
+          message: `Waktu check-in Shift III belum dimulai. Tombol akan aktif pukul ${s.start.replace(':', '.')} WIB.`,
+        }
+      }
+      return {
+        status: 'can_masuk',
+        title: 'Ambil Foto & Absen Masuk',
+        startTime: s.start,
+        endTime: s.window_end,
+      }
+    }
+
+    // Shift I and II
+    if (currentMinutes < masukStartMins) {
+      return {
+        status: 'waiting_masuk',
+        title: `Presensi Masuk Dibuka Pukul ${s.start.replace(':', '.')} WIB`,
+        startTime: s.start,
+        message: `Waktu check-in belum dimulai. Tombol akan aktif pukul ${s.start.replace(':', '.')} WIB.`,
+      }
+    }
+
+    return {
+      status: 'can_masuk',
+      title: 'Ambil Foto & Absen Masuk',
+      startTime: s.start,
+      endTime: s.window_end,
+    }
+  }
+
+  // B. After Check-In, Haven't Checked Out
+  if (currentShift === 'Shift III') {
+    // If night time (>= 18:00 WIB), guard checked in tonight, checkout is tomorrow morning
+    if (currentMinutes >= 18 * 60 || currentMinutes >= masukStartMins) {
+      return {
+        status: 'waiting_pulang',
+        title: `Presensi berikutnya: Pulang pukul ${s.end.replace(':', '.')} WIB (H+1)`,
+        startTime: s.end,
+        note: '(H+1)',
+        message: `Check-in Shift III tercatat. Tombol presensi pulang akan aktif besok pagi pukul ${s.end.replace(':', '.')} WIB.`,
+      }
+    }
+    // Morning time (before 12:00)
+    if (currentMinutes < pulangStartMins) {
+      return {
+        status: 'waiting_pulang',
+        title: `Presensi berikutnya: Pulang pukul ${s.end.replace(':', '.')} WIB`,
+        startTime: s.end,
+        message: `Tombol presensi pulang akan aktif pukul ${s.end.replace(':', '.')} WIB.`,
+      }
+    }
+    return {
+      status: 'can_pulang',
+      title: 'Ambil Foto & Absen Pulang',
+      startTime: s.end,
+      note: undefined,
+    }
+  }
+
+  // Shift I & II
+  if (currentMinutes < pulangStartMins) {
+    return {
+      status: 'waiting_pulang',
+      title: `Presensi berikutnya: Pulang pukul ${s.end.replace(':', '.')} WIB`,
+      startTime: s.end,
+      note,
+      message: `Check-in tercatat. Tombol presensi pulang akan aktif pukul ${s.end.replace(':', '.')} WIB.`,
+    }
+  }
+
+  return {
+    status: 'can_pulang',
+    title: 'Ambil Foto & Absen Pulang',
+    startTime: s.end,
+    note,
+  }
+}
+

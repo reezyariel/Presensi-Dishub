@@ -228,8 +228,8 @@ export default function SchedulePage() {
               <p className="font-semibold text-neutral-800">Ketentuan Jadwal Customer Service</p>
               <ul className="space-y-1 text-[11px] list-disc ml-3">
                 <li>Jadwal berlaku tetap setiap hari kerja (Senin–Jumat).</li>
-                <li>Toleransi check-in: 07.30 – 08.00 WIB. Setelah 08.00 dianggap terlambat.</li>
-                <li>Toleransi check-out: 16.00 – 17.00 WIB.</li>
+                <li>Rentang check-in: {csSchedule.masukStart} – {csSchedule.masukEnd} WIB.</li>
+                <li>Rentang check-out: {csSchedule.pulangStart} – {csSchedule.pulangEnd} WIB.</li>
                 <li>Tidak ada variasi shift untuk divisi CS.</li>
               </ul>
             </div>

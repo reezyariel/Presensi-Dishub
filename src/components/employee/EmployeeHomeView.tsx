@@ -20,6 +20,7 @@ import {
   getCSScheduleSync,
   preloadSchedules,
   getNextAttendanceInfo,
+  getAttendanceButtonState,
 } from '../../lib/scheduleEngine'
 import type { AttendanceRecord, ShiftType } from '../../types/attendance'
 import TakeAttendanceModal from '../../pages/attendance/TakeAttendanceModal'
@@ -64,9 +65,11 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
     return () => clearInterval(timer)
   }, [])
 
-  // Preload schedule cache so getCSScheduleSync/getSecurityScheduleSync have fresh data
+  // Preload schedule cache and periodically refresh so changes in Settings are picked up
   useEffect(() => {
     preloadSchedules()
+    const refreshSched = setInterval(() => preloadSchedules(), 60000)
+    return () => clearInterval(refreshSched)
   }, [])
 
   useEffect(() => {
@@ -234,7 +237,8 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
     ...(todayRecords.pulang    ? ['pulang']    : []),
   ] as ('masuk' | 'istirahat' | 'pulang')[]
 
-  const nextInfo = getNextAttendanceInfo(category, completedTypes, selectedShift, today)
+  const nextInfo = getNextAttendanceInfo(category, completedTypes, selectedShift, today, currentTime)
+  const buttonState = getAttendanceButtonState(category, todayRecords, selectedShift, today, currentTime)
 
   // Clock display
   const timeStr = currentTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
@@ -246,10 +250,13 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
     ? 'Sudah Check-In'
     : 'Belum Absen'
 
+  // Is action currently active?
+  const isActionActive = buttonState.status === 'can_masuk' || buttonState.status === 'can_istirahat' || buttonState.status === 'can_pulang'
+
   // Banner warna latar
   const bannerBg = todayRecords.pulang
     ? 'bg-neutral-50 border-neutral-200'
-    : todayRecords.masuk
+    : isActionActive
     ? 'bg-neutral-900 border-neutral-800'
     : 'bg-neutral-50 border-neutral-200'
 
@@ -264,6 +271,103 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
         <div>
           <p className="text-xs font-bold text-neutral-700">Semua presensi hari ini selesai</p>
           <p className="text-[11px] text-neutral-500 mt-0.5">Sampai jumpa besok. Istirahat yang cukup!</p>
+        </div>
+      </>
+    )
+  } else if (buttonState.status === 'workday_holiday') {
+    nextAttendanceBanner = (
+      <>
+        <div className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center flex-shrink-0 mt-0.5 text-neutral-600">
+          <Calendar size={13} />
+        </div>
+        <div>
+          <p className="text-xs font-bold text-neutral-800">{buttonState.title}</p>
+          <p className="text-[11px] text-neutral-500 mt-0.5">{buttonState.message}</p>
+        </div>
+      </>
+    )
+  } else if (buttonState.status === 'can_masuk') {
+    nextAttendanceBanner = (
+      <>
+        <div className="w-7 h-7 rounded-full bg-white/10 text-white flex items-center justify-center flex-shrink-0 mt-0.5">
+          <Camera size={13} />
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold text-neutral-400">Jendela Check-In Dibuka</p>
+          <p className="text-xs font-bold mt-0.5 text-white">
+            Waktu presensi masuk: {buttonState.startTime.replace(':', '.')} – {buttonState.endTime.replace(':', '.')} WIB
+          </p>
+          <p className="text-[10px] mt-0.5 text-neutral-400">
+            Ambil foto selfie di area kantor untuk melakukan presensi masuk.
+          </p>
+        </div>
+      </>
+    )
+  } else if (buttonState.status === 'waiting_istirahat') {
+    nextAttendanceBanner = (
+      <>
+        <div className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center flex-shrink-0 mt-0.5 text-neutral-600">
+          <Clock size={13} />
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold text-neutral-500">Presensi berikutnya</p>
+          <p className="text-xs font-bold mt-0.5 text-neutral-900">
+            Istirahat pukul {buttonState.startTime.replace(':', '.')} WIB
+          </p>
+          <p className="text-[10px] mt-0.5 text-neutral-400">
+            Tombol presensi istirahat akan aktif otomatis pukul {buttonState.startTime.replace(':', '.')} WIB.
+          </p>
+        </div>
+      </>
+    )
+  } else if (buttonState.status === 'can_istirahat') {
+    nextAttendanceBanner = (
+      <>
+        <div className="w-7 h-7 rounded-full bg-white/10 text-white flex items-center justify-center flex-shrink-0 mt-0.5">
+          <Camera size={13} />
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold text-neutral-400">Waktu Istirahat Sedang Berlangsung</p>
+          <p className="text-xs font-bold mt-0.5 text-white">
+            Presensi istirahat: {buttonState.startTime.replace(':', '.')} – {buttonState.endTime.replace(':', '.')} WIB
+          </p>
+          <p className="text-[10px] mt-0.5 text-neutral-400">
+            Silakan ambil foto selfie untuk mencatat presensi istirahat siang.
+          </p>
+        </div>
+      </>
+    )
+  } else if (buttonState.status === 'waiting_pulang') {
+    nextAttendanceBanner = (
+      <>
+        <div className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center flex-shrink-0 mt-0.5 text-neutral-600">
+          <Clock size={13} />
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold text-neutral-500">Presensi berikutnya</p>
+          <p className="text-xs font-bold mt-0.5 text-neutral-900">
+            Pulang pukul {buttonState.startTime.replace(':', '.')} WIB{buttonState.note ? ` ${buttonState.note}` : ''}
+          </p>
+          <p className="text-[10px] mt-0.5 text-neutral-400">
+            Tombol presensi pulang akan aktif saat waktu pulang tiba.
+          </p>
+        </div>
+      </>
+    )
+  } else if (buttonState.status === 'can_pulang') {
+    nextAttendanceBanner = (
+      <>
+        <div className="w-7 h-7 rounded-full bg-white/10 text-white flex items-center justify-center flex-shrink-0 mt-0.5">
+          <Camera size={13} />
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold text-neutral-400">Waktu Check-Out Tiba</p>
+          <p className="text-xs font-bold mt-0.5 text-white">
+            Presensi pulang dibuka mulai pukul {buttonState.startTime.replace(':', '.')} WIB
+          </p>
+          <p className="text-[10px] mt-0.5 text-neutral-400">
+            Silakan ambil foto selfie sebelum meninggalkan lokasi kerja.
+          </p>
         </div>
       </>
     )
@@ -416,8 +520,37 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
                 </div>
               </div>
 
-              {/* Action Button */}
-              {!todayRecords.masuk ? (
+              {/* Action Button & Scheduling Area */}
+              {buttonState.status === 'workday_holiday' ? (
+                <div className="p-5 bg-neutral-50 rounded-xl border border-neutral-200 text-center space-y-2">
+                  <div className="w-10 h-10 rounded-full bg-neutral-200 text-neutral-600 flex items-center justify-center mx-auto">
+                    <Calendar size={18} />
+                  </div>
+                  <p className="text-xs font-bold text-neutral-900">{buttonState.title}</p>
+                  <p className="text-[11px] text-neutral-500 leading-relaxed max-w-sm mx-auto">
+                    {buttonState.message}
+                  </p>
+                </div>
+              ) : buttonState.status === 'waiting_masuk' ? (
+                <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-200 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-neutral-100 border border-neutral-200 flex items-center justify-center flex-shrink-0 text-neutral-600">
+                      <Clock size={16} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-neutral-900">{buttonState.title}</p>
+                      <p className="text-[11px] text-neutral-500 mt-0.5">{buttonState.message}</p>
+                    </div>
+                  </div>
+                  <button
+                    disabled
+                    className="w-full py-3.5 bg-neutral-200 text-neutral-400 font-bold text-sm rounded-xl flex items-center justify-center gap-2.5 cursor-not-allowed"
+                  >
+                    <Camera size={18} />
+                    <span>Absen Masuk (Belum Dibuka)</span>
+                  </button>
+                </div>
+              ) : buttonState.status === 'can_masuk' ? (
                 <button
                   onClick={() => handleOpenTakeModal('masuk')}
                   className="w-full py-4 bg-neutral-900 hover:bg-black text-white font-bold text-sm rounded-xl flex items-center justify-center gap-3 transition-all shadow-sm active:scale-[0.99]"
@@ -425,26 +558,81 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
                   <Camera size={20} />
                   <span>Ambil Foto &amp; Absen Masuk</span>
                 </button>
-              ) : !todayRecords.pulang ? (
+              ) : buttonState.status === 'waiting_istirahat' ? (
                 <div className="space-y-3">
-                  {/* CS: show Istirahat button if not yet taken */}
-                  {category === 'CS' && !todayRecords.istirahat && (
-                    <button
-                      onClick={() => handleOpenTakeModal('istirahat')}
-                      className="w-full py-3.5 bg-white hover:bg-neutral-50 text-neutral-800 font-bold text-sm rounded-xl border border-neutral-200 flex items-center justify-center gap-3 transition-all shadow-sm active:scale-[0.99]"
+                  <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-200 flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-neutral-100 border border-neutral-200 flex items-center justify-center flex-shrink-0 text-neutral-600 mt-0.5">
+                      <Clock size={16} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs font-bold text-neutral-900">{buttonState.title}</p>
+                      <p className="text-[11px] text-neutral-500 mt-0.5 leading-relaxed">
+                        {buttonState.message}
+                      </p>
+                    </div>
+                  </div>
+                  {todayRecords.masuk?.id && (
+                    <Link
+                      to={`/attendance/${todayRecords.masuk.id}`}
+                      className="w-full py-2.5 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold rounded-xl border border-neutral-200 flex items-center justify-center gap-1.5 transition-colors"
                     >
-                      <Camera size={18} />
-                      <span>Absen Istirahat</span>
-                    </button>
+                      <span>Lihat Detail Absen Masuk</span>
+                      <ChevronRight size={14} />
+                    </Link>
                   )}
+                </div>
+              ) : buttonState.status === 'can_istirahat' ? (
+                <div className="space-y-3">
+                  <button
+                    onClick={() => handleOpenTakeModal('istirahat')}
+                    className="w-full py-3.5 bg-neutral-900 hover:bg-black text-white font-bold text-sm rounded-xl flex items-center justify-center gap-3 transition-all shadow-sm active:scale-[0.99]"
+                  >
+                    <Camera size={18} />
+                    <span>Ambil Foto &amp; Absen Istirahat</span>
+                  </button>
+                  {todayRecords.masuk?.id && (
+                    <Link
+                      to={`/attendance/${todayRecords.masuk.id}`}
+                      className="w-full py-2.5 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold rounded-xl border border-neutral-200 flex items-center justify-center gap-1.5 transition-colors"
+                    >
+                      <span>Lihat Detail Absen Masuk</span>
+                      <ChevronRight size={14} />
+                    </Link>
+                  )}
+                </div>
+              ) : buttonState.status === 'waiting_pulang' ? (
+                <div className="space-y-3">
+                  <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-200 flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-neutral-100 border border-neutral-200 flex items-center justify-center flex-shrink-0 text-neutral-600 mt-0.5">
+                      <Clock size={16} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs font-bold text-neutral-900">{buttonState.title}</p>
+                      <p className="text-[11px] text-neutral-500 mt-0.5 leading-relaxed">
+                        {buttonState.message}
+                      </p>
+                    </div>
+                  </div>
+                  {todayRecords.masuk?.id && (
+                    <Link
+                      to={`/attendance/${todayRecords.masuk.id}`}
+                      className="w-full py-2.5 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold rounded-xl border border-neutral-200 flex items-center justify-center gap-1.5 transition-colors"
+                    >
+                      <span>Lihat Detail Absen Masuk</span>
+                      <ChevronRight size={14} />
+                    </Link>
+                  )}
+                </div>
+              ) : buttonState.status === 'can_pulang' ? (
+                <div className="space-y-3">
                   <button
                     onClick={() => handleOpenTakeModal('pulang')}
                     className="w-full py-3.5 bg-neutral-900 hover:bg-black text-white font-bold text-sm rounded-xl flex items-center justify-center gap-3 transition-all shadow-sm active:scale-[0.99]"
                   >
                     <Camera size={18} />
-                    <span>Absen Pulang</span>
+                    <span>Ambil Foto &amp; Absen Pulang</span>
                   </button>
-                  {todayRecords.masuk.id && (
+                  {todayRecords.masuk?.id && (
                     <Link
                       to={`/attendance/${todayRecords.masuk.id}`}
                       className="w-full py-2.5 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold rounded-xl border border-neutral-200 flex items-center justify-center gap-1.5 transition-colors"
