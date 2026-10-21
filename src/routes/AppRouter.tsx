@@ -25,6 +25,29 @@ import SettingsLocationPage from '../pages/admin/SettingsLocationPage'
 import AuditLogPage from '../pages/admin/AuditLogPage'
 
 import ProtectedRoute from './ProtectedRoute'
+import { useAuth } from '../hooks/useAuth'
+
+function UniversalRouteRedirect({ target }: { target: string }) {
+  const { role, isAdmin, isLoading } = useAuth()
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-neutral-900 border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs text-neutral-500 font-medium">Memverifikasi hak akses...</p>
+        </div>
+      </div>
+    )
+  }
+  if (isAdmin) {
+    if (target === 'schedule') return <Navigate to="/cs/schedule" replace />
+    if (target === 'history') return <Navigate to="/admin/attendance" replace />
+    if (target === 'reports') return <Navigate to="/admin/reports" replace />
+    return <Navigate to="/admin" replace />
+  }
+  const prefix = role === 'Security' ? '/security' : '/cs'
+  return <Navigate to={`${prefix}/${target}`} replace />
+}
 
 export default function AppRouter() {
   return (
@@ -36,7 +59,7 @@ export default function AppRouter() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/admin/login" element={<Navigate to="/login" replace />} />
 
-      {/* 3. Customer Service Employee Portal (Reference Panel 3 & sub-pages) */}
+      {/* 3. Cleaning Service Employee Portal (Reference Panel 3 & sub-pages) */}
       <Route
         path="/cs"
         element={
@@ -78,7 +101,7 @@ export default function AppRouter() {
         }
       />
 
-      {/* 6. Universal Direct Routes */}
+      {/* 6. Universal Direct Routes -> redirect to role-specific portal */}
       <Route
         path="/attendance/:id"
         element={
@@ -91,7 +114,7 @@ export default function AppRouter() {
         path="/history"
         element={
           <ProtectedRoute allowedRoles={['CS', 'Security', 'admin']}>
-            <AttendanceHistoryPage />
+            <UniversalRouteRedirect target="history" />
           </ProtectedRoute>
         }
       />
@@ -99,7 +122,7 @@ export default function AppRouter() {
         path="/schedule"
         element={
           <ProtectedRoute allowedRoles={['CS', 'Security', 'admin']}>
-            <SchedulePage />
+            <UniversalRouteRedirect target="schedule" />
           </ProtectedRoute>
         }
       />
@@ -107,7 +130,7 @@ export default function AppRouter() {
         path="/reports"
         element={
           <ProtectedRoute allowedRoles={['CS', 'Security', 'admin']}>
-            <ReportsPage />
+            <UniversalRouteRedirect target="reports" />
           </ProtectedRoute>
         }
       />
@@ -115,7 +138,7 @@ export default function AppRouter() {
         path="/profile"
         element={
           <ProtectedRoute allowedRoles={['CS', 'Security', 'admin']}>
-            <ProfilePage />
+            <UniversalRouteRedirect target="profile" />
           </ProtectedRoute>
         }
       />

@@ -93,7 +93,7 @@ export default function EmployeeSidebar({ category, isMobileOpen = false, onClos
               <div className="flex items-center gap-1 mt-0.5">
                 <RoleIcon size={10} className="text-neutral-500 flex-shrink-0" />
                 <p className="text-[11px] text-neutral-500 font-medium truncate">
-                  {category === 'CS' ? 'Customer Service' : 'Security / Keamanan'}
+                  {category === 'CS' ? 'Cleaning Service' : 'Security / Keamanan'}
                 </p>
               </div>
             </div>

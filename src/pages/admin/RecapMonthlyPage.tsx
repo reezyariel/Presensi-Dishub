@@ -292,7 +292,7 @@ export default function RecapMonthlyPage() {
             className="px-3 py-1.5 bg-neutral-50 border border-neutral-200 rounded-lg text-xs font-semibold text-neutral-800 focus:outline-none focus:ring-1 focus:ring-neutral-900"
           >
             <option value="">Semua Divisi</option>
-            <option value="CS">Customer Service (CS)</option>
+            <option value="CS">Cleaning Service (CS)</option>
             <option value="Security">Security Satpam</option>
           </select>
 

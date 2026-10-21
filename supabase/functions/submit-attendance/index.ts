@@ -197,7 +197,7 @@ serve(async (req: Request) => {
     if (category === 'CS') {
       if (shift) {
         return new Response(
-          JSON.stringify({ error: 'Kategori Customer Service tidak memiliki shift.' }),
+          JSON.stringify({ error: 'Kategori Cleaning Service tidak memiliki shift.' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }

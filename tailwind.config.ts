@@ -63,11 +63,57 @@ export default {
           '0%, 100%': { opacity: '1' },
           '50%': { opacity: '0.4' },
         },
+        // Splash Screen animations
+        'logo-appear': {
+          '0%': { opacity: '0', transform: 'scale(0.75)' },
+          '60%': { opacity: '1', transform: 'scale(1.04)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        'float': {
+          '0%, 100%': { transform: 'translateY(0px)' },
+          '50%': { transform: 'translateY(-8px)' },
+        },
+        'text-up': {
+          '0%': { opacity: '0', transform: 'translateY(20px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        // Login Page animations
+        'slow-zoom': {
+          '0%': { transform: 'scale(1)' },
+          '100%': { transform: 'scale(1.08)' },
+        },
+        'glow-pulse': {
+          '0%, 100%': { boxShadow: '0 0 20px rgba(255,255,255,0.1)' },
+          '50%': { boxShadow: '0 0 40px rgba(255,255,255,0.25)' },
+        },
+        'badge-in': {
+          '0%': { opacity: '0', transform: 'translateY(12px) scale(0.95)' },
+          '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
+        },
+        'form-in': {
+          '0%': { opacity: '0', transform: 'translateY(24px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        'splash-bg-shift': {
+          '0%': { backgroundPosition: '50% 40%' },
+          '50%': { backgroundPosition: '52% 44%' },
+          '100%': { backgroundPosition: '50% 40%' },
+        },
       },
       animation: {
         'fade-in': 'fade-in 0.3s ease-out',
         'slide-in': 'slide-in 0.25s ease-out',
         'pulse-dot': 'pulse-dot 1.5s ease-in-out infinite',
+        // Splash
+        'logo-appear': 'logo-appear 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both',
+        'float': 'float 4s ease-in-out infinite',
+        'text-up': 'text-up 0.5s ease-out both',
+        // Login
+        'slow-zoom': 'slow-zoom 20s ease-in-out infinite alternate',
+        'glow-pulse': 'glow-pulse 3s ease-in-out infinite',
+        'badge-in': 'badge-in 0.4s ease-out both',
+        'form-in': 'form-in 0.55s ease-out both',
+        'splash-bg-shift': 'splash-bg-shift 12s ease-in-out infinite',
       },
     },
   },

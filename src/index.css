@@ -155,3 +155,18 @@
   font-family: inherit;
   border-radius: 1rem;
 }
+
+/* Extra keyframes that require CSS-only props (box-shadow can't be in Tailwind theme) */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(255,255,255,0.08); }
+  50%       { box-shadow: 0 0 45px rgba(255,255,255,0.22); }
+}
+
+/* Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

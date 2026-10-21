@@ -263,7 +263,7 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
   }
 
   const displayName = employeeProfile?.full_name || profile?.full_name || 'Pegawai'
-  const roleLabel = category === 'CS' ? 'Customer Service' : 'Security / Keamanan'
+  const roleLabel = category === 'CS' ? 'Cleaning Service' : 'Security / Keamanan'
 
   // Derive next attendance info from today's completed records
   const completedTypes = [

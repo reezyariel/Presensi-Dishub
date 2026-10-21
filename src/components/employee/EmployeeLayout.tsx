@@ -50,7 +50,7 @@ export default function EmployeeLayout({ category }: EmployeeLayoutProps) {
             px-4 py-4 sm:px-5 sm:py-5
             md:px-7 md:py-6
           ">
-            <Outlet />
+            <Outlet context={{ category }} />
           </div>
         </main>
 

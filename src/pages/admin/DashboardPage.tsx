@@ -165,7 +165,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* 0. Executive Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 sm:p-6 rounded-2xl border border-neutral-200/90 shadow-2xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-6 rounded-2xl border border-neutral-200/90 shadow-2xs">
         <div>
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-neutral-900 animate-pulse" />
@@ -174,15 +174,15 @@ export default function DashboardPage() {
             </h2>
           </div>
           <p className="text-xs text-neutral-500 mt-1 leading-relaxed">
-            Pemantauan presensi pegawai CS & Security secara realtime hari ini ({formatJakartaDate(today)}).
+            Pemantauan presensi pegawai Cleaning Service &amp; Security secara realtime hari ini ({formatJakartaDate(today)}).
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-shrink-0">
+        <div className="flex items-center gap-2 w-full sm:w-auto flex-shrink-0">
           <button
             onClick={loadDashboard}
             disabled={isLoading}
-            className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3.5"
+            className="btn-secondary text-xs flex-1 sm:flex-initial flex items-center justify-center gap-1.5 py-2.5 px-3.5"
             title="Muat ulang data terbaru"
           >
             <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} />
@@ -191,7 +191,7 @@ export default function DashboardPage() {
 
           <Link
             to="/admin/attendance"
-            className="btn-primary text-xs flex items-center gap-1.5 py-2 px-3.5"
+            className="btn-primary text-xs flex-1 sm:flex-initial flex items-center justify-center gap-1.5 py-2.5 px-3.5"
           >
             <span>Daftar Presensi</span>
             <ArrowUpRight size={14} />
@@ -199,100 +199,100 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 1. Top Stat Cards (5 Desktop Columns) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
+      {/* 1. Top Stat Cards (Responsive Grid: 2 cols on mobile, 5 on desktop) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         {/* Card 1: Total Karyawan */}
-        <div className="card p-4.5 sm:p-5 flex flex-col justify-between space-y-3">
+        <div className="card p-3.5 sm:p-5 flex flex-col justify-between space-y-2.5 sm:space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">
+            <span className="text-[10px] sm:text-[11px] font-bold text-neutral-500 uppercase tracking-wider">
               Total Pegawai
             </span>
-            <div className="w-8 h-8 rounded-xl bg-neutral-100 border border-neutral-200 text-neutral-800 flex items-center justify-center">
-              <Users size={16} />
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-neutral-100 border border-neutral-200 text-neutral-800 flex items-center justify-center flex-shrink-0">
+              <Users size={15} />
             </div>
           </div>
           <div>
-            <p className="text-2xl sm:text-3xl font-extrabold text-neutral-900 font-mono tracking-tight">
+            <p className="text-xl sm:text-3xl font-extrabold text-neutral-900 font-mono tracking-tight">
               {stats.totalEmployees}
             </p>
-            <p className="text-[11px] text-neutral-500 mt-0.5">Pegawai aktif terdaftar</p>
+            <p className="text-[10px] sm:text-[11px] text-neutral-500 mt-1 truncate">Pegawai aktif terdaftar</p>
           </div>
         </div>
 
         {/* Card 2: Hadir Hari Ini */}
-        <div className="card p-4.5 sm:p-5 flex flex-col justify-between space-y-3">
+        <div className="card p-3.5 sm:p-5 flex flex-col justify-between space-y-2.5 sm:space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">
+            <span className="text-[10px] sm:text-[11px] font-bold text-neutral-500 uppercase tracking-wider">
               Hadir Hari Ini
             </span>
-            <div className="w-8 h-8 rounded-xl bg-neutral-900 text-white flex items-center justify-center">
-              <UserCheck size={16} />
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-neutral-900 text-white flex items-center justify-center flex-shrink-0">
+              <UserCheck size={15} />
             </div>
           </div>
           <div>
-            <div className="flex items-baseline gap-2">
-              <p className="text-2xl sm:text-3xl font-extrabold text-neutral-900 font-mono tracking-tight">
+            <div className="flex items-center justify-between">
+              <p className="text-xl sm:text-3xl font-extrabold text-neutral-900 font-mono tracking-tight">
                 {stats.hadir}
               </p>
-              <span className="text-xs font-bold text-neutral-700 font-mono">
-                ({stats.percent}%)
+              <span className="text-[10px] sm:text-xs font-bold text-neutral-800 bg-neutral-100 border border-neutral-200 px-1.5 py-0.5 rounded-md font-mono">
+                {stats.percent}%
               </span>
             </div>
-            <p className="text-[11px] text-neutral-500 mt-0.5">Presensi masuk tercatat</p>
+            <p className="text-[10px] sm:text-[11px] text-neutral-500 mt-1 truncate">Presensi masuk tercatat</p>
           </div>
         </div>
 
         {/* Card 3: Terlambat */}
-        <div className="card p-4.5 sm:p-5 flex flex-col justify-between space-y-3">
+        <div className="card p-3.5 sm:p-5 flex flex-col justify-between space-y-2.5 sm:space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">
+            <span className="text-[10px] sm:text-[11px] font-bold text-neutral-500 uppercase tracking-wider">
               Terlambat
             </span>
-            <div className="w-8 h-8 rounded-xl bg-neutral-200/90 border border-neutral-300 text-neutral-900 flex items-center justify-center">
-              <Clock size={16} />
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-neutral-200/90 border border-neutral-300 text-neutral-900 flex items-center justify-center flex-shrink-0">
+              <Clock size={15} />
             </div>
           </div>
           <div>
-            <p className="text-2xl sm:text-3xl font-extrabold text-neutral-900 font-mono tracking-tight">
+            <p className="text-xl sm:text-3xl font-extrabold text-neutral-900 font-mono tracking-tight">
               {stats.terlambat}
             </p>
-            <p className="text-[11px] text-neutral-500 mt-0.5">Melewati jadwal shift</p>
+            <p className="text-[10px] sm:text-[11px] text-neutral-500 mt-1 truncate">Melewati jadwal shift</p>
           </div>
         </div>
 
         {/* Card 4: Izin / Perlu Review */}
-        <div className="card p-4.5 sm:p-5 flex flex-col justify-between space-y-3">
+        <div className="card p-3.5 sm:p-5 flex flex-col justify-between space-y-2.5 sm:space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">
+            <span className="text-[10px] sm:text-[11px] font-bold text-neutral-500 uppercase tracking-wider">
               Perlu Review
             </span>
-            <div className="w-8 h-8 rounded-xl bg-neutral-100 border border-neutral-200 text-neutral-800 flex items-center justify-center">
-              <AlertCircle size={16} />
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-neutral-100 border border-neutral-200 text-neutral-800 flex items-center justify-center flex-shrink-0">
+              <AlertCircle size={15} />
             </div>
           </div>
           <div>
-            <p className="text-2xl sm:text-3xl font-extrabold text-neutral-900 font-mono tracking-tight">
+            <p className="text-xl sm:text-3xl font-extrabold text-neutral-900 font-mono tracking-tight">
               {stats.izinSakit}
             </p>
-            <p className="text-[11px] text-neutral-500 mt-0.5">Memerlukan verifikasi</p>
+            <p className="text-[10px] sm:text-[11px] text-neutral-500 mt-1 truncate">Memerlukan verifikasi</p>
           </div>
         </div>
 
         {/* Card 5: Belum Absen */}
-        <div className="card p-4.5 sm:p-5 flex flex-col justify-between space-y-3 col-span-2 sm:col-span-1">
+        <div className="card p-3.5 sm:p-5 flex flex-col justify-between space-y-2.5 sm:space-y-3 col-span-2 sm:col-span-1">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">
+            <span className="text-[10px] sm:text-[11px] font-bold text-neutral-500 uppercase tracking-wider">
               Belum Absen
             </span>
-            <div className="w-8 h-8 rounded-xl bg-neutral-100 border border-neutral-200 text-neutral-500 flex items-center justify-center">
-              <UserX size={16} />
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-neutral-100 border border-neutral-200 text-neutral-500 flex items-center justify-center flex-shrink-0">
+              <UserX size={15} />
             </div>
           </div>
           <div>
-            <p className="text-2xl sm:text-3xl font-extrabold text-neutral-900 font-mono tracking-tight">
+            <p className="text-xl sm:text-3xl font-extrabold text-neutral-900 font-mono tracking-tight">
               {stats.belumAbsen}
             </p>
-            <p className="text-[11px] text-neutral-500 mt-0.5">Belum melakukan absen</p>
+            <p className="text-[10px] sm:text-[11px] text-neutral-500 mt-1 truncate">Belum melakukan absen</p>
           </div>
         </div>
       </div>
@@ -468,7 +468,60 @@ export default function DashboardPage() {
             </Link>
           </div>
 
-          <div className="overflow-x-auto -mx-5 px-5 sm:mx-0 sm:px-0">
+          {/* Mobile Activity Card View (md:hidden) — No horizontal scrolling, perfectly formatted */}
+          <div className="md:hidden space-y-2.5">
+            {recentActivities.length === 0 ? (
+              <p className="py-8 text-center text-neutral-400 text-xs">
+                Belum ada aktivitas presensi yang tercatat hari ini.
+              </p>
+            ) : (
+              recentActivities.map(rec => (
+                <div
+                  key={rec.id}
+                  className="p-3.5 bg-neutral-50/70 hover:bg-neutral-50 border border-neutral-200/80 rounded-xl space-y-2.5 transition-colors"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-7 h-7 rounded-full bg-neutral-900 text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
+                        {rec.employee_name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <span className="block font-bold text-xs text-neutral-900 truncate">
+                          {rec.employee_name}
+                        </span>
+                        <span className="block text-[10px] text-neutral-400 font-mono">
+                          ID: {rec.id.slice(0, 8)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <CategoryBadge category={rec.category} />
+                      <AttendanceTypeBadge type={rec.attendance_type} />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-neutral-200/60 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-bold text-neutral-800">
+                        {rec.recorded_at ? formatJakartaTime(new Date(rec.recorded_at)) : '--:--'} WIB
+                      </span>
+                      <AttendanceStatusBadge status={rec.attendance_status} />
+                    </div>
+                    <Link
+                      to={`/admin/attendance/${rec.id}`}
+                      className="inline-flex items-center gap-0.5 text-[11px] font-bold text-neutral-900 hover:underline"
+                    >
+                      <span>Detail</span>
+                      <ChevronRight size={13} />
+                    </Link>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Desktop Table View (hidden md:block) */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-neutral-100 text-neutral-400 text-[11px] uppercase tracking-wider font-semibold">

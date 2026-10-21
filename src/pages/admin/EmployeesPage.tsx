@@ -443,12 +443,12 @@ export default function EmployeesPage() {
           </div>
         </div>
 
-        {/* Customer Service */}
+        {/* Cleaning Service */}
         <div className="card p-5 flex items-center justify-between">
           <div>
-            <p className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Customer Service</p>
+            <p className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">Cleaning Service</p>
             <p className="text-2xl font-extrabold text-neutral-900 font-mono mt-1">{stats.csCount}</p>
-            <p className="text-[10px] text-neutral-400 mt-0.5">Petugas CS kantor</p>
+            <p className="text-[10px] text-neutral-400 mt-0.5">Petugas kebersihan &amp; CS</p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-neutral-900 text-white flex items-center justify-center flex-shrink-0">
             <Headphones size={20} />
@@ -661,7 +661,7 @@ export default function EmployeesPage() {
                       {emp.employee_role === 'CS' ? (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-neutral-100 text-neutral-900 border border-neutral-200">
                           <Headphones size={13} />
-                          Customer Service
+                          Cleaning Service
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-neutral-900 text-white">
@@ -823,7 +823,7 @@ export default function EmployeesPage() {
                     }`}
                   >
                     <Headphones size={15} />
-                    <span>Customer Service</span>
+                    <span>Cleaning Service</span>
                   </button>
 
                   <button

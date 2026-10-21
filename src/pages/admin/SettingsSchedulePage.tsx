@@ -359,7 +359,7 @@ export default function SettingsSchedulePage() {
             </div>
             <div>
               <h2 className="text-xs font-bold text-neutral-900 uppercase tracking-wider">
-                Jadwal CS — Customer Service
+                Jadwal CS — Cleaning Service
               </h2>
               <p className="text-[11px] text-neutral-500">
                 Masuk: <strong>sebelum open</strong> = ditolak · <strong>open–batas tepat waktu</strong> = tepat waktu · <strong>batas–tutup</strong> = terlambat · <strong>setelah tutup</strong> = ditolak

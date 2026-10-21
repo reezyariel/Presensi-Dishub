@@ -194,7 +194,7 @@ console.log('  ✅ Consistent whitespace compression and lowercase across all in
 // ============================================================
 // 4. CS 3-Boundary Window & Lateness Policy
 // ============================================================
-console.log('\nTEST 4: Customer Service 3-Boundary Schedule & Lateness Rules')
+console.log('\nTEST 4: Cleaning Service 3-Boundary Schedule & Lateness Rules')
 
 function evaluateCSAttendanceServer(
   attendanceType: 'masuk' | 'istirahat' | 'pulang',

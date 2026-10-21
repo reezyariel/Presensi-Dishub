@@ -314,7 +314,7 @@ export default function AttendanceListPage() {
                 className="form-input text-xs py-1.5"
               >
                 <option value="">Semua Divisi</option>
-                <option value="CS">Customer Service</option>
+                <option value="CS">Cleaning Service (CS)</option>
                 <option value="Security">Security</option>
               </select>
             </div>

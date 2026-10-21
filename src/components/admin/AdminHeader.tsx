@@ -9,17 +9,17 @@ import { supabase } from '../../lib/supabase'
 import { formatInTimeZone } from 'date-fns-tz'
 import { TIMEZONE } from '../../lib/scheduleEngine'
 
-const PAGE_TITLES: Record<string, { title: string; category: string }> = {
-  '/admin': { title: 'Dashboard Ringkasan', category: 'Utama' },
-  '/admin/employees': { title: 'Manajemen Pegawai', category: 'SDM' },
-  '/admin/attendance': { title: 'Daftar Presensi', category: 'Presensi' },
-  '/admin/attendance/detail': { title: 'Detail Catatan Presensi', category: 'Presensi' },
-  '/admin/review': { title: 'Review & Verifikasi Presensi', category: 'Pemeriksaan' },
-  '/admin/recap/daily': { title: 'Rekapitulasi Harian', category: 'Laporan' },
-  '/admin/recap/monthly': { title: 'Rekapitulasi Bulanan', category: 'Laporan' },
-  '/admin/settings/schedule': { title: 'Konfigurasi Shift & Jadwal', category: 'Pengaturan' },
-  '/admin/settings/location': { title: 'Titik Lokasi & Geofence', category: 'Pengaturan' },
-  '/admin/audit': { title: 'Log Audit Keamanan', category: 'Keamanan' },
+const PAGE_TITLES: Record<string, { title: string; shortTitle: string; category: string }> = {
+  '/admin': { title: 'Dashboard Ringkasan', shortTitle: 'Dashboard', category: 'Utama' },
+  '/admin/employees': { title: 'Manajemen Pegawai', shortTitle: 'Pegawai', category: 'SDM' },
+  '/admin/attendance': { title: 'Daftar Presensi', shortTitle: 'Daftar Presensi', category: 'Presensi' },
+  '/admin/attendance/detail': { title: 'Detail Catatan Presensi', shortTitle: 'Detail Presensi', category: 'Presensi' },
+  '/admin/review': { title: 'Review & Verifikasi Presensi', shortTitle: 'Review Presensi', category: 'Pemeriksaan' },
+  '/admin/recap/daily': { title: 'Rekapitulasi Harian', shortTitle: 'Rekap Harian', category: 'Laporan' },
+  '/admin/recap/monthly': { title: 'Rekapitulasi Bulanan', shortTitle: 'Rekap Bulanan', category: 'Laporan' },
+  '/admin/settings/schedule': { title: 'Konfigurasi Shift & Jadwal', shortTitle: 'Atur Jadwal', category: 'Pengaturan' },
+  '/admin/settings/location': { title: 'Titik Lokasi & Geofence', shortTitle: 'Lokasi Kantor', category: 'Pengaturan' },
+  '/admin/audit': { title: 'Log Audit Keamanan', shortTitle: 'Audit Log', category: 'Keamanan' },
 }
 
 interface AdminHeaderProps {
@@ -39,9 +39,9 @@ export default function AdminHeader({ onToggleSidebar }: AdminHeaderProps) {
   // Determine current page info
   const pageInfo = (() => {
     if (location.pathname.startsWith('/admin/attendance/')) {
-      return { title: 'Detail Presensi', category: 'Presensi' }
+      return { title: 'Detail Presensi', shortTitle: 'Detail Presensi', category: 'Presensi' }
     }
-    return PAGE_TITLES[location.pathname] ?? { title: 'Dashboard Admin', category: 'Admin' }
+    return PAGE_TITLES[location.pathname] ?? { title: 'Dashboard Admin', shortTitle: 'Dashboard', category: 'Admin' }
   })()
 
   // Real-time clock interval (updates every second)
@@ -105,12 +105,12 @@ export default function AdminHeader({ onToggleSidebar }: AdminHeaderProps) {
   )
 
   return (
-    <header className="admin-header justify-between">
+    <header className="admin-header justify-between px-3.5 sm:px-6">
       {/* Left: Mobile Toggle & Desktop Breadcrumbs */}
-      <div className="flex items-center gap-3 min-w-0">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
         <button
           onClick={onToggleSidebar}
-          className="md:hidden p-2 rounded-xl text-neutral-600 hover:bg-neutral-100 transition-colors"
+          className="md:hidden p-1.5 sm:p-2 rounded-xl text-neutral-600 hover:bg-neutral-100 transition-colors flex-shrink-0"
           aria-label="Buka Menu Navigasi"
         >
           <Menu size={20} />
@@ -122,14 +122,15 @@ export default function AdminHeader({ onToggleSidebar }: AdminHeaderProps) {
             <ChevronRight size={12} />
             <span className="text-neutral-500 font-semibold">{pageInfo.category}</span>
           </div>
-          <h1 className="text-base sm:text-lg font-bold text-neutral-900 tracking-tight truncate">
-            {pageInfo.title}
+          <h1 className="text-sm sm:text-lg font-bold text-neutral-900 tracking-tight truncate">
+            <span className="sm:hidden">{pageInfo.shortTitle || pageInfo.title}</span>
+            <span className="hidden sm:inline">{pageInfo.title}</span>
           </h1>
         </div>
       </div>
 
       {/* Right: Live Clock, Notifications, User Profile & Logout */}
-      <div className="flex items-center gap-2.5 sm:gap-4">
+      <div className="flex items-center gap-1.5 sm:gap-3.5 flex-shrink-0">
         {/* Live Jakarta Time & Date Pill (Desktop) */}
         <div className="hidden lg:flex items-center gap-2.5 text-xs text-neutral-600 bg-neutral-100/90 px-3.5 py-1.5 rounded-xl border border-neutral-200 shadow-2xs font-mono">
           <div className="flex items-center gap-1.5">

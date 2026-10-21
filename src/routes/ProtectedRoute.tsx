@@ -84,7 +84,7 @@ export default function ProtectedRoute({ children, requireAdmin, allowedRoles }:
                 className="btn-primary w-full justify-center py-2.5 text-xs flex items-center gap-1.5"
               >
                 <Headphones size={15} />
-                <span>Buka Portal Customer Service</span>
+                <span>Buka Portal Cleaning Service</span>
               </Link>
             )}
 

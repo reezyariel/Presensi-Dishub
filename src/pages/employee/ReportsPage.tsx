@@ -391,7 +391,7 @@ export default function ReportsPage() {
             <div>
               <h3 className="text-sm font-bold text-neutral-900">Rekapitulasi Seluruh Divisi</h3>
               <p className="text-xs text-neutral-400 mt-0.5">
-                Rincian kehadiran Customer Service vs Security untuk periode terpilih
+                Rincian kehadiran Cleaning Service vs Security untuk periode terpilih
               </p>
             </div>
             <span className="text-xs font-mono text-neutral-400">
@@ -417,8 +417,8 @@ export default function ReportsPage() {
                       <Headphones size={15} />
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-neutral-900">Customer Service</p>
-                      <p className="text-[11px] text-neutral-400 font-normal">Layanan &amp; Administrasi</p>
+                      <p className="text-xs font-bold text-neutral-900">Cleaning Service</p>
+                      <p className="text-[11px] text-neutral-400 font-normal">Kebersihan &amp; Pemeliharaan</p>
                     </div>
                   </td>
                   <td className="text-center px-5 py-4 font-mono font-bold text-sm">{stats.cs?.hadir ?? 0}</td>

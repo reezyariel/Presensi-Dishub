@@ -44,7 +44,7 @@ export default function ProfilePage() {
   }
 
   const displayName = employeeProfile?.full_name || profile?.full_name || user?.email?.split('@')[0] || 'Karyawan'
-  const roleLabel = role === 'Security' ? 'Security / Keamanan' : 'Customer Service'
+  const roleLabel = role === 'Security' ? 'Security / Keamanan' : 'Cleaning Service'
   const RoleIcon = role === 'Security' ? Shield : Headphones
   const basePath = role === 'Security' ? '/security' : '/cs'
   const initials = displayName.split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase()

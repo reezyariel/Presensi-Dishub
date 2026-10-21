@@ -818,7 +818,7 @@ export function getAttendanceButtonState(
         return {
           status: 'workday_holiday',
           title: 'Hari Libur (Bukan Hari Kerja CS)',
-          message: 'Layanan Customer Service beroperasi hari Senin sampai Jumat. Presensi tidak aktif di akhir pekan.',
+          message: 'Layanan Cleaning Service beroperasi hari Senin sampai Jumat. Presensi tidak aktif di akhir pekan.',
         }
       }
 
