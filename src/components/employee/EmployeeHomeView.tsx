@@ -334,19 +334,36 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
       </>
     )
   } else if (buttonState.status === 'can_masuk') {
+    const openT    = (buttonState.openTime     || buttonState.startTime).replace(':', '.')
+    const deadlineT = (buttonState.deadlineTime || buttonState.endTime).replace(':', '.')
+    const closeT   = (buttonState.closeTime    || buttonState.endTime).replace(':', '.')
     nextAttendanceBanner = (
       <>
         <div className="w-7 h-7 rounded-full bg-white/10 text-white flex items-center justify-center flex-shrink-0 mt-0.5">
           <Camera size={13} />
         </div>
-        <div>
+        <div className="flex-1">
           <p className="text-[11px] font-semibold text-neutral-400">
             {buttonState.isLate ? 'Jendela Check-In (Terlambat)' : 'Jendela Check-In Dibuka'}
           </p>
-          <p className="text-xs font-bold mt-0.5 text-white">
-            Waktu presensi masuk: {buttonState.startTime.replace(':', '.')} – {buttonState.endTime.replace(':', '.')} WIB
-          </p>
-          <p className="text-[10px] mt-0.5 text-neutral-400">
+          {category === 'CS' ? (
+            <div className="mt-1 space-y-0.5">
+              <p className="text-[10px] text-neutral-300">
+                <span className="font-semibold text-white">Buka:</span> {openT} WIB
+              </p>
+              <p className="text-[10px] text-neutral-300">
+                <span className="font-semibold text-white">Batas tepat waktu:</span> {deadlineT} WIB
+              </p>
+              <p className="text-[10px] text-neutral-300">
+                <span className="font-semibold text-white">Tutup:</span> {closeT} WIB
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs font-bold mt-0.5 text-white">
+              Waktu presensi masuk: {openT} – {closeT} WIB
+            </p>
+          )}
+          <p className="text-[10px] mt-1 text-neutral-400">
             {buttonState.isLate
               ? 'Waktu check-in telah melewati batas tepat waktu. Presensi akan dicatat sebagai terlambat.'
               : 'Ambil foto selfie di area kantor untuk melakukan presensi masuk.'}
@@ -851,26 +868,69 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
               )}
             </div>
             <div className="px-5 py-4 space-y-3">
-              {[
-                { label: 'Masuk', value: scheduleDisplay.masuk, icon: Sunrise },
-                { label: 'Istirahat', value: scheduleDisplay.istirahat, icon: Clock },
-                { label: 'Pulang', value: scheduleDisplay.pulang, icon: Sunset },
-              ].map(item => {
-                const Icon = item.icon
+              {category === 'CS' ? (() => {
+                const cs = (() => { try { return getCSScheduleSync() } catch { return null } })()
                 return (
-                  <div key={item.label} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-xs text-neutral-500">
-                      <Icon size={14} />
-                      <span>{item.label}</span>
+                  <>
+                    {/* CS Masuk: 3 distinct boundaries */}
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-2 text-xs text-neutral-500 pt-0.5">
+                        <Sunrise size={14} />
+                        <span>Masuk</span>
+                      </div>
+                      <div className="text-right space-y-0.5">
+                        <p className="text-[10px] text-neutral-500">
+                          <span className="font-semibold text-neutral-700">Buka</span>{' '}
+                          {cs ? cs.masuk.open.replace(':', '.') : '--'} WIB
+                        </p>
+                        <p className="text-[10px] text-neutral-500">
+                          <span className="font-semibold text-neutral-700">Batas</span>{' '}
+                          {cs ? cs.masuk.ontime_deadline.replace(':', '.') : '--'} WIB
+                        </p>
+                        <p className="text-[10px] text-neutral-500">
+                          <span className="font-semibold text-neutral-700">Tutup</span>{' '}
+                          {cs ? cs.masuk.close.replace(':', '.') : '--'} WIB
+                        </p>
+                      </div>
                     </div>
-                    <span className="text-xs font-bold text-neutral-900 font-mono">{item.value}</span>
-                  </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-xs text-neutral-500">
+                        <Clock size={14} />
+                        <span>Istirahat</span>
+                      </div>
+                      <span className="text-xs font-bold text-neutral-900 font-mono">{scheduleDisplay.istirahat}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-xs text-neutral-500">
+                        <Sunset size={14} />
+                        <span>Pulang</span>
+                      </div>
+                      <span className="text-xs font-bold text-neutral-900 font-mono">{scheduleDisplay.pulang}</span>
+                    </div>
+                  </>
                 )
-              })}
-              {category === 'Security' && (
-                <div className="pt-2 border-t border-neutral-100">
-                  <p className="text-[10px] text-neutral-400">Kamis & Jumat: Shift bergeser +30 menit</p>
-                </div>
+              })() : (
+                <>
+                  {[
+                    { label: 'Masuk', value: scheduleDisplay.masuk, icon: Sunrise },
+                    { label: 'Istirahat', value: scheduleDisplay.istirahat, icon: Clock },
+                    { label: 'Pulang', value: scheduleDisplay.pulang, icon: Sunset },
+                  ].map(item => {
+                    const Icon = item.icon
+                    return (
+                      <div key={item.label} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-xs text-neutral-500">
+                          <Icon size={14} />
+                          <span>{item.label}</span>
+                        </div>
+                        <span className="text-xs font-bold text-neutral-900 font-mono">{item.value}</span>
+                      </div>
+                    )
+                  })}
+                  <div className="pt-2 border-t border-neutral-100">
+                    <p className="text-[10px] text-neutral-400">Kamis &amp; Jumat: Shift bergeser +30 menit</p>
+                  </div>
+                </>
               )}
             </div>
           </div>
@@ -881,7 +941,7 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
               <h3 className="text-sm font-bold text-neutral-900">Rekap 30 Hari</h3>
               <TrendingUp size={15} className="text-neutral-400" />
             </div>
-            <div className="px-5 py-4 grid grid-cols-3 gap-3 text-center">
+            <div className="px-5 py-4 grid grid-cols-2 gap-3 text-center">
               <div>
                 <p className="text-xl font-bold text-neutral-900">{monthStats.hadir}</p>
                 <p className="text-[10px] font-medium text-neutral-500 mt-0.5 flex items-center justify-center gap-1">
@@ -894,13 +954,6 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
                 <p className="text-[10px] font-medium text-neutral-500 mt-0.5 flex items-center justify-center gap-1">
                   <AlertCircle size={10} />
                   Terlambat
-                </p>
-              </div>
-              <div>
-                <p className="text-xl font-bold text-neutral-900">{monthStats.tidakHadir}</p>
-                <p className="text-[10px] font-medium text-neutral-500 mt-0.5 flex items-center justify-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-neutral-300 inline-block" />
-                  Absen
                 </p>
               </div>
             </div>

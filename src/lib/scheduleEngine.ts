@@ -721,6 +721,9 @@ export type AttendanceButtonState =
       title: string
       startTime: string
       message: string
+      openTime?: string
+      deadlineTime?: string
+      closeTime?: string
     }
   | {
       status: 'can_masuk'
@@ -728,11 +731,17 @@ export type AttendanceButtonState =
       startTime: string
       endTime: string
       isLate: boolean  // true jika saat ini sudah melewati ontime_deadline
+      openTime?: string
+      deadlineTime?: string
+      closeTime?: string
     }
   | {
       status: 'window_closed'  // jendela presensi masuk sudah ditutup
       title: string
       message: string
+      openTime?: string
+      deadlineTime?: string
+      closeTime?: string
     }
   | {
       status: 'waiting_istirahat'
@@ -819,6 +828,9 @@ export function getAttendanceButtonState(
           status: 'waiting_masuk',
           title: `Presensi Masuk Dibuka Pukul ${cs.masuk.open.replace(':', '.')} WIB`,
           startTime: cs.masuk.open,
+          openTime: cs.masuk.open,
+          deadlineTime: cs.masuk.ontime_deadline,
+          closeTime: cs.masuk.close,
           message: `Waktu check-in belum dimulai. Tombol akan aktif otomatis pukul ${cs.masuk.open.replace(':', '.')} WIB.`,
         }
       }
@@ -828,6 +840,9 @@ export function getAttendanceButtonState(
         return {
           status: 'window_closed',
           title: 'Jendela Presensi Masuk Ditutup',
+          openTime: cs.masuk.open,
+          deadlineTime: cs.masuk.ontime_deadline,
+          closeTime: cs.masuk.close,
           message: `Waktu presensi masuk telah berakhir pukul ${cs.masuk.close.replace(':', '.')} WIB. Presensi hari ini tidak dapat dilakukan.`,
         }
       }
@@ -839,6 +854,9 @@ export function getAttendanceButtonState(
         title: isLate ? 'Absen Masuk (Terlambat)' : 'Ambil Foto & Absen Masuk',
         startTime: cs.masuk.open,
         endTime: cs.masuk.close,
+        openTime: cs.masuk.open,
+        deadlineTime: cs.masuk.ontime_deadline,
+        closeTime: cs.masuk.close,
         isLate,
       }
     }

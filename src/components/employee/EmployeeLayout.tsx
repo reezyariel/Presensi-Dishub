@@ -42,7 +42,7 @@ export default function EmployeeLayout({ category }: EmployeeLayoutProps) {
         {/* ─── Page Content ─── */}
         <main className={`
           flex-1 overflow-y-auto
-          ${isTakingAttendance ? '' : 'pb-20 md:pb-0'}
+          ${isTakingAttendance ? '' : 'pb-28 sm:pb-32 md:pb-8'}
         `}>
           {/* Content wrapper: on mobile, plain scroll; on desktop, extra padding */}
           <div className="
