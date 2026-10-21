@@ -34,6 +34,8 @@ export default function AttendanceDetailPage() {
   const [showCorrection, setShowCorrection] = useState(false)
   const [correctionReason, setCorrectionReason] = useState('')
   const [correctionReviewStatus, setCorrectionReviewStatus] = useState<ReviewStatus>('belum_diperiksa')
+  const [correctionAttendanceStatus, setCorrectionAttendanceStatus] = useState<'tepat_waktu' | 'terlambat'>('tepat_waktu')
+  const [correctionLateMinutes, setCorrectionLateMinutes] = useState<number>(0)
   const [correctionNotes, setCorrectionNotes] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
@@ -86,6 +88,8 @@ export default function AttendanceDetailPage() {
       const r = data as AttendanceRecord
       setRecord(r)
       setCorrectionReviewStatus(r.review_status)
+      setCorrectionAttendanceStatus(r.attendance_status)
+      setCorrectionLateMinutes(r.late_minutes ?? 0)
       setCorrectionNotes(r.admin_notes ?? '')
 
       // Get signed URL for private selfie storage
@@ -126,12 +130,17 @@ export default function AttendanceDetailPage() {
     setIsSaving(true)
 
     try {
+      const finalLate = correctionAttendanceStatus === 'tepat_waktu' ? 0 : correctionLateMinutes
       const oldValues = {
         review_status: record.review_status,
+        attendance_status: record.attendance_status,
+        late_minutes: record.late_minutes,
         admin_notes: record.admin_notes,
       }
       const newValues = {
         review_status: correctionReviewStatus,
+        attendance_status: correctionAttendanceStatus,
+        late_minutes: finalLate,
         admin_notes: correctionNotes,
       }
 
@@ -140,6 +149,8 @@ export default function AttendanceDetailPage() {
         .from('attendance_records')
         .update({
           review_status: correctionReviewStatus,
+          attendance_status: correctionAttendanceStatus,
+          late_minutes: finalLate,
           admin_notes: correctionNotes,
           updated_at: new Date().toISOString(),
         })
@@ -151,7 +162,7 @@ export default function AttendanceDetailPage() {
       await supabase.from('attendance_audit_logs').insert({
         attendance_record_id: record.id,
         admin_id: profile.id,
-        action: 'UPDATE_REVIEW_STATUS',
+        action: 'UPDATE_STATUS_AND_REVIEW',
         old_values: oldValues,
         new_values: newValues,
         reason: correctionReason,
@@ -418,6 +429,41 @@ export default function AttendanceDetailPage() {
 
       {showCorrection ? (
         <div className="space-y-3.5 pt-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-neutral-800">
+                Status Kehadiran
+              </label>
+              <select
+                value={correctionAttendanceStatus}
+                onChange={e => {
+                  const val = e.target.value as 'tepat_waktu' | 'terlambat'
+                  setCorrectionAttendanceStatus(val)
+                  if (val === 'tepat_waktu') setCorrectionLateMinutes(0)
+                }}
+                className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-xs bg-white text-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+              >
+                <option value="tepat_waktu">Tepat Waktu</option>
+                <option value="terlambat">Terlambat</option>
+              </select>
+            </div>
+
+            {correctionAttendanceStatus === 'terlambat' && (
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-neutral-800">
+                  Menit Keterlambatan
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={correctionLateMinutes}
+                  onChange={e => setCorrectionLateMinutes(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                  className="w-full px-3 py-2 border border-neutral-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-neutral-900 font-mono"
+                />
+              </div>
+            )}
+          </div>
+
           <div className="space-y-1">
             <label className="text-xs font-semibold text-neutral-800">
               Pilihan Status Review
