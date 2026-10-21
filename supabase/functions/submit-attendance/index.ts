@@ -398,31 +398,37 @@ serve(async (req: Request) => {
     let adminNotes: string | null = null
 
     if (category === 'CS') {
-      // Kebijakan CS: Tidak ada status terlambat ('tepat_waktu' selalu)
-      // Rentang waktu kerja divalidasi di server untuk flag pemeriksaan admin
-      attendanceStatus = 'tepat_waktu'
-      lateMinutes = 0
+      // Aturan CS Senin–Jumat:
+      //   - masuk 07:30–08:00 WIB   → tepat_waktu
+      //   - masuk setelah 08:00 WIB  → terlambat, late_minutes dihitung dari 08:00
+      // Tidak ada shift; istirahat dan pulang tidak dihitung keterlambatan.
 
       if (attendance_type === 'masuk') {
-        scheduledStart = '07:00'
-        scheduledEnd = '08:00'
-        if (currentHour < 7 || currentHour >= 8) {
+        scheduledStart = '07:30'
+        scheduledEnd   = '08:00'
+        const lateDeadlineMins = 8 * 60  // 08:00 = 480 menit
+        if (currentMinutesFromMidnight > lateDeadlineMins) {
+          attendanceStatus = 'terlambat'
+          lateMinutes = currentMinutesFromMidnight - lateDeadlineMins
+          adminNotes = `Terlambat ${lateMinutes} menit (Masuk pukul ${jakartaTimeStr} WIB, batas 08:00 WIB)`
+        } else if (currentMinutesFromMidnight < 7 * 60 + 30) {
+          // Sebelum 07:30 → di luar jendela normal, tandai untuk admin
           reviewStatus = 'perlu_tindak_lanjut'
-          adminNotes = `Masuk di luar rentang jadwal resmi 07:00-08:00 (${jakartaTimeStr} WIB)`
+          adminNotes = `Masuk sebelum jendela resmi 07:30–08:00 (${jakartaTimeStr} WIB)`
         }
       } else if (attendance_type === 'istirahat') {
         scheduledStart = '12:00'
-        scheduledEnd = '14:00'
+        scheduledEnd   = '14:00'
         if (currentHour < 12 || currentHour >= 14) {
           reviewStatus = 'perlu_tindak_lanjut'
-          adminNotes = `Istirahat di luar rentang jadwal resmi 12:00-14:00 (${jakartaTimeStr} WIB)`
+          adminNotes = `Istirahat di luar rentang jadwal resmi 12:00–14:00 (${jakartaTimeStr} WIB)`
         }
       } else if (attendance_type === 'pulang') {
         scheduledStart = '16:00'
-        scheduledEnd = '18:00'
+        scheduledEnd   = '18:00'
         if (currentHour < 16 || currentHour >= 18) {
           reviewStatus = 'perlu_tindak_lanjut'
-          adminNotes = `Pulang di luar rentang jadwal resmi 16:00-18:00 (${jakartaTimeStr} WIB)`
+          adminNotes = `Pulang di luar rentang jadwal resmi 16:00–18:00 (${jakartaTimeStr} WIB)`
         }
       }
     } else if (category === 'Security') {

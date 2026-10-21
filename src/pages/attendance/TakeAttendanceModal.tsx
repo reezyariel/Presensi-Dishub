@@ -686,7 +686,7 @@ export default function TakeAttendanceModal({
               <div className="flex items-center justify-between py-1">
                 <span className="text-neutral-500">Status Validasi</span>
                 <span className="font-bold text-neutral-900">
-                  {category !== 'CS' && resultRecord.attendance_status === 'terlambat' ? 'Terlambat' : 'Tepat Waktu'}
+                  {resultRecord.attendance_status === 'terlambat' ? 'Terlambat' : 'Tepat Waktu'}
                 </span>
               </div>
             </div>

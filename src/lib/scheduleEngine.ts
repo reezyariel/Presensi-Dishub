@@ -1,6 +1,6 @@
 // ============================================================
 // ShiftTrack — Schedule Engine (Dynamic DB-backed)
-// CS: any check-in within [start, end] = tepat_waktu
+// CS: masuk 07:30–08:00 = tepat_waktu; setelah 08:00 = terlambat
 // Security: 3-shift rotation with Thu/Fri +N min offset
 // Reads authoritative schedule from attendance_settings
 // ============================================================
@@ -28,7 +28,7 @@ export interface CSSchedule {
 }
 
 export const DEFAULT_CS_SCHEDULE: CSSchedule = {
-  masuk:     { start: '07:00', end: '08:00' },
+  masuk:     { start: '07:30', end: '08:00' },
   istirahat: { start: '12:00', end: '14:00' },
   pulang:    { start: '16:00', end: '18:00' },
 }
@@ -248,10 +248,12 @@ export function determineShiftIIIWorkDate(recordedAt: Date): string {
 // ─────────────────────────────────────────────────────────────
 // Calculate attendance status (synchronous, uses cache)
 //
-// CS POLICY: Any masuk within [start, end] = tepat_waktu (late_minutes: 0)
-//            This is per business requirement — CS is never "terlambat"
-//            as long as they check in before window end.
-// Security:  Compare against shift start; late if after scheduled start.
+// CS POLICY:
+//   - masuk tepat_waktu jika check-in pada atau sebelum scheduledEnd (08:00)
+//   - masuk terlambat jika check-in setelah scheduledEnd (08:00), dengan
+//     late_minutes dihitung dari scheduledEnd.
+//   - Jadwal masuk CS: start=07:30, end=08:00 (batas terlambat)
+// Security: Compare against shift start; late if after scheduled start.
 // ─────────────────────────────────────────────────────────────
 export function calculateAttendanceStatus(
   category: 'CS' | 'Security',
@@ -269,13 +271,29 @@ export function calculateAttendanceStatus(
   }
 
   if (category === 'CS') {
-    // CS policy: tepat_waktu if within window [start, end], no late penalty
+    // CS policy: tepat_waktu jika masuk pada atau sebelum end (08:00).
+    // Terlambat jika masuk SETELAH end (08:00), late_minutes dihitung dari 08:00.
     const cs = getCSScheduleSync()
+    const scheduledStart = cs.masuk.start  // 07:30
+    const scheduledEnd   = cs.masuk.end    // 08:00 — batas terlambat
+
+    const lateDeadline = parseTimeOnDate(scheduledEnd, workDate)
+    const diffMs = recorded.getTime() - lateDeadline.getTime()
+    const diffMin = Math.floor(diffMs / 60000)
+
+    if (diffMin > 0) {
+      return {
+        status: 'terlambat',
+        lateMinutes: diffMin,
+        scheduledStart,
+        scheduledEnd,
+      }
+    }
     return {
       status: 'tepat_waktu',
       lateMinutes: 0,
-      scheduledStart: cs.masuk.start,
-      scheduledEnd: cs.masuk.end,
+      scheduledStart,
+      scheduledEnd,
     }
   }
 
