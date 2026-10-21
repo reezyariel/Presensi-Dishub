@@ -20,6 +20,10 @@
     @apply bg-neutral-50 text-neutral-900 min-h-screen selection:bg-neutral-900 selection:text-white;
   }
 
+  body:has(#sipaten-login-root) {
+    background-color: #0a0a0a;
+  }
+
   :root {
     --sidebar-width: 260px;
     --header-height: 64px;
@@ -156,10 +160,21 @@
   border-radius: 1rem;
 }
 
-/* Extra keyframes that require CSS-only props (box-shadow can't be in Tailwind theme) */
 @keyframes glow-pulse {
   0%, 100% { box-shadow: 0 0 20px rgba(255,255,255,0.08); }
   50%       { box-shadow: 0 0 45px rgba(255,255,255,0.22); }
+}
+
+@keyframes wave {
+  0%, 100% { transform: rotate(0deg); }
+  20%, 60% { transform: rotate(14deg); }
+  40%, 80% { transform: rotate(-10deg); }
+}
+
+.animate-wave {
+  display: inline-block;
+  transform-origin: 70% 70%;
+  animation: wave 2.4s infinite ease-in-out;
 }
 
 /* Respect prefers-reduced-motion */
