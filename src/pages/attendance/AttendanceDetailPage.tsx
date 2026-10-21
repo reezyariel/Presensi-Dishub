@@ -220,7 +220,7 @@ export default function AttendanceDetailPage() {
           </div>
         </div>
         <span className="px-3 py-1 rounded-full text-xs font-bold bg-neutral-100 text-neutral-900 border border-neutral-300">
-          {record.attendance_status === 'terlambat' ? 'Terlambat' : 'Tepat Waktu'}
+          {record.category !== 'CS' && record.attendance_status === 'terlambat' ? 'Terlambat' : 'Tepat Waktu'}
         </span>
       </div>
 
@@ -253,7 +253,8 @@ export default function AttendanceDetailPage() {
           </div>
 
           {masukRec ? (
-            masukRec.attendance_status === 'terlambat' ? (
+            // CS policy: no late status — always show tepat_waktu
+            masukRec.attendance_status === 'terlambat' && record?.category !== 'CS' ? (
               <span className="px-2.5 py-0.5 rounded text-xs font-bold bg-neutral-900 text-white font-mono">
                 Terlambat +{masukRec.late_minutes}m
               </span>

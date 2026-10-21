@@ -131,9 +131,24 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
         })
         const masukRecords = personalMonth.filter(r => r.attendance_type === 'masuk')
         const totalHadir = masukRecords.length
-        const totalLate = masukRecords.filter(r => r.attendance_status === 'terlambat').length
-        const approximateWorkdays = Math.min(22, Math.max(totalHadir, 15))
-        const absent = Math.max(0, approximateWorkdays - totalHadir)
+        // CS policy: no late status — count 0 terlambat regardless of DB record
+        const totalLate = category === 'CS'
+          ? 0
+          : masukRecords.filter(r => r.attendance_status === 'terlambat').length
+
+        // Count actual elapsed Mon–Sat working days in the past 30 days up to (and including) today.
+        // This avoids counting future days or weekends (Sunday) as absences.
+        const nowDate = new Date()
+        const todayStr = today // already YYYY-MM-DD Jakarta
+        let elapsedWorkdays = 0
+        for (let i = 0; i < 30; i++) {
+          const d = new Date(nowDate.getTime() - i * 24 * 60 * 60 * 1000)
+          const dStr = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' })
+          if (dStr > todayStr) continue // skip future (shouldn't happen)
+          const dow = d.toLocaleDateString('en-US', { timeZone: 'Asia/Jakarta', weekday: 'short' })
+          if (dow !== 'Sun') elapsedWorkdays++ // Mon–Sat counts as workday
+        }
+        const absent = Math.max(0, elapsedWorkdays - totalHadir)
         setMonthStats({ hadir: totalHadir, terlambat: totalLate, tidakHadir: absent })
       }
 
@@ -488,11 +503,12 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
                   )}
                   {todayRecords.masuk && (
                     <span className={`mt-1 inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                      todayRecords.masuk.attendance_status === 'terlambat'
+                      // CS policy: no late status, always tepat_waktu
+                      category !== 'CS' && todayRecords.masuk.attendance_status === 'terlambat'
                         ? 'bg-neutral-900 text-white'
                         : 'bg-neutral-100 text-neutral-700 border border-neutral-200'
                     }`}>
-                      {todayRecords.masuk.attendance_status === 'terlambat' ? 'Terlambat' : 'Tepat Waktu'}
+                      {category !== 'CS' && todayRecords.masuk.attendance_status === 'terlambat' ? 'Terlambat' : 'Tepat Waktu'}
                     </span>
                   )}
                 </div>
@@ -704,7 +720,8 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
                       {recentRecords.map(rec => {
                         const typeLabel = rec.attendance_type === 'masuk' ? 'Absen Masuk' : rec.attendance_type === 'istirahat' ? 'Istirahat' : 'Absen Pulang'
                         const timeStr = rec.recorded_at ? formatJakartaTime(new Date(rec.recorded_at)) : '--:--'
-                        const isLate = rec.attendance_status === 'terlambat'
+                        // CS policy: no late status
+                        const isLate = category !== 'CS' && rec.attendance_status === 'terlambat'
                         return (
                           <tr key={rec.id} className="border-b border-neutral-50 hover:bg-neutral-50/60 transition-colors">
                             <td className="px-5 py-3 font-medium text-neutral-700">{rec.work_date}</td>
@@ -734,7 +751,8 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
                   {recentRecords.map(rec => {
                     const typeLabel = rec.attendance_type === 'masuk' ? 'Absen Masuk' : rec.attendance_type === 'istirahat' ? 'Istirahat' : 'Absen Pulang'
                     const timeStr = rec.recorded_at ? formatJakartaTime(new Date(rec.recorded_at)) : '--:--'
-                    const isLate = rec.attendance_status === 'terlambat'
+                    // CS policy: no late status
+                    const isLate = category !== 'CS' && rec.attendance_status === 'terlambat'
                     return (
                       <Link key={rec.id} to={`/attendance/${rec.id}`} className="p-4 flex items-center justify-between hover:bg-neutral-50 transition-colors">
                         <div className="flex items-center gap-3">
