@@ -227,7 +227,7 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
       const cs = getCSScheduleSync()
       const fmt = (s: string, e: string) => `${s.replace(':', '.')} – ${e.replace(':', '.')} WIB`
       return {
-        masuk:     fmt(cs.masuk.start,     cs.masuk.end),
+        masuk:     fmt(cs.masuk.open,      cs.masuk.ontime_deadline),
         istirahat: fmt(cs.istirahat.start, cs.istirahat.end),
         pulang:    fmt(cs.pulang.start,    cs.pulang.end),
       }
@@ -306,6 +306,18 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
         </div>
       </>
     )
+  } else if (buttonState.status === 'window_closed') {
+    nextAttendanceBanner = (
+      <>
+        <div className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center flex-shrink-0 mt-0.5 text-neutral-600">
+          <AlertCircle size={13} />
+        </div>
+        <div>
+          <p className="text-xs font-bold text-neutral-800">{buttonState.title}</p>
+          <p className="text-[11px] text-neutral-500 mt-0.5">{buttonState.message}</p>
+        </div>
+      </>
+    )
   } else if (buttonState.status === 'can_masuk') {
     nextAttendanceBanner = (
       <>
@@ -313,12 +325,16 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
           <Camera size={13} />
         </div>
         <div>
-          <p className="text-[11px] font-semibold text-neutral-400">Jendela Check-In Dibuka</p>
+          <p className="text-[11px] font-semibold text-neutral-400">
+            {buttonState.isLate ? 'Jendela Check-In (Terlambat)' : 'Jendela Check-In Dibuka'}
+          </p>
           <p className="text-xs font-bold mt-0.5 text-white">
             Waktu presensi masuk: {buttonState.startTime.replace(':', '.')} – {buttonState.endTime.replace(':', '.')} WIB
           </p>
           <p className="text-[10px] mt-0.5 text-neutral-400">
-            Ambil foto selfie di area kantor untuk melakukan presensi masuk.
+            {buttonState.isLate
+              ? 'Waktu check-in telah melewati batas tepat waktu. Presensi akan dicatat sebagai terlambat.'
+              : 'Ambil foto selfie di area kantor untuk melakukan presensi masuk.'}
           </p>
         </div>
       </>
@@ -570,13 +586,32 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
                     <span>Absen Masuk (Belum Dibuka)</span>
                   </button>
                 </div>
+              ) : buttonState.status === 'window_closed' ? (
+                <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-200 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-neutral-100 border border-neutral-200 flex items-center justify-center flex-shrink-0 text-neutral-600">
+                      <AlertCircle size={16} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-neutral-900">{buttonState.title}</p>
+                      <p className="text-[11px] text-neutral-500 mt-0.5">{buttonState.message}</p>
+                    </div>
+                  </div>
+                  <button
+                    disabled
+                    className="w-full py-3.5 bg-neutral-200 text-neutral-400 font-bold text-sm rounded-xl flex items-center justify-center gap-2.5 cursor-not-allowed"
+                  >
+                    <Camera size={18} />
+                    <span>Absen Masuk (Jendela Ditutup)</span>
+                  </button>
+                </div>
               ) : buttonState.status === 'can_masuk' ? (
                 <button
                   onClick={() => handleOpenTakeModal('masuk')}
                   className="w-full py-4 bg-neutral-900 hover:bg-black text-white font-bold text-sm rounded-xl flex items-center justify-center gap-3 transition-all shadow-sm active:scale-[0.99]"
                 >
                   <Camera size={20} />
-                  <span>Ambil Foto &amp; Absen Masuk</span>
+                  <span>{buttonState.title || 'Ambil Foto & Absen Masuk'}</span>
                 </button>
               ) : buttonState.status === 'waiting_istirahat' ? (
                 <div className="space-y-3">

@@ -5,7 +5,6 @@ import { normalizeName } from '../src/lib/utils'
 import {
   getSecuritySchedule,
   calculateAttendanceStatus,
-  CS_SCHEDULE,
 } from '../src/lib/scheduleEngine'
 
 console.log('============================================================')
@@ -193,82 +192,90 @@ console.log('  ✅ Consistent whitespace compression and lowercase across all in
 
 
 // ============================================================
-// 4. CS Time Windows & No-Lateness Policy
+// 4. CS 3-Boundary Window & Lateness Policy
 // ============================================================
-console.log('\nTEST 4: Customer Service Schedule Windows & No-Lateness Policy')
+console.log('\nTEST 4: Customer Service 3-Boundary Schedule & Lateness Rules')
 
 function evaluateCSAttendanceServer(
   attendanceType: 'masuk' | 'istirahat' | 'pulang',
   hour: number,
-  _minute: number
-): { attendanceStatus: 'tepat_waktu'; lateMinutes: number; reviewStatus: 'belum_diperiksa' | 'perlu_tindak_lanjut' } {
-  const attendanceStatus = 'tepat_waktu' as const
-  const lateMinutes = 0
-  let reviewStatus: 'belum_diperiksa' | 'perlu_tindak_lanjut' = 'belum_diperiksa'
+  minute: number,
+  open = '07:30',
+  deadline = '08:00',
+  close = '11:59'
+): { allowed: boolean; status: 'tepat_waktu' | 'terlambat'; lateMinutes: number; error?: string } {
+  const currentMinutes = hour * 60 + minute
+  const [oh, om] = open.split(':').map(Number)
+  const [dh, dm] = deadline.split(':').map(Number)
+  const [ch, cm] = close.split(':').map(Number)
+  const openM = oh * 60 + om
+  const deadM = dh * 60 + dm
+  const closeM = ch * 60 + cm
 
   if (attendanceType === 'masuk') {
-    if (hour < 7 || hour >= 8) {
-      reviewStatus = 'perlu_tindak_lanjut'
+    if (currentMinutes < openM) {
+      return { allowed: false, status: 'tepat_waktu', lateMinutes: 0, error: 'Belum dibuka' }
     }
-  } else if (attendanceType === 'istirahat') {
-    if (hour < 12 || hour >= 14) {
-      reviewStatus = 'perlu_tindak_lanjut'
+    if (currentMinutes > closeM) {
+      return { allowed: false, status: 'tepat_waktu', lateMinutes: 0, error: 'Jendela ditutup' }
     }
-  } else if (attendanceType === 'pulang') {
-    if (hour < 16 || hour >= 18) {
-      reviewStatus = 'perlu_tindak_lanjut'
+    if (currentMinutes > deadM) {
+      return { allowed: true, status: 'terlambat', lateMinutes: currentMinutes - deadM }
     }
+    return { allowed: true, status: 'tepat_waktu', lateMinutes: 0 }
   }
-
-  return { attendanceStatus, lateMinutes, reviewStatus }
+  return { allowed: true, status: 'tepat_waktu', lateMinutes: 0 }
 }
 
-// 4a. CS Masuk at 07:30 (inside window 07:00-08:00)
-const csInWindow = evaluateCSAttendanceServer('masuk', 7, 30)
-assert.equal(csInWindow.attendanceStatus, 'tepat_waktu')
+// 4a. CS Masuk before open at 07:15 -> REJECTED (Belum dibuka)
+const csEarly = evaluateCSAttendanceServer('masuk', 7, 15)
+assert.equal(csEarly.allowed, false)
+assert.equal(csEarly.error, 'Belum dibuka')
+console.log('  ✅ CS Masuk before 07:30 is rejected (Belum dibuka)')
+
+// 4b. CS Masuk at 07:30 (exact open) -> tepat_waktu, late = 0
+const csAtOpen = evaluateCSAttendanceServer('masuk', 7, 30)
+assert.equal(csAtOpen.allowed, true)
+assert.equal(csAtOpen.status, 'tepat_waktu')
+assert.equal(csAtOpen.lateMinutes, 0)
+console.log('  ✅ CS Masuk at 07:30 is tepat_waktu (late = 0)')
+
+// 4c. CS Masuk at 07:55 (within on-time window) -> tepat_waktu, late = 0
+const csInWindow = evaluateCSAttendanceServer('masuk', 7, 55)
+assert.equal(csInWindow.allowed, true)
+assert.equal(csInWindow.status, 'tepat_waktu')
 assert.equal(csInWindow.lateMinutes, 0)
-assert.equal(csInWindow.reviewStatus, 'belum_diperiksa')
-console.log('  ✅ CS Masuk at 07:30 is tepat_waktu (late = 0, normal review)')
+console.log('  ✅ CS Masuk at 07:55 is tepat_waktu (late = 0)')
 
-// 4b. CS Masuk at 08:15 (outside window 07:00-08:00) -> NEVER 'terlambat', flagged for review
-const csLateArrival = evaluateCSAttendanceServer('masuk', 8, 15)
-assert.equal(csLateArrival.attendanceStatus, 'tepat_waktu')
-assert.equal(csLateArrival.lateMinutes, 0)
-assert.equal(csLateArrival.reviewStatus, 'perlu_tindak_lanjut')
-console.log('  ✅ CS Masuk at 08:15 preserves tepat_waktu (late = 0) and flags perlu_tindak_lanjut')
+// 4d. CS Masuk at 08:00 (exact deadline) -> tepat_waktu, late = 0
+const csAtDeadline = evaluateCSAttendanceServer('masuk', 8, 0)
+assert.equal(csAtDeadline.allowed, true)
+assert.equal(csAtDeadline.status, 'tepat_waktu')
+assert.equal(csAtDeadline.lateMinutes, 0)
+console.log('  ✅ CS Masuk at 08:00 is tepat_waktu (late = 0)')
 
-// 4c. CS Masuk at 06:45 (before window 07:00-08:00)
-const csEarlyArrival = evaluateCSAttendanceServer('masuk', 6, 45)
-assert.equal(csEarlyArrival.attendanceStatus, 'tepat_waktu')
-assert.equal(csEarlyArrival.lateMinutes, 0)
-assert.equal(csEarlyArrival.reviewStatus, 'perlu_tindak_lanjut')
-console.log('  ✅ CS Masuk at 06:45 preserves tepat_waktu and flags perlu_tindak_lanjut')
+// 4e. CS Masuk at 08:05 -> terlambat 5 menit
+const csLate = evaluateCSAttendanceServer('masuk', 8, 5)
+assert.equal(csLate.allowed, true)
+assert.equal(csLate.status, 'terlambat')
+assert.equal(csLate.lateMinutes, 5)
+console.log('  ✅ CS Masuk at 08:05 is terlambat 5 menit')
 
-// 4d. CS Istirahat at 12:45 (inside window 12:00-14:00)
-const csBreakInside = evaluateCSAttendanceServer('istirahat', 12, 45)
-assert.equal(csBreakInside.reviewStatus, 'belum_diperiksa')
-console.log('  ✅ CS Istirahat at 12:45 accepted in normal window')
+// 4f. CS Masuk after close at 12:05 -> REJECTED (Jendela ditutup)
+const csPastClose = evaluateCSAttendanceServer('masuk', 12, 5)
+assert.equal(csPastClose.allowed, false)
+assert.equal(csPastClose.error, 'Jendela ditutup')
+console.log('  ✅ CS Masuk after close (12:05) is rejected')
 
-// 4e. CS Istirahat at 14:15 (outside window 12:00-14:00)
-const csBreakOutside = evaluateCSAttendanceServer('istirahat', 14, 15)
-assert.equal(csBreakOutside.reviewStatus, 'perlu_tindak_lanjut')
-console.log('  ✅ CS Istirahat at 14:15 flagged for review')
+// 4g. Schedule Engine calculateAttendanceStatus verification
+const engineOnTime = calculateAttendanceStatus('CS', 'masuk', null, '2026-10-19', new Date('2026-10-19T07:50:00+07:00'))
+assert.equal(engineOnTime.status, 'tepat_waktu')
+assert.equal(engineOnTime.lateMinutes, 0)
 
-// 4f. CS Pulang at 16:30 (inside window 16:00-18:00)
-const csCheckoutInside = evaluateCSAttendanceServer('pulang', 16, 30)
-assert.equal(csCheckoutInside.reviewStatus, 'belum_diperiksa')
-console.log('  ✅ CS Pulang at 16:30 accepted in normal window')
-
-// 4g. CS Pulang at 18:30 (outside window 16:00-18:00)
-const csCheckoutOutside = evaluateCSAttendanceServer('pulang', 18, 30)
-assert.equal(csCheckoutOutside.reviewStatus, 'perlu_tindak_lanjut')
-console.log('  ✅ CS Pulang at 18:30 flagged for review')
-
-// 4h. Schedule Engine CS policy verification
-const engineCSResult = calculateAttendanceStatus('CS', 'masuk', null, '2026-10-19', new Date('2026-10-19T08:30:00+07:00'))
-assert.equal(engineCSResult.status, 'tepat_waktu')
-assert.equal(engineCSResult.lateMinutes, 0)
-console.log('  ✅ scheduleEngine calculateAttendanceStatus enforces tepat_waktu & 0 lateMinutes for CS')
+const engineLate = calculateAttendanceStatus('CS', 'masuk', null, '2026-10-19', new Date('2026-10-19T08:15:00+07:00'))
+assert.equal(engineLate.status, 'terlambat')
+assert.equal(engineLate.lateMinutes, 15)
+console.log('  ✅ scheduleEngine calculateAttendanceStatus: 07:50 tepat_waktu, 08:15 terlambat 15 min')
 
 
 // ============================================================
@@ -341,7 +348,7 @@ console.log('  ✅ Shift II Friday (16:30 start): 16:25 tepat waktu, 16:40 terla
 const schSec3Norm = getSecuritySchedule('2026-10-19', 'Shift III')
 assert.equal(schSec3Norm.start, '20:00')
 assert.equal(schSec3Norm.end, '07:30')
-assert.equal(schSec3Norm.endNextDay, true)
+assert.equal(schSec3Norm.end_next_day, true)
 
 const sec3OnTime = calculateAttendanceStatus('Security', 'masuk', 'Shift III', '2026-10-19', new Date('2026-10-19T19:50:00+07:00'))
 assert.equal(sec3OnTime.status, 'tepat_waktu')
@@ -356,7 +363,7 @@ console.log('  ✅ Shift III Normal (20:00 start): 19:50 tepat waktu, 20:25 terl
 const schSec3Thu = getSecuritySchedule('2026-10-22', 'Shift III')
 assert.equal(schSec3Thu.start, '20:30')
 assert.equal(schSec3Thu.end, '08:00')
-assert.equal(schSec3Thu.endNextDay, true)
+assert.equal(schSec3Thu.end_next_day, true)
 
 const sec3ThuOnTime = calculateAttendanceStatus('Security', 'masuk', 'Shift III', '2026-10-22', new Date('2026-10-22T20:20:00+07:00'))
 assert.equal(sec3ThuOnTime.status, 'tepat_waktu')

@@ -40,8 +40,9 @@ export default function SchedulePage() {
   // Dynamic CS schedule from DB cache
   const csRaw = getCSScheduleSync()
   const csSchedule = {
-    masukStart:    csRaw.masuk.start.replace(':', '.'),
-    masukEnd:      csRaw.masuk.end.replace(':', '.'),
+    masukStart:    csRaw.masuk.open.replace(':', '.'),
+    masukEnd:      csRaw.masuk.ontime_deadline.replace(':', '.'),
+    masukClose:    csRaw.masuk.close?.replace(':', '.'),
     istirahatStart: csRaw.istirahat.start.replace(':', '.'),
     istirahatEnd:   csRaw.istirahat.end.replace(':', '.'),
     pulangStart:   csRaw.pulang.start.replace(':', '.'),
@@ -150,13 +151,19 @@ export default function SchedulePage() {
                 </div>
                 <div className="space-y-1">
                   <div className="flex justify-between items-center">
-                    <span className="text-[11px] text-neutral-500">Mulai</span>
+                    <span className="text-[11px] text-neutral-500">Mulai Check-in</span>
                     <span className="text-sm font-bold text-neutral-900 font-mono">{csSchedule.masukStart} WIB</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-[11px] text-neutral-500">Batas</span>
+                    <span className="text-[11px] text-neutral-500">Batas Tepat Waktu</span>
                     <span className="text-sm font-bold text-neutral-900 font-mono">{csSchedule.masukEnd} WIB</span>
                   </div>
+                  {csSchedule.masukClose && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-[11px] text-neutral-500">Tutup Check-in</span>
+                      <span className="text-sm font-bold text-neutral-900 font-mono">{csSchedule.masukClose} WIB</span>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="px-5 py-2 bg-neutral-50 border-t border-neutral-100">

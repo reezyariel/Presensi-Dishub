@@ -113,7 +113,7 @@ export default function TakeAttendanceModal({
       const cs = getCSScheduleSync()
       const fmt = (s: string, e: string) => `${s.replace(':', '.')} – ${e.replace(':', '.')} WIB`
       return {
-        masuk: fmt(cs.masuk.start, cs.masuk.end),
+        masuk: fmt(cs.masuk.open, cs.masuk.ontime_deadline),
         istirahat: fmt(cs.istirahat.start, cs.istirahat.end),
         pulang: fmt(cs.pulang.start, cs.pulang.end),
       }

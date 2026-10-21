@@ -390,6 +390,39 @@ serve(async (req: Request) => {
     const workDayOfWeek = workDateObj.getUTCDay()
     const isShiftedDay = workDayOfWeek === 4 || workDayOfWeek === 5 // 4 = Thu, 5 = Fri
 
+    // 6a. Fetch CS schedule from attendance_settings (source of truth for Admin config)
+    // Defaults used if DB row missing or fields absent
+    let csOpen:     string = '07:30'
+    let csDeadline: string = '08:00'
+    let csClose:    string = '11:59'
+
+    if (category === 'CS') {
+      const { data: csSettingRows } = await supabase
+        .from('attendance_settings')
+        .select('setting_value')
+        .eq('setting_key', 'cs_schedule')
+        .maybeSingle()
+
+      if (csSettingRows?.setting_value) {
+        const sv = csSettingRows.setting_value as {
+          masuk?: { open?: string; ontime_deadline?: string; close?: string; start?: string; end?: string }
+        }
+        // Support both old schema (start/end) and new schema (open/ontime_deadline/close)
+        const m = sv.masuk
+        if (m) {
+          csOpen     = m.open     ?? m.start ?? csOpen
+          csDeadline = m.ontime_deadline ?? m.end ?? csDeadline
+          csClose    = m.close    ?? csClose
+        }
+      }
+    }
+
+    // Helper: parse HH:mm to minutes-from-midnight
+    function hhmm(t: string): number {
+      const [h, m] = t.split(':').map(Number)
+      return h * 60 + m
+    }
+
     let scheduledStart: string | null = null
     let scheduledEnd: string | null = null
     let attendanceStatus: 'tepat_waktu' | 'terlambat' = 'tepat_waktu'
@@ -398,24 +431,50 @@ serve(async (req: Request) => {
     let adminNotes: string | null = null
 
     if (category === 'CS') {
-      // Aturan CS Senin–Jumat:
-      //   - masuk 07:30–08:00 WIB   → tepat_waktu
-      //   - masuk setelah 08:00 WIB  → terlambat, late_minutes dihitung dari 08:00
+      // Aturan CS Senin–Jumat (3-boundary system dari Admin settings):
+      //   Sebelum open          → TOLAK (presensi tidak diizinkan)
+      //   open – ontime_deadline  → tepat_waktu
+      //   ontime_deadline+1 – close → terlambat, late_minutes dari ontime_deadline
+      //   Setelah close         → TOLAK (jendela ditutup)
       // Tidak ada shift; istirahat dan pulang tidak dihitung keterlambatan.
 
       if (attendance_type === 'masuk') {
-        scheduledStart = '07:30'
-        scheduledEnd   = '08:00'
-        const lateDeadlineMins = 8 * 60  // 08:00 = 480 menit
-        if (currentMinutesFromMidnight > lateDeadlineMins) {
-          attendanceStatus = 'terlambat'
-          lateMinutes = currentMinutesFromMidnight - lateDeadlineMins
-          adminNotes = `Terlambat ${lateMinutes} menit (Masuk pukul ${jakartaTimeStr} WIB, batas 08:00 WIB)`
-        } else if (currentMinutesFromMidnight < 7 * 60 + 30) {
-          // Sebelum 07:30 → di luar jendela normal, tandai untuk admin
-          reviewStatus = 'perlu_tindak_lanjut'
-          adminNotes = `Masuk sebelum jendela resmi 07:30–08:00 (${jakartaTimeStr} WIB)`
+        scheduledStart = csOpen
+        scheduledEnd   = csDeadline
+
+        const openMins     = hhmm(csOpen)
+        const deadlineMins = hhmm(csDeadline)
+        const closeMins    = hhmm(csClose)
+
+        // Tolak jika sebelum waktu buka
+        if (currentMinutesFromMidnight < openMins) {
+          return new Response(
+            JSON.stringify({
+              error: `Presensi masuk CS belum dibuka. Jendela check-in dimulai pukul ${csOpen} WIB.`,
+              requires_reason: false,
+            }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
         }
+
+        // Tolak jika setelah waktu tutup
+        if (currentMinutesFromMidnight > closeMins) {
+          return new Response(
+            JSON.stringify({
+              error: `Jendela presensi masuk CS telah ditutup pada pukul ${csClose} WIB. Presensi hari ini tidak dapat dilakukan.`,
+              requires_reason: false,
+            }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+
+        // Dalam jendela: cek tepat_waktu vs terlambat
+        if (currentMinutesFromMidnight > deadlineMins) {
+          attendanceStatus = 'terlambat'
+          lateMinutes = currentMinutesFromMidnight - deadlineMins
+          adminNotes = `Terlambat ${lateMinutes} menit (Masuk pukul ${jakartaTimeStr} WIB, batas ${csDeadline} WIB)`
+        }
+        // Tepat waktu: tidak perlu adminNotes
       } else if (attendance_type === 'istirahat') {
         scheduledStart = '12:00'
         scheduledEnd   = '14:00'

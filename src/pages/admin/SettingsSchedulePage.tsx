@@ -30,8 +30,9 @@ export default function SettingsSchedulePage() {
   const [officeAddress, setOfficeAddress] = useState<string>(DEFAULT_OFFICE_CONFIG.address || '')
 
   // CS Schedule (editable windows)
-  const [csMasukStart, setCsMasukStart] = useState('07:00')
-  const [csMasukEnd, setCsMasukEnd] = useState('08:00')
+  const [csMasukOpen, setCsMasukOpen] = useState('07:30')
+  const [csMasukDeadline, setCsMasukDeadline] = useState('08:00')
+  const [csMasukClose, setCsMasukClose] = useState('11:59')
   const [csIstirahatStart, setCsIstirahatStart] = useState('12:00')
   const [csIstirahatEnd, setCsIstirahatEnd] = useState('14:00')
   const [csPulangStart, setCsPulangStart] = useState('16:00')
@@ -89,12 +90,16 @@ export default function SettingsSchedulePage() {
             setOfficeRadius(Number(s.setting_value) || 100)
           } else if (s.setting_key === 'cs_schedule') {
             const cs = s.setting_value as {
-              masuk?: { start?: string; end?: string }
+              masuk?: { open?: string; ontime_deadline?: string; close?: string; start?: string; end?: string }
               istirahat?: { start?: string; end?: string }
               pulang?: { start?: string; end?: string }
             }
-            if (cs.masuk?.start) setCsMasukStart(cs.masuk.start)
-            if (cs.masuk?.end) setCsMasukEnd(cs.masuk.end)
+            // Support both old schema (start/end) and new schema (open/ontime_deadline/close)
+            if (cs.masuk?.open)             setCsMasukOpen(cs.masuk.open)
+            else if (cs.masuk?.start)       setCsMasukOpen(cs.masuk.start)
+            if (cs.masuk?.ontime_deadline)  setCsMasukDeadline(cs.masuk.ontime_deadline)
+            else if (cs.masuk?.end)         setCsMasukDeadline(cs.masuk.end)
+            if (cs.masuk?.close)            setCsMasukClose(cs.masuk.close)
             if (cs.istirahat?.start) setCsIstirahatStart(cs.istirahat.start)
             if (cs.istirahat?.end) setCsIstirahatEnd(cs.istirahat.end)
             if (cs.pulang?.start) setCsPulangStart(cs.pulang.start)
@@ -172,11 +177,15 @@ export default function SettingsSchedulePage() {
       {
         setting_key: 'cs_schedule',
         setting_value: {
-          masuk:     { start: csMasukStart,     end: csMasukEnd },
+          masuk: {
+            open:             csMasukOpen,
+            ontime_deadline:  csMasukDeadline,
+            close:            csMasukClose,
+          },
           istirahat: { start: csIstirahatStart, end: csIstirahatEnd },
           pulang:    { start: csPulangStart,    end: csPulangEnd },
         },
-        description: 'Jadwal CS: jendela waktu masuk/istirahat/pulang. Tidak terlambat selama dalam jendela.',
+        description: 'Jadwal CS: open=mulai jendela, ontime_deadline=batas tepat_waktu, close=tutup jendela, plus istirahat dan pulang.',
         updated_by: profile.id, updated_at: now,
       },
       {
@@ -353,7 +362,7 @@ export default function SettingsSchedulePage() {
                 Jadwal CS — Customer Service
               </h2>
               <p className="text-[11px] text-neutral-500">
-                CS tidak dihitung terlambat selama absen dalam jendela [Mulai → Batas]
+                Masuk: <strong>sebelum open</strong> = ditolak · <strong>open–batas tepat waktu</strong> = tepat waktu · <strong>batas–tutup</strong> = terlambat · <strong>setelah tutup</strong> = ditolak
               </p>
             </div>
           </div>
@@ -367,20 +376,23 @@ export default function SettingsSchedulePage() {
 
         <div className="p-5">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Masuk */}
+            {/* Masuk — 3 batas waktu */}
             <div className="p-4 rounded-xl border border-neutral-200 bg-neutral-50/40 space-y-3">
               <div className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">
                 1. Presensi Masuk
               </div>
               <p className="text-[11px] text-neutral-500">
-                Absen kapan saja dalam jendela ini = tepat waktu, tidak terlambat.
+                Sistem 3-batas: tombol aktif antara <em>Open</em> dan <em>Tutup</em>. Status tepat waktu jika ≤ <em>Batas Tepat Waktu</em>.
               </p>
-              <div className="grid grid-cols-2 gap-2">
-                {timeInput(csMasukStart, setCsMasukStart, 'Mulai Jendela')}
-                {timeInput(csMasukEnd, setCsMasukEnd, 'Batas Jendela')}
+              <div className="grid grid-cols-1 gap-2">
+                {timeInput(csMasukOpen, setCsMasukOpen, '⏰ Mulai Check-in (Open)')}
+                {timeInput(csMasukDeadline, setCsMasukDeadline, '✅ Batas Tepat Waktu (Ontime Deadline)')}
+                {timeInput(csMasukClose, setCsMasukClose, '🔒 Tutup Check-in (Close)')}
               </div>
-              <div className="text-xs font-bold font-mono text-neutral-900 bg-white border border-neutral-200 rounded-lg px-3 py-1.5 text-center">
-                {csMasukStart} – {csMasukEnd}
+              <div className="text-xs font-mono text-neutral-700 bg-white border border-neutral-200 rounded-lg px-3 py-2 space-y-0.5">
+                <div><span className="text-neutral-400">Buka:  </span><strong>{csMasukOpen}</strong></div>
+                <div><span className="text-neutral-400">Batas: </span><strong>{csMasukDeadline}</strong></div>
+                <div><span className="text-neutral-400">Tutup: </span><strong>{csMasukClose}</strong></div>
               </div>
             </div>
 
