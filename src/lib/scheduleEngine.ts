@@ -32,6 +32,10 @@ export interface CSScheduleWindow {
   ontime_deadline: string // HH:mm
   /** Waktu penutupan jendela (setelahnya: presensi ditolak) */
   close: string          // HH:mm
+
+  // Backward compatibility aliases:
+  start?: string
+  end?: string
 }
 
 export interface CSSchedule {
@@ -41,7 +45,7 @@ export interface CSSchedule {
 }
 
 export const DEFAULT_CS_SCHEDULE: CSSchedule = {
-  masuk:     { open: '07:30', ontime_deadline: '08:00', close: '11:59' },
+  masuk:     { open: '07:30', ontime_deadline: '08:00', close: '11:59', start: '07:30', end: '08:00' },
   istirahat: { start: '12:00', end: '14:00' },
   pulang:    { start: '16:00', end: '18:00' },
 }
@@ -56,7 +60,7 @@ export const CS_SCHEDULE = {
 // ─────────────────────────────────────────────────────────────
 // Security Schedule Types & Defaults
 // ─────────────────────────────────────────────────────────────
-interface ShiftSchedule {
+export interface ShiftSchedule {
   start: string
   window_end: string
   end: string
@@ -92,6 +96,202 @@ export const DEFAULT_SECURITY_SCHEDULE: SecuritySchedule = {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Time Validation & Normalization Helpers
+// ─────────────────────────────────────────────────────────────
+export const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/
+
+export function isValidTimeString(t: unknown): boolean {
+  return typeof t === 'string' && TIME_REGEX.test(t.trim())
+}
+
+/**
+ * Normalizes any raw DB/API CS schedule object into a strictly-typed CSSchedule.
+ * Handles old schemas (start/end), new 3-boundary (open/ontime_deadline/close),
+ * legacy (windowEnd), partial missing fields, and null/undefined values.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function normalizeCSSchedule(raw: any): CSSchedule {
+  if (!raw || typeof raw !== 'object') {
+    return { ...DEFAULT_CS_SCHEDULE }
+  }
+
+  const rawMasuk = raw.masuk && typeof raw.masuk === 'object' ? raw.masuk : {}
+  const rawIstirahat = raw.istirahat && typeof raw.istirahat === 'object' ? raw.istirahat : {}
+  const rawPulang = raw.pulang && typeof raw.pulang === 'object' ? raw.pulang : {}
+
+  const open: string =
+    isValidTimeString(rawMasuk.open)
+      ? rawMasuk.open.trim()
+      : isValidTimeString(rawMasuk.start)
+      ? rawMasuk.start.trim()
+      : DEFAULT_CS_SCHEDULE.masuk.open
+
+  const ontime_deadline: string =
+    isValidTimeString(rawMasuk.ontime_deadline)
+      ? rawMasuk.ontime_deadline.trim()
+      : isValidTimeString(rawMasuk.end)
+      ? rawMasuk.end.trim()
+      : isValidTimeString(rawMasuk.windowEnd)
+      ? rawMasuk.windowEnd.trim()
+      : DEFAULT_CS_SCHEDULE.masuk.ontime_deadline
+
+  const close: string =
+    isValidTimeString(rawMasuk.close)
+      ? rawMasuk.close.trim()
+      : DEFAULT_CS_SCHEDULE.masuk.close
+
+  const istirahatStart: string =
+    isValidTimeString(rawIstirahat.start)
+      ? rawIstirahat.start.trim()
+      : DEFAULT_CS_SCHEDULE.istirahat.start
+
+  const istirahatEnd: string =
+    isValidTimeString(rawIstirahat.end)
+      ? rawIstirahat.end.trim()
+      : isValidTimeString(rawIstirahat.windowEnd)
+      ? rawIstirahat.windowEnd.trim()
+      : DEFAULT_CS_SCHEDULE.istirahat.end
+
+  const pulangStart: string =
+    isValidTimeString(rawPulang.start)
+      ? rawPulang.start.trim()
+      : DEFAULT_CS_SCHEDULE.pulang.start
+
+  const pulangEnd: string =
+    isValidTimeString(rawPulang.end)
+      ? rawPulang.end.trim()
+      : isValidTimeString(rawPulang.windowEnd)
+      ? rawPulang.windowEnd.trim()
+      : DEFAULT_CS_SCHEDULE.pulang.end
+
+  return {
+    masuk: {
+      open,
+      ontime_deadline,
+      close,
+      start: open,
+      end: ontime_deadline,
+    },
+    istirahat: {
+      start: istirahatStart,
+      end: istirahatEnd,
+    },
+    pulang: {
+      start: pulangStart,
+      end: pulangEnd,
+    },
+  }
+}
+
+/**
+ * Validates that CS schedule has all required fields and chronological coherence:
+ * open <= ontime_deadline <= close
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function isCSScheduleValid(cs: any): boolean {
+  if (!cs || typeof cs !== 'object' || !cs.masuk || !cs.istirahat || !cs.pulang) {
+    return false
+  }
+
+  const { masuk, istirahat, pulang } = cs
+
+  if (
+    !isValidTimeString(masuk.open) ||
+    !isValidTimeString(masuk.ontime_deadline) ||
+    !isValidTimeString(masuk.close) ||
+    !isValidTimeString(istirahat.start) ||
+    !isValidTimeString(istirahat.end) ||
+    !isValidTimeString(pulang.start) ||
+    !isValidTimeString(pulang.end)
+  ) {
+    return false
+  }
+
+  const openM = getTimeInMinutes(masuk.open)
+  const deadlineM = getTimeInMinutes(masuk.ontime_deadline)
+  const closeM = getTimeInMinutes(masuk.close)
+
+  if (openM > deadlineM || deadlineM > closeM) {
+    return false
+  }
+
+  const istirahatStartM = getTimeInMinutes(istirahat.start)
+  const istirahatEndM = getTimeInMinutes(istirahat.end)
+  if (istirahatStartM >= istirahatEndM) {
+    return false
+  }
+
+  const pulangStartM = getTimeInMinutes(pulang.start)
+  const pulangEndM = getTimeInMinutes(pulang.end)
+  if (pulangStartM >= pulangEndM) {
+    return false
+  }
+
+  return true
+}
+
+/**
+ * Normalizes any raw DB/API Security schedule object into a strictly-typed SecuritySchedule.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function normalizeSecuritySchedule(raw: any): SecuritySchedule {
+  if (!raw || typeof raw !== 'object') {
+    return { ...DEFAULT_SECURITY_SCHEDULE }
+  }
+
+  const tfMin =
+    typeof raw.thursday_friday_shift_minutes === 'number' && !isNaN(raw.thursday_friday_shift_minutes)
+      ? raw.thursday_friday_shift_minutes
+      : DEFAULT_SECURITY_SCHEDULE.thursday_friday_shift_minutes
+
+  const shifts: Record<ShiftType, ShiftSchedule> = {
+    'Shift I': { ...DEFAULT_SECURITY_SCHEDULE.shifts['Shift I'] },
+    'Shift II': { ...DEFAULT_SECURITY_SCHEDULE.shifts['Shift II'] },
+    'Shift III': { ...DEFAULT_SECURITY_SCHEDULE.shifts['Shift III'] },
+  }
+
+  const rawShifts = raw.shifts && typeof raw.shifts === 'object' ? raw.shifts : {}
+  for (const shiftName of ['Shift I', 'Shift II', 'Shift III'] as ShiftType[]) {
+    const rs = rawShifts[shiftName]
+    const def = DEFAULT_SECURITY_SCHEDULE.shifts[shiftName]
+    if (rs && typeof rs === 'object') {
+      shifts[shiftName] = {
+        start: isValidTimeString(rs.start) ? rs.start.trim() : def.start,
+        window_end: isValidTimeString(rs.window_end) ? rs.window_end.trim() : def.window_end,
+        end: isValidTimeString(rs.end) ? rs.end.trim() : def.end,
+        end_window_end: isValidTimeString(rs.end_window_end) ? rs.end_window_end.trim() : def.end_window_end,
+        end_next_day: typeof rs.end_next_day === 'boolean' ? rs.end_next_day : def.end_next_day,
+        end_window_end_next_day: typeof rs.end_window_end_next_day === 'boolean' ? rs.end_window_end_next_day : def.end_window_end_next_day,
+      }
+    }
+  }
+
+  return {
+    thursday_friday_shift_minutes: tfMin,
+    shifts,
+  }
+}
+
+/**
+ * Validates Security schedule structure for given shift or all shifts.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function isSecurityScheduleValid(sec: any, shift?: ShiftType | null): boolean {
+  if (!sec || typeof sec !== 'object' || !sec.shifts || typeof sec.shifts !== 'object') {
+    return false
+  }
+  const shiftsToCheck: ShiftType[] = shift ? [shift] : ['Shift I', 'Shift II', 'Shift III']
+  for (const s of shiftsToCheck) {
+    const shiftData = sec.shifts[s]
+    if (!shiftData || typeof shiftData !== 'object') return false
+    if (!isValidTimeString(shiftData.start) || !isValidTimeString(shiftData.window_end) || !isValidTimeString(shiftData.end)) {
+      return false
+    }
+  }
+  return true
+}
+
+// ─────────────────────────────────────────────────────────────
 // DB Settings Cache (module-level, refreshed on demand)
 // ─────────────────────────────────────────────────────────────
 let _csScheduleCache: CSSchedule | null = null
@@ -103,34 +303,38 @@ async function loadScheduleCache(force = false): Promise<void> {
   if (!force && _cacheLoadedAt > 0 && now - _cacheLoadedAt < 60_000) return // 1 min cache
 
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('attendance_settings')
       .select('setting_key, setting_value')
       .in('setting_key', ['cs_schedule', 'security_schedule'])
 
+    if (error) {
+      console.warn('Failed to load schedule from attendance_settings:', error.message)
+    }
+
     if (data) {
       for (const row of data) {
         if (row.setting_key === 'cs_schedule') {
-          _csScheduleCache = row.setting_value as CSSchedule
+          _csScheduleCache = normalizeCSSchedule(row.setting_value)
         } else if (row.setting_key === 'security_schedule') {
-          _securityScheduleCache = row.setting_value as SecuritySchedule
+          _securityScheduleCache = normalizeSecuritySchedule(row.setting_value)
         }
       }
     }
     _cacheLoadedAt = now
-  } catch {
-    // fallback to defaults on error
+  } catch (err) {
+    console.warn('Error loading schedule cache:', err)
   }
 }
 
 export async function getCSSchedule(): Promise<CSSchedule> {
   await loadScheduleCache()
-  return _csScheduleCache ?? DEFAULT_CS_SCHEDULE
+  return _csScheduleCache ? normalizeCSSchedule(_csScheduleCache) : DEFAULT_CS_SCHEDULE
 }
 
 export async function getSecurityScheduleFromDB(): Promise<SecuritySchedule> {
   await loadScheduleCache()
-  return _securityScheduleCache ?? DEFAULT_SECURITY_SCHEDULE
+  return _securityScheduleCache ? normalizeSecuritySchedule(_securityScheduleCache) : DEFAULT_SECURITY_SCHEDULE
 }
 
 export function invalidateScheduleCache(): void {
@@ -141,11 +345,11 @@ export function invalidateScheduleCache(): void {
 // Synchronous fallback (for components that can't await)
 // ─────────────────────────────────────────────────────────────
 export function getCSScheduleSync(): CSSchedule {
-  return _csScheduleCache ?? DEFAULT_CS_SCHEDULE
+  return _csScheduleCache ? normalizeCSSchedule(_csScheduleCache) : DEFAULT_CS_SCHEDULE
 }
 
 export function getSecurityScheduleSync(): SecuritySchedule {
-  return _securityScheduleCache ?? DEFAULT_SECURITY_SCHEDULE
+  return _securityScheduleCache ? normalizeSecuritySchedule(_securityScheduleCache) : DEFAULT_SECURITY_SCHEDULE
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -790,6 +994,116 @@ export function getAttendanceButtonState(
     title: 'Ambil Foto & Absen Pulang',
     startTime: s.end,
     note,
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 30-Day Attendance Recap Calculation Engine
+// ─────────────────────────────────────────────────────────────
+export interface RecapDayStats {
+  hadir: number      // Total unique workdays present (distinct work_date)
+  terlambat: number  // Total unique workdays late (distinct work_date)
+  tidakHadir: number // Total unique scheduled workdays absent (jatuh tempo without attendance)
+}
+
+export interface RecapMasukRecord {
+  work_date: string
+  attendance_type: string
+  attendance_status?: string
+}
+
+/**
+ * Authoritative 30-day attendance recap calculator for ShiftTrack.
+ *
+ * Rules:
+ * 1. Counts WORKDAYS (unique work_date), never raw rows, preventing duplicate counting.
+ * 2. Only counts scheduled workdays that have ELAPSED (jatuh tempo):
+ *    - CS: Mon–Fri only (Sat & Sun excluded).
+ *    - Security: Mon–Sat only (Sun excluded).
+ * 3. Today is NOT counted as absent unless the check-in window has officially closed today
+ *    and the employee did not check in.
+ * 4. Future days are NEVER counted as absent.
+ * 5. Days before the employee's join date (created_at) are NEVER counted as absent.
+ * 6. If the employee has NO attendance history and NO join date within the window,
+ *    returns 0/0/0 (avoids fabricating 22 absences for uninitialized/demo accounts).
+ */
+export function calculate30DayRecap(
+  category: 'CS' | 'Security',
+  masukRecords: RecapMasukRecord[],
+  joinDateStr?: string | null,
+  now: Date = new Date(),
+  _shift?: ShiftType | null,
+): RecapDayStats {
+  void _shift
+
+  // Deduplicate records by work_date:
+  const hadirDates = new Set<string>()
+  const terlambatDates = new Set<string>()
+
+  for (const r of masukRecords) {
+    if (r.work_date && r.attendance_type === 'masuk') {
+      hadirDates.add(r.work_date)
+      if (r.attendance_status === 'terlambat') {
+        terlambatDates.add(r.work_date)
+      }
+    }
+  }
+
+  const totalHadir = hadirDates.size
+  const totalLate = terlambatDates.size
+
+  // 30 days ago in Jakarta timezone
+  const past30StartDate = new Date(now)
+  past30StartDate.setDate(past30StartDate.getDate() - 30)
+  const past30DaysStr = past30StartDate.toLocaleDateString('en-CA', { timeZone: TIMEZONE })
+
+  // Rule 6: If employee has no attendance records and no join date (or join date outside window),
+  // do NOT fabricate absences for an unrecorded past period.
+  if (masukRecords.length === 0 && (!joinDateStr || joinDateStr < past30DaysStr)) {
+    return { hadir: 0, terlambat: 0, tidakHadir: 0 }
+  }
+
+  const elapsedScheduledDays: string[] = []
+
+  // Iterate backwards from yesterday (i=1) to 30 days ago (i=30)
+  for (let i = 1; i <= 30; i++) {
+    const d = new Date(now)
+    d.setDate(now.getDate() - i)
+    const dStr = d.toLocaleDateString('en-CA', { timeZone: TIMEZONE })
+
+    // Rule: Skip days before employee joined
+    if (joinDateStr && dStr < joinDateStr) continue
+    // Rule: Skip days outside the 30-day window
+    if (dStr < past30DaysStr) continue
+
+    const dow = d.toLocaleDateString('en-US', { timeZone: TIMEZONE, weekday: 'short' })
+    const isScheduledWorkday = category === 'CS'
+      ? (dow !== 'Sat' && dow !== 'Sun')
+      : (dow !== 'Sun')
+
+    if (isScheduledWorkday) {
+      elapsedScheduledDays.push(dStr)
+    }
+  }
+
+  // Today (i=0):
+  // Today is the active/current day.
+  // Per Ketentuan 4 ("Jangan menghitung tanggal mendatang atau hari kerja yang jadwalnya belum dimulai sebagai absen"),
+  // hari ini tidak dihitung sebagai absen pada rekap 30 hari.
+  // Kehadiran hari ini (jika sudah presensi masuk) tetap tercatat pada totalHadir.
+
+  // Absences = scheduled elapsed days without attendance
+  let absentCount = 0
+  for (const dateStr of elapsedScheduledDays) {
+    if (!hadirDates.has(dateStr)) {
+      absentCount++
+    }
+  }
+
+  return {
+    hadir: totalHadir,
+    terlambat: totalLate,
+    tidakHadir: absentCount,
   }
 }
 

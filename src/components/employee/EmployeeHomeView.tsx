@@ -21,9 +21,11 @@ import {
   preloadSchedules,
   getNextAttendanceInfo,
   getAttendanceButtonState,
+  calculate30DayRecap,
 } from '../../lib/scheduleEngine'
 import type { AttendanceRecord, ShiftType } from '../../types/attendance'
 import TakeAttendanceModal from '../../pages/attendance/TakeAttendanceModal'
+import ServiceMenuGrid from './ServiceMenuGrid'
 
 interface EmployeeHomeViewProps {
   category: 'CS' | 'Security'
@@ -115,7 +117,10 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
       }
 
       // 2. Past 30 days for personal stats
-      const past30Days = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      // Query 31 hari ke belakang agar kita bisa exclude hari ini secara eksplisit di client.
+      const past30StartDate = new Date()
+      past30StartDate.setDate(past30StartDate.getDate() - 30)
+      const past30Days = past30StartDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' })
       const { data: monthList } = await supabase
         .from('attendance_records')
         .select('work_date, attendance_type, attendance_status, auth_uid, employee_profile_id, normalized_name, category')
@@ -130,31 +135,26 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
           return r.category === category && r.normalized_name === normName
         })
         const masukRecords = personalMonth.filter(r => r.attendance_type === 'masuk')
-        const totalHadir = masukRecords.length
-        // Baca status langsung dari DB (edge function sudah menyimpan status yang benar)
-        const totalLate = masukRecords.filter(r => r.attendance_status === 'terlambat').length
 
-        // Hitung hari kerja terjadwal yang sudah berlalu (tidak termasuk hari mendatang).
-        // CS  : Senin–Jumat (dow 1–5). Sabtu dan Minggu bukan hari kerja CS.
-        // Security: Senin–Sabtu (dow 1–6). Minggu bukan hari kerja Security.
-        const nowDate = new Date()
-        const todayStr = today // YYYY-MM-DD Jakarta
-        let elapsedWorkdays = 0
-        for (let i = 0; i < 30; i++) {
-          const d = new Date(nowDate.getTime() - i * 24 * 60 * 60 * 1000)
-          const dStr = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' })
-          if (dStr > todayStr) continue // lewati hari mendatang (tidak seharusnya terjadi)
-          const dow = d.toLocaleDateString('en-US', { timeZone: 'Asia/Jakarta', weekday: 'short' })
-          if (category === 'CS') {
-            // CS hanya Senin–Jumat
-            if (dow !== 'Sat' && dow !== 'Sun') elapsedWorkdays++
-          } else {
-            // Security Senin–Sabtu
-            if (dow !== 'Sun') elapsedWorkdays++
-          }
-        }
-        const absent = Math.max(0, elapsedWorkdays - totalHadir)
-        setMonthStats({ hadir: totalHadir, terlambat: totalLate, tidakHadir: absent })
+        // Tanggal bergabung pegawai (YYYY-MM-DD) dalam timezone Jakarta
+        // Cek employeeProfile.created_at, profile.created_at, atau user.created_at
+        const rawCreatedAt =
+          (employeeProfile as { created_at?: string } | null)?.created_at ||
+          profile?.created_at ||
+          user?.created_at
+
+        const joinDateStr: string | null = rawCreatedAt
+          ? new Date(rawCreatedAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' })
+          : null
+
+        const recapStats = calculate30DayRecap(
+          category,
+          masukRecords,
+          joinDateStr,
+          new Date(),
+          selectedShift,
+        )
+        setMonthStats(recapStats)
       }
 
       // 3. Weekly bar chart data
@@ -245,6 +245,21 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
   const handleOpenTakeModal = (type: 'masuk' | 'istirahat' | 'pulang') => {
     setAttendanceTypeToTake(type)
     setIsTakeModalOpen(true)
+  }
+
+  const handlePresensiMenuClick = () => {
+    if (buttonState.status === 'can_masuk') {
+      handleOpenTakeModal('masuk')
+    } else if (buttonState.status === 'can_istirahat') {
+      handleOpenTakeModal('istirahat')
+    } else if (buttonState.status === 'can_pulang') {
+      handleOpenTakeModal('pulang')
+    } else {
+      const card = document.getElementById('presensi-hari-ini-card')
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    }
   }
 
   const displayName = employeeProfile?.full_name || profile?.full_name || 'Pegawai'
@@ -497,7 +512,7 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
         <div className="lg:col-span-2 space-y-5">
 
           {/* A. Main Attendance Card */}
-          <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
+          <div id="presensi-hari-ini-card" className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden scroll-mt-20">
             {/* Card header */}
             <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between">
               <h3 className="text-sm font-bold text-neutral-900">Presensi Hari Ini</h3>
@@ -718,6 +733,12 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
             )}
 
           </div>
+
+          {/* ── Menu Layanan (GoPay-inspired Modern Quick Actions Grid) ── */}
+          <ServiceMenuGrid
+            category={category}
+            onPresensiClick={handlePresensiMenuClick}
+          />
 
           {/* B. Recent Attendance Records (Desktop: Table, Mobile: Cards) */}
           <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
