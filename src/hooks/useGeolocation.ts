@@ -1,5 +1,5 @@
 // ============================================================
-// ShiftTrack — useGeolocation Hook
+// SIPATEN — useGeolocation Hook
 // GPS position tracking, browser permission handling,
 // distance calculation against office geofence, and error messaging
 // ============================================================
@@ -79,11 +79,11 @@ export function useGeolocation(officeConfig: OfficeLocationConfig = DEFAULT_OFFI
           const isConfigured = officeRef.current.isConfigured !== false && officeRef.current.latitude !== 0
           const distance = isConfigured
             ? calculateDistanceMeters(
-                latitude,
-                longitude,
-                officeRef.current.latitude,
-                officeRef.current.longitude,
-              )
+              latitude,
+              longitude,
+              officeRef.current.latitude,
+              officeRef.current.longitude,
+            )
             : null
 
           const isInside = isConfigured && distance !== null ? distance <= officeRef.current.radiusMeters : false

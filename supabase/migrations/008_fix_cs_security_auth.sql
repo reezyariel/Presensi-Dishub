@@ -1,5 +1,5 @@
 -- ============================================================
--- ShiftTrack Migration 008: Comprehensive Fix for CS & Security Auth
+-- SIPATEN Migration 008: Comprehensive Fix for CS & Security Auth
 -- 1. Ensure auth_uid column exists and is indexed
 -- 2. Create demo CS and Security Auth accounts in auth.users and auth.identities
 -- 3. Populate employee_profiles and link auth_uid
@@ -26,8 +26,8 @@ begin
   -- Standard password hash for 'password123'
   pwd_hash := crypt('password123', gen_salt('bf', 10));
 
-  -- A. Create / Update cs@shifttrack.app
-  select id into cs_id from auth.users where email = 'cs@shifttrack.app';
+  -- A. Create / Update cs@SIPATEN.app
+  select id into cs_id from auth.users where email = 'cs@SIPATEN.app';
   if cs_id is null then
     cs_id := gen_random_uuid();
     insert into auth.users (
@@ -40,7 +40,7 @@ begin
       '00000000-0000-0000-0000-000000000000',
       'authenticated',
       'authenticated',
-      'cs@shifttrack.app',
+      'cs@SIPATEN.app',
       pwd_hash,
       now(),
       now(),
@@ -74,14 +74,14 @@ begin
     where id = cs_id;
   end if;
 
-  -- Ensure identity exists for cs@shifttrack.app (note: email column is generated, omitted)
+  -- Ensure identity exists for cs@SIPATEN.app (note: email column is generated, omitted)
   insert into auth.identities (
     id, provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at
   ) values (
     gen_random_uuid(),
     cs_id::text,
     cs_id,
-    jsonb_build_object('sub', cs_id::text, 'email', 'cs@shifttrack.app', 'email_verified', true, 'phone_verified', false),
+    jsonb_build_object('sub', cs_id::text, 'email', 'cs@SIPATEN.app', 'email_verified', true, 'phone_verified', false),
     'email',
     now(),
     now(),
@@ -91,8 +91,8 @@ begin
     set identity_data = excluded.identity_data,
         updated_at = now();
 
-  -- B. Create / Update security@shifttrack.app
-  select id into sec_id from auth.users where email = 'security@shifttrack.app';
+  -- B. Create / Update security@SIPATEN.app
+  select id into sec_id from auth.users where email = 'security@SIPATEN.app';
   if sec_id is null then
     sec_id := gen_random_uuid();
     insert into auth.users (
@@ -105,7 +105,7 @@ begin
       '00000000-0000-0000-0000-000000000000',
       'authenticated',
       'authenticated',
-      'security@shifttrack.app',
+      'security@SIPATEN.app',
       pwd_hash,
       now(),
       now(),
@@ -145,7 +145,7 @@ begin
     gen_random_uuid(),
     sec_id::text,
     sec_id,
-    jsonb_build_object('sub', sec_id::text, 'email', 'security@shifttrack.app', 'email_verified', true, 'phone_verified', false),
+    jsonb_build_object('sub', sec_id::text, 'email', 'security@SIPATEN.app', 'email_verified', true, 'phone_verified', false),
     'email',
     now(),
     now(),
@@ -155,8 +155,8 @@ begin
     set identity_data = excluded.identity_data,
         updated_at = now();
 
-  -- C. Also support cs.demo@shifttrack.app
-  select id into cs_demo_id from auth.users where email = 'cs.demo@shifttrack.app';
+  -- C. Also support cs.demo@SIPATEN.app
+  select id into cs_demo_id from auth.users where email = 'cs.demo@SIPATEN.app';
   if cs_demo_id is null then
     cs_demo_id := gen_random_uuid();
     insert into auth.users (
@@ -169,7 +169,7 @@ begin
       '00000000-0000-0000-0000-000000000000',
       'authenticated',
       'authenticated',
-      'cs.demo@shifttrack.app',
+      'cs.demo@SIPATEN.app',
       pwd_hash,
       now(),
       now(),
@@ -209,7 +209,7 @@ begin
     gen_random_uuid(),
     cs_demo_id::text,
     cs_demo_id,
-    jsonb_build_object('sub', cs_demo_id::text, 'email', 'cs.demo@shifttrack.app', 'email_verified', true, 'phone_verified', false),
+    jsonb_build_object('sub', cs_demo_id::text, 'email', 'cs.demo@SIPATEN.app', 'email_verified', true, 'phone_verified', false),
     'email',
     now(),
     now(),
@@ -219,8 +219,8 @@ begin
     set identity_data = excluded.identity_data,
         updated_at = now();
 
-  -- D. Also support security.demo@shifttrack.app
-  select id into sec_demo_id from auth.users where email = 'security.demo@shifttrack.app';
+  -- D. Also support security.demo@SIPATEN.app
+  select id into sec_demo_id from auth.users where email = 'security.demo@SIPATEN.app';
   if sec_demo_id is null then
     sec_demo_id := gen_random_uuid();
     insert into auth.users (
@@ -233,7 +233,7 @@ begin
       '00000000-0000-0000-0000-000000000000',
       'authenticated',
       'authenticated',
-      'security.demo@shifttrack.app',
+      'security.demo@SIPATEN.app',
       pwd_hash,
       now(),
       now(),
@@ -273,7 +273,7 @@ begin
     gen_random_uuid(),
     sec_demo_id::text,
     sec_demo_id,
-    jsonb_build_object('sub', sec_demo_id::text, 'email', 'security.demo@shifttrack.app', 'email_verified', true, 'phone_verified', false),
+    jsonb_build_object('sub', sec_demo_id::text, 'email', 'security.demo@SIPATEN.app', 'email_verified', true, 'phone_verified', false),
     'email',
     now(),
     now(),
@@ -286,13 +286,13 @@ begin
   -- 3. Populate / Upsert employee_profiles
   -- CS Demo Officer
   insert into public.employee_profiles (full_name, normalized_name, employee_role, default_shift, is_active, notes, auth_uid)
-  values ('Demo CS Officer', 'demo cs officer', 'CS', null, true, 'Akun demo resmi Customer Service ShiftTrack', cs_id)
+  values ('Demo CS Officer', 'demo cs officer', 'CS', null, true, 'Akun demo resmi Customer Service SIPATEN', cs_id)
   on conflict (normalized_name, employee_role) do update
     set auth_uid = cs_id, is_active = true, updated_at = now();
 
   -- Security Demo Officer
   insert into public.employee_profiles (full_name, normalized_name, employee_role, default_shift, is_active, notes, auth_uid)
-  values ('Demo Security Officer', 'demo security officer', 'Security', 'Shift I', true, 'Akun demo resmi Security ShiftTrack', sec_id)
+  values ('Demo Security Officer', 'demo security officer', 'Security', 'Shift I', true, 'Akun demo resmi Security SIPATEN', sec_id)
   on conflict (normalized_name, employee_role) do update
     set auth_uid = sec_id, is_active = true, default_shift = 'Shift I', updated_at = now();
 
@@ -456,9 +456,9 @@ begin
 
   -- 3. Friendly aliases
   if v_clean in ('cs001', 'cs', 'demo-cs', 'democs') then
-    return 'cs@shifttrack.app';
+    return 'cs@SIPATEN.app';
   elsif v_clean in ('sec001', 'sec', 'security', 'security001', 'demo-sec', 'demosec') then
-    return 'security@shifttrack.app';
+    return 'security@SIPATEN.app';
   end if;
 
   return null;

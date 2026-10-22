@@ -1,5 +1,5 @@
 // ============================================================
-// ShiftTrack — LocationPickerMap Component
+// SIPATEN — LocationPickerMap Component
 // Interactive Leaflet.js map for choosing office coordinates
 // and visualizing geofence radius with OpenStreetMap tiles
 // ============================================================

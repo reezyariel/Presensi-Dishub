@@ -1,6 +1,6 @@
 // ============================================================
-// ShiftTrack — Menu Layanan Grid (GoPay-inspired Modern Quick Actions)
-// Minimalist Monochrome Design tailored to ShiftTrack identity
+// SIPATEN — Menu Layanan Grid (GoPay-inspired Modern Quick Actions)
+// Minimalist Monochrome Design tailored to SIPATEN identity
 // Responsive: 4 cols on mobile, 5 cols on tablet & desktop (10 items)
 // ============================================================
 
@@ -125,7 +125,7 @@ export default function ServiceMenuGrid({ category, onPresensiClick }: ServiceMe
       icon: HelpCircle,
       isAvailable: false,
       unavailableDescription:
-        'Layanan pusat bantuan digital sedang dalam pengembangan. Jika Anda mengalami kendala absensi (GPS, kamera, atau akun), silakan hubungi tim Admin ShiftTrack.',
+        'Layanan pusat bantuan digital sedang dalam pengembangan. Jika Anda mengalami kendala absensi (GPS, kamera, atau akun), silakan hubungi tim Admin SIPATEN.',
     },
   ]
 
@@ -173,10 +173,9 @@ export default function ServiceMenuGrid({ category, onPresensiClick }: ServiceMe
                       flex items-center justify-center
                       border transition-all duration-200 shadow-sm
                       relative
-                      ${
-                        item.isAvailable
-                          ? 'bg-neutral-50 border-neutral-200 text-neutral-800 group-hover:bg-neutral-900 group-hover:text-white group-hover:border-neutral-900 group-hover:shadow'
-                          : 'bg-neutral-50/70 border-neutral-200/60 text-neutral-500 group-hover:border-neutral-300 group-hover:bg-neutral-100'
+                      ${item.isAvailable
+                        ? 'bg-neutral-50 border-neutral-200 text-neutral-800 group-hover:bg-neutral-900 group-hover:text-white group-hover:border-neutral-900 group-hover:shadow'
+                        : 'bg-neutral-50/70 border-neutral-200/60 text-neutral-500 group-hover:border-neutral-300 group-hover:bg-neutral-100'
                       }
                     `}
                   >
@@ -186,10 +185,9 @@ export default function ServiceMenuGrid({ category, onPresensiClick }: ServiceMe
                     className={`
                       text-[11px] font-medium text-center leading-snug mt-1.5 px-0.5 line-clamp-2
                       transition-colors
-                      ${
-                        item.isAvailable
-                          ? 'text-neutral-800 font-semibold group-hover:text-neutral-900'
-                          : 'text-neutral-500 group-hover:text-neutral-700'
+                      ${item.isAvailable
+                        ? 'text-neutral-800 font-semibold group-hover:text-neutral-900'
+                        : 'text-neutral-500 group-hover:text-neutral-700'
                       }
                     `}
                   >

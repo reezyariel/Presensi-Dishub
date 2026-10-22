@@ -1,5 +1,5 @@
 // ============================================================
-// ShiftTrack — EmployeeLayout (Responsive)
+// SIPATEN — EmployeeLayout (Responsive)
 // Desktop (≥ md): Sidebar kiri permanen + Topbar + Area Konten Lebar
 // Mobile (< md): Bottom navigation + full-screen scrollable content
 // ============================================================

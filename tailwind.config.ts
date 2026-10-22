@@ -11,9 +11,9 @@ export default {
         sans: ['Inter', 'system-ui', 'sans-serif'],
       },
       colors: {
-        // ShiftTrack strict monochrome palette
+        // SIPATEN strict monochrome palette
         brand: {
-          50:  '#fafafa',
+          50: '#fafafa',
           100: '#f4f4f5',
           200: '#e4e4e7',
           300: '#d4d4d8',
@@ -26,19 +26,19 @@ export default {
           950: '#09090b',
         },
         sidebar: {
-          DEFAULT:  '#111111',
-          hover:    '#1f1f1f',
-          active:   '#2a2a2a',
-          text:     '#a3a3a3',
-          heading:  '#737373',
-          border:   '#262626',
+          DEFAULT: '#111111',
+          hover: '#1f1f1f',
+          active: '#2a2a2a',
+          text: '#a3a3a3',
+          heading: '#737373',
+          border: '#262626',
         },
         surface: {
           DEFAULT: '#ffffff',
-          muted:   '#f8f9fa',
-          subtle:  '#f1f3f5',
-          border:  '#e5e7eb',
-          dark:    '#121212',
+          muted: '#f8f9fa',
+          subtle: '#f1f3f5',
+          border: '#e5e7eb',
+          dark: '#121212',
         },
       },
       borderRadius: {

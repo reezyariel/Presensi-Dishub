@@ -1,5 +1,5 @@
 // ============================================================
-// ShiftTrack — Employee Sidebar (Desktop, ≥ md breakpoint)
+// SIPATEN — Employee Sidebar (Desktop, ≥ md breakpoint)
 // Shown only on desktop (hidden on mobile via CSS)
 // Handles CS and Security navigation
 // ============================================================
@@ -64,11 +64,11 @@ export default function EmployeeSidebar({ category, isMobileOpen = false, onClos
           <div className="flex items-center gap-2.5">
             <img
               src="/logo.jpg"
-              alt="ShiftTrack Logo"
+              alt="SIPATEN Logo"
               className="w-8 h-8 rounded-lg object-cover flex-shrink-0"
             />
             <div>
-              <p className="text-sm font-bold text-neutral-900 leading-none">ShiftTrack</p>
+              <p className="text-sm font-bold text-neutral-900 leading-none">SIPATEN</p>
               <p className="text-[10px] text-neutral-500 font-medium mt-0.5 leading-none">Portal Karyawan</p>
             </div>
           </div>
@@ -152,7 +152,7 @@ export default function EmployeeSidebar({ category, isMobileOpen = false, onClos
             <div className="space-y-1">
               <h3 className="text-sm font-bold text-neutral-900">Keluar dari Akun?</h3>
               <p className="text-xs text-neutral-500">
-                Apakah Anda yakin ingin keluar dari sesi ShiftTrack di perangkat ini?
+                Apakah Anda yakin ingin keluar dari sesi SIPATEN di perangkat ini?
               </p>
             </div>
             <div className="flex items-center gap-3 pt-2">

@@ -1,5 +1,5 @@
 // ============================================================
-// ShiftTrack — Data Pegawai Admin Page (Enterprise Desktop Layout)
+// SIPATEN — Data Pegawai Admin Page (Enterprise Desktop Layout)
 // Full Desktop Grid, Integrated Auth Account Provisioning,
 // Real-time Credentials Modal, Password Reset, and Historical Data Protection
 // ============================================================
@@ -116,7 +116,7 @@ export default function EmployeesPage() {
     setFormFullName('')
     setFormRole(initialRole)
     setFormEmployeeCode(suggestedCode)
-    setFormEmail(`${suggestedCode.toLowerCase()}@shifttrack.app`)
+    setFormEmail(`${suggestedCode.toLowerCase()}@SIPATEN.app`)
     setFormPassword('')
     setShowPassword(false)
     setFormDefaultShift('')
@@ -132,7 +132,7 @@ export default function EmployeesPage() {
     if (!editingEmployee) {
       const suggestedCode = generateSuggestedCode(newRole)
       setFormEmployeeCode(suggestedCode)
-      setFormEmail(`${suggestedCode.toLowerCase()}@shifttrack.app`)
+      setFormEmail(`${suggestedCode.toLowerCase()}@SIPATEN.app`)
       if (newRole === 'Security' && !formDefaultShift) {
         setFormDefaultShift('Shift I')
       }
@@ -364,7 +364,7 @@ export default function EmployeesPage() {
 
   function copyCredentialsToClipboard() {
     if (!createdCredentials) return
-    const text = `[ShiftTrack — Kredensial Akun Pegawai]\nNama: ${createdCredentials.fullName}\nID Pegawai: ${createdCredentials.employeeCode}\nEmail Login: ${createdCredentials.email}\nKata Sandi: ${createdCredentials.password}\nRole: ${createdCredentials.role}\n${createdCredentials.defaultShift ? `Shift: ${createdCredentials.defaultShift}\n` : ''}Login portal: ${window.location.origin}/login`
+    const text = `[SIPATEN — Kredensial Akun Pegawai]\nNama: ${createdCredentials.fullName}\nID Pegawai: ${createdCredentials.employeeCode}\nEmail Login: ${createdCredentials.email}\nKata Sandi: ${createdCredentials.password}\nRole: ${createdCredentials.role}\n${createdCredentials.defaultShift ? `Shift: ${createdCredentials.defaultShift}\n` : ''}Login portal: ${window.location.origin}/login`
     navigator.clipboard.writeText(text)
     setCopiedSuccess(true)
     setTimeout(() => setCopiedSuccess(false), 2500)
@@ -511,25 +511,22 @@ export default function EmployeesPage() {
               <span className="px-2 text-[10px] font-bold text-neutral-500 uppercase">Divisi:</span>
               <button
                 onClick={() => setRoleFilter('ALL')}
-                className={`px-2.5 py-1.5 rounded-lg font-semibold transition-all ${
-                  roleFilter === 'ALL' ? 'bg-neutral-900 text-white shadow-xs' : 'text-neutral-600 hover:text-neutral-900'
-                }`}
+                className={`px-2.5 py-1.5 rounded-lg font-semibold transition-all ${roleFilter === 'ALL' ? 'bg-neutral-900 text-white shadow-xs' : 'text-neutral-600 hover:text-neutral-900'
+                  }`}
               >
                 Semua
               </button>
               <button
                 onClick={() => setRoleFilter('CS')}
-                className={`px-2.5 py-1.5 rounded-lg font-semibold transition-all ${
-                  roleFilter === 'CS' ? 'bg-neutral-900 text-white shadow-xs' : 'text-neutral-600 hover:text-neutral-900'
-                }`}
+                className={`px-2.5 py-1.5 rounded-lg font-semibold transition-all ${roleFilter === 'CS' ? 'bg-neutral-900 text-white shadow-xs' : 'text-neutral-600 hover:text-neutral-900'
+                  }`}
               >
                 CS
               </button>
               <button
                 onClick={() => setRoleFilter('Security')}
-                className={`px-2.5 py-1.5 rounded-lg font-semibold transition-all ${
-                  roleFilter === 'Security' ? 'bg-neutral-900 text-white shadow-xs' : 'text-neutral-600 hover:text-neutral-900'
-                }`}
+                className={`px-2.5 py-1.5 rounded-lg font-semibold transition-all ${roleFilter === 'Security' ? 'bg-neutral-900 text-white shadow-xs' : 'text-neutral-600 hover:text-neutral-900'
+                  }`}
               >
                 Security
               </button>
@@ -776,7 +773,7 @@ export default function EmployeesPage() {
                 </h3>
                 <p className="text-xs text-neutral-500 mt-0.5">
                   {editingEmployee
-                    ? 'Perbarui informasi profil pegawai ShiftTrack.'
+                    ? 'Perbarui informasi profil pegawai SIPATEN.'
                     : 'Membuat profil pegawai dan akun autentikasi Supabase secara instan.'}
                 </p>
               </div>
@@ -816,11 +813,10 @@ export default function EmployeesPage() {
                   <button
                     type="button"
                     onClick={() => handleRoleChange('CS')}
-                    className={`py-2.5 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                      formRole === 'CS'
+                    className={`py-2.5 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${formRole === 'CS'
                         ? 'bg-neutral-900 text-white border-neutral-900'
                         : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-50'
-                    }`}
+                      }`}
                   >
                     <Headphones size={15} />
                     <span>Cleaning Service</span>
@@ -829,11 +825,10 @@ export default function EmployeesPage() {
                   <button
                     type="button"
                     onClick={() => handleRoleChange('Security')}
-                    className={`py-2.5 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                      formRole === 'Security'
+                    className={`py-2.5 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${formRole === 'Security'
                         ? 'bg-neutral-900 text-white border-neutral-900'
                         : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-50'
-                    }`}
+                      }`}
                   >
                     <Shield size={15} />
                     <span>Security</span>
@@ -861,7 +856,7 @@ export default function EmployeesPage() {
                   <input
                     type="email"
                     required
-                    placeholder="pegawai@shifttrack.app"
+                    placeholder="pegawai@SIPATEN.app"
                     value={formEmail}
                     onChange={e => setFormEmail(e.target.value)}
                     className="form-input text-xs py-2.5"
@@ -957,8 +952,8 @@ export default function EmployeesPage() {
                   {isSubmitting
                     ? 'Memproses Akun...'
                     : editingEmployee
-                    ? 'Perbarui Data'
-                    : 'Buat Akun & Simpan'}
+                      ? 'Perbarui Data'
+                      : 'Buat Akun & Simpan'}
                 </button>
               </div>
             </form>

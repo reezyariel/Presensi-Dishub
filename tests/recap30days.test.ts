@@ -1,5 +1,5 @@
 /**
- * ShiftTrack — Authoritative 30-Day Attendance Recap Calculation Tests
+ * SIPATEN — Authoritative 30-Day Attendance Recap Calculation Tests
  *
  * Directly tests calculate30DayRecap from src/lib/scheduleEngine.ts.
  * Run with: npx tsx tests/recap30days.test.ts
@@ -43,7 +43,7 @@ const CS_30DAY_WORKDAYS = 22
 const SEC_30DAY_WORKDAYS = 26
 
 console.log('\n============================================================')
-console.log('📅  ShiftTrack — Rekap 30 Hari Calculation Test Suite')
+console.log('📅  SIPATEN — Rekap 30 Hari Calculation Test Suite')
 console.log('============================================================\n')
 
 // ─────────────────────────────────────────────────────────────────────────────

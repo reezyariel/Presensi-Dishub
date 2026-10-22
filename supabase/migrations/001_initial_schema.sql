@@ -1,5 +1,5 @@
 -- ============================================================
--- ShiftTrack — Database Schema Migration
+-- SIPATEN — Database Schema Migration
 -- Version: 1.2 (Security-Definer Admin Architecture & Hardened RLS)
 -- ============================================================
 

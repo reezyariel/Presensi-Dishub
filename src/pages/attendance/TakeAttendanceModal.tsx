@@ -1,5 +1,5 @@
 // ============================================================
-// ShiftTrack — TakeAttendanceModal Component
+// SIPATEN — TakeAttendanceModal Component
 // Cross-device Camera Attendance Modal for CS & Security
 // Live Video Preview, Snapshot, Confirm Photo, Geofence GPS
 // ============================================================
@@ -239,8 +239,8 @@ export default function TakeAttendanceModal({
     attendanceType === 'masuk'
       ? 'Presensi Masuk'
       : attendanceType === 'istirahat'
-      ? 'Presensi Istirahat'
-      : 'Presensi Pulang'
+        ? 'Presensi Istirahat'
+        : 'Presensi Pulang'
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-3 sm:p-4 backdrop-blur-xs">
@@ -351,8 +351,8 @@ export default function TakeAttendanceModal({
                     {!officeConfig.isConfigured
                       ? 'Admin belum menetapkan koordinat kantor aktif'
                       : coords
-                      ? `Akurasi: ±${Math.round(coords.accuracy)}m • Titik: ${officeConfig.name} (${officeConfig.radiusMeters}m)`
-                      : 'Pastikan izin lokasi browser telah diaktifkan'}
+                        ? `Akurasi: ±${Math.round(coords.accuracy)}m • Titik: ${officeConfig.name} (${officeConfig.radiusMeters}m)`
+                        : 'Pastikan izin lokasi browser telah diaktifkan'}
                   </p>
                 </div>
               </div>
@@ -438,11 +438,10 @@ export default function TakeAttendanceModal({
                 muted
                 onLoadedMetadata={(e) => {
                   const target = e.currentTarget
-                  target.play().catch(() => {})
+                  target.play().catch(() => { })
                 }}
-                className={`w-full h-full object-cover ${photo ? 'hidden' : 'block'} ${
-                  facingMode === 'user' ? 'scale-x-[-1]' : ''
-                }`}
+                className={`w-full h-full object-cover ${photo ? 'hidden' : 'block'} ${facingMode === 'user' ? 'scale-x-[-1]' : ''
+                  }`}
               />
 
               {/* Captured Photo Preview */}
@@ -579,11 +578,10 @@ export default function TakeAttendanceModal({
                   <MapPin size={14} />
                   Lokasi Validasi Presensi:
                 </span>
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                  isInsideRadius
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isInsideRadius
                     ? 'bg-neutral-200 text-neutral-900'
                     : 'bg-neutral-900 text-white'
-                }`}>
+                  }`}>
                   {isInsideRadius ? 'Dalam Radius' : 'Luar Radius'}
                 </span>
               </div>

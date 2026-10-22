@@ -313,7 +313,7 @@ serve(async (req: Request) => {
 
     if (!matchedEmployee) {
       return new Response(
-        JSON.stringify({ error: `Pegawai "${employee_name}" tidak terdaftar dalam sistem ShiftTrack. Absensi ditolak.` }),
+        JSON.stringify({ error: `Pegawai "${employee_name}" tidak terdaftar dalam sistem SIPATEN. Absensi ditolak.` }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -392,9 +392,9 @@ serve(async (req: Request) => {
 
     // 6a. Fetch CS schedule from attendance_settings (source of truth for Admin config)
     // Defaults used if DB row missing or fields absent
-    let csOpen:     string = '07:30'
+    let csOpen: string = '07:30'
     let csDeadline: string = '08:00'
-    let csClose:    string = '11:59'
+    let csClose: string = '11:59'
 
     if (category === 'CS') {
       const { data: csSettingRows } = await supabase
@@ -410,9 +410,9 @@ serve(async (req: Request) => {
         // Support both old schema (start/end) and new schema (open/ontime_deadline/close)
         const m = sv.masuk
         if (m) {
-          csOpen     = m.open     ?? m.start ?? csOpen
+          csOpen = m.open ?? m.start ?? csOpen
           csDeadline = m.ontime_deadline ?? m.end ?? csDeadline
-          csClose    = m.close    ?? csClose
+          csClose = m.close ?? csClose
         }
       }
     }
@@ -440,11 +440,11 @@ serve(async (req: Request) => {
 
       if (attendance_type === 'masuk') {
         scheduledStart = csOpen
-        scheduledEnd   = csDeadline
+        scheduledEnd = csDeadline
 
-        const openMins     = hhmm(csOpen)
+        const openMins = hhmm(csOpen)
         const deadlineMins = hhmm(csDeadline)
-        const closeMins    = hhmm(csClose)
+        const closeMins = hhmm(csClose)
 
         // Tolak jika sebelum waktu buka
         if (currentMinutesFromMidnight < openMins) {
@@ -477,14 +477,14 @@ serve(async (req: Request) => {
         // Tepat waktu: tidak perlu adminNotes
       } else if (attendance_type === 'istirahat') {
         scheduledStart = '12:00'
-        scheduledEnd   = '14:00'
+        scheduledEnd = '14:00'
         if (currentHour < 12 || currentHour >= 14) {
           reviewStatus = 'perlu_tindak_lanjut'
           adminNotes = `Istirahat di luar rentang jadwal resmi 12:00–14:00 (${jakartaTimeStr} WIB)`
         }
       } else if (attendance_type === 'pulang') {
         scheduledStart = '16:00'
-        scheduledEnd   = '18:00'
+        scheduledEnd = '18:00'
         if (currentHour < 16 || currentHour >= 18) {
           reviewStatus = 'perlu_tindak_lanjut'
           adminNotes = `Pulang di luar rentang jadwal resmi 16:00–18:00 (${jakartaTimeStr} WIB)`

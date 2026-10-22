@@ -78,19 +78,19 @@ async function testLogin(identifier: string, pass: string, expectedRole: string)
 }
 
 async function main() {
-  console.log('--- Testing ShiftTrack Auth Logins ---')
+  console.log('--- Testing SIPATEN Auth Logins ---')
 
   // 1. Test CS with employee ID
   await testLogin('CS001', 'password123', 'CS')
 
   // 2. Test CS with email
-  await testLogin('cs@shifttrack.app', 'password123', 'CS')
+  await testLogin('cs@SIPATEN.app', 'password123', 'CS')
 
   // 3. Test Security with employee ID
   await testLogin('sec001', 'password123', 'Security')
 
   // 4. Test Security with email
-  await testLogin('security@shifttrack.app', 'password123', 'Security')
+  await testLogin('security@SIPATEN.app', 'password123', 'Security')
 
   console.log('\n--- Finished Test ---')
 }

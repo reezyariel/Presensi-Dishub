@@ -1,5 +1,5 @@
 -- ============================================================
--- ShiftTrack Migration 003: Employee Profiles & Secure Directory View
+-- SIPATEN Migration 003: Employee Profiles & Secure Directory View
 -- Tabel untuk menyimpan data karyawan CS dan Security
 -- Non-destructive: tidak mengubah tabel yang sudah ada
 -- ============================================================

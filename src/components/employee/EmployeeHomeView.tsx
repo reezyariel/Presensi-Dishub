@@ -1,5 +1,5 @@
 // ============================================================
-// ShiftTrack — Employee Home View (CS & Security)
+// SIPATEN — Employee Home View (CS & Security)
 // Responsive: 2-column grid on desktop, single column on mobile
 // 100% real Supabase data, camera & attendance preserved
 // ============================================================
@@ -227,9 +227,9 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
       const cs = getCSScheduleSync()
       const fmt = (s: string, e: string) => `${s.replace(':', '.')} – ${e.replace(':', '.')} WIB`
       return {
-        masuk:     fmt(cs.masuk.open,      cs.masuk.ontime_deadline),
+        masuk: fmt(cs.masuk.open, cs.masuk.ontime_deadline),
         istirahat: fmt(cs.istirahat.start, cs.istirahat.end),
-        pulang:    fmt(cs.pulang.start,    cs.pulang.end),
+        pulang: fmt(cs.pulang.start, cs.pulang.end),
       }
     } else {
       const sched = getScheduleInfo('Security', 'masuk', selectedShift, today)
@@ -267,9 +267,9 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
 
   // Derive next attendance info from today's completed records
   const completedTypes = [
-    ...(todayRecords.masuk     ? ['masuk']     : []),
+    ...(todayRecords.masuk ? ['masuk'] : []),
     ...(todayRecords.istirahat ? ['istirahat'] : []),
-    ...(todayRecords.pulang    ? ['pulang']    : []),
+    ...(todayRecords.pulang ? ['pulang'] : []),
   ] as ('masuk' | 'istirahat' | 'pulang')[]
 
   const nextInfo = getNextAttendanceInfo(category, completedTypes, selectedShift, today, currentTime)
@@ -282,8 +282,8 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
   const attendanceStatus = todayRecords.pulang
     ? 'Sudah Check-Out'
     : todayRecords.masuk
-    ? 'Sudah Check-In'
-    : 'Belum Absen'
+      ? 'Sudah Check-In'
+      : 'Belum Absen'
 
   // Is action currently active?
   const isActionActive = buttonState.status === 'can_masuk' || buttonState.status === 'can_istirahat' || buttonState.status === 'can_pulang'
@@ -292,8 +292,8 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
   const bannerBg = todayRecords.pulang
     ? 'bg-neutral-50 border-neutral-200'
     : isActionActive
-    ? 'bg-neutral-900 border-neutral-800'
-    : 'bg-neutral-50 border-neutral-200'
+      ? 'bg-neutral-900 border-neutral-800'
+      : 'bg-neutral-50 border-neutral-200'
 
   // Next Attendance Banner — dihitung sebelum render untuk menghindari nested ternary
   let nextAttendanceBanner: React.ReactNode
@@ -334,9 +334,9 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
       </>
     )
   } else if (buttonState.status === 'can_masuk') {
-    const openT    = (buttonState.openTime     || buttonState.startTime).replace(':', '.')
+    const openT = (buttonState.openTime || buttonState.startTime).replace(':', '.')
     const deadlineT = (buttonState.deadlineTime || buttonState.endTime).replace(':', '.')
-    const closeT   = (buttonState.closeTime    || buttonState.endTime).replace(':', '.')
+    const closeT = (buttonState.closeTime || buttonState.endTime).replace(':', '.')
     nextAttendanceBanner = (
       <>
         <div className="w-7 h-7 rounded-full bg-white/10 text-white flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -442,26 +442,22 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
   } else if (nextInfo) {
     nextAttendanceBanner = (
       <>
-        <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
-          todayRecords.masuk ? 'bg-white/10 text-white' : 'bg-neutral-100 text-neutral-600'
-        }`}>
+        <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${todayRecords.masuk ? 'bg-white/10 text-white' : 'bg-neutral-100 text-neutral-600'
+          }`}>
           <Clock size={13} />
         </div>
         <div>
-          <p className={`text-[11px] font-semibold ${
-            todayRecords.masuk ? 'text-neutral-400' : 'text-neutral-500'
-          }`}>
+          <p className={`text-[11px] font-semibold ${todayRecords.masuk ? 'text-neutral-400' : 'text-neutral-500'
+            }`}>
             {todayRecords.masuk ? 'Presensi berikutnya' : 'Presensi hari ini dimulai'}
           </p>
-          <p className={`text-xs font-bold mt-0.5 ${
-            todayRecords.masuk ? 'text-white' : 'text-neutral-900'
-          }`}>
+          <p className={`text-xs font-bold mt-0.5 ${todayRecords.masuk ? 'text-white' : 'text-neutral-900'
+            }`}>
             {nextInfo.label} pukul {nextInfo.startTime.replace(':', '.')} WIB
             {nextInfo.note ? ` ${nextInfo.note}` : ''}
           </p>
-          <p className={`text-[10px] mt-0.5 ${
-            todayRecords.masuk ? 'text-neutral-500' : 'text-neutral-400'
-          }`}>
+          <p className={`text-[10px] mt-0.5 ${todayRecords.masuk ? 'text-neutral-500' : 'text-neutral-400'
+            }`}>
             Pastikan Anda melakukan presensi sesuai jadwal.
           </p>
         </div>
@@ -499,16 +495,14 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
                   {selectedShift}
                 </span>
               )}
-              <span className={`inline-flex items-center gap-1 text-xs font-semibold rounded-full px-2.5 py-1 ${
-                todayRecords.pulang
+              <span className={`inline-flex items-center gap-1 text-xs font-semibold rounded-full px-2.5 py-1 ${todayRecords.pulang
                   ? 'bg-neutral-200 text-neutral-700 border border-neutral-300'
                   : todayRecords.masuk
-                  ? 'bg-neutral-900 text-white'
-                  : 'bg-white text-neutral-600 border border-neutral-300'
-              }`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${
-                  todayRecords.masuk ? 'bg-white' : 'bg-neutral-400'
-                }`} />
+                    ? 'bg-neutral-900 text-white'
+                    : 'bg-white text-neutral-600 border border-neutral-300'
+                }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${todayRecords.masuk ? 'bg-white' : 'bg-neutral-400'
+                  }`} />
                 {attendanceStatus}
               </span>
             </div>
@@ -555,11 +549,10 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
                     <p className="text-2xl font-bold text-neutral-300 font-mono">--:--</p>
                   )}
                   {todayRecords.masuk && (
-                    <span className={`mt-1 inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                      todayRecords.masuk.attendance_status === 'terlambat'
+                    <span className={`mt-1 inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ${todayRecords.masuk.attendance_status === 'terlambat'
                         ? 'bg-neutral-900 text-white'
                         : 'bg-neutral-100 text-neutral-700 border border-neutral-200'
-                    }`}>
+                      }`}>
                       {todayRecords.masuk.attendance_status === 'terlambat' ? 'Terlambat' : 'Tepat Waktu'}
                     </span>
                   )}
@@ -804,9 +797,8 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
                             <td className="px-5 py-3 font-semibold text-neutral-900">{typeLabel}</td>
                             <td className="px-5 py-3 font-mono text-neutral-700">{timeStr}</td>
                             <td className="px-5 py-3">
-                              <span className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                                isLate ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-700 border border-neutral-200'
-                              }`}>
+                              <span className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ${isLate ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-700 border border-neutral-200'
+                                }`}>
                                 {isLate ? 'Terlambat' : 'Tepat Waktu'}
                               </span>
                             </td>
@@ -973,13 +965,12 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
                   return (
                     <div key={w.day} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
                       <div
-                        className={`w-full max-w-[20px] rounded-t transition-all duration-500 ${
-                          w.count > 0
+                        className={`w-full max-w-[20px] rounded-t transition-all duration-500 ${w.count > 0
                             ? 'bg-neutral-900'
                             : isToday
-                            ? 'bg-neutral-300 border border-dashed border-neutral-400'
-                            : 'bg-neutral-100'
-                        }`}
+                              ? 'bg-neutral-300 border border-dashed border-neutral-400'
+                              : 'bg-neutral-100'
+                          }`}
                         style={{ height: `${heightPercent}%` }}
                       />
                       <span className={`text-[9px] font-medium ${isToday ? 'text-neutral-900 font-bold' : 'text-neutral-400'}`}>

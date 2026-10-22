@@ -52,7 +52,7 @@ function UniversalRouteRedirect({ target }: { target: string }) {
 export default function AppRouter() {
   return (
     <Routes>
-      {/* 1. Splash Screen ShiftTrack (Reference Panel 1) */}
+      {/* 1. Splash Screen SIPATEN (Reference Panel 1) */}
       <Route path="/" element={<SplashScreen />} />
 
       {/* 2. Unified Enterprise Login (Reference Panel 2) */}

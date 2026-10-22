@@ -1,5 +1,5 @@
 -- ============================================================
--- ShiftTrack Migration 007: Link Employee Auth Accounts
+-- SIPATEN Migration 007: Link Employee Auth Accounts
 -- Adds auth_uid column to employee_profiles to link
 -- Supabase Auth users directly to employee records.
 -- Each CS/Security employee needs their own Supabase Auth

@@ -48,7 +48,7 @@ export default function RecapMonthlyPage() {
 
       const { data, error } = await q
       if (error) {
-        console.error('[ShiftTrack] Failed to load monthly recap:', error.message)
+        console.error('[SIPATEN] Failed to load monthly recap:', error.message)
         setErrorMessage(error.message || 'Gagal memuat data rekap bulanan.')
         setRecords([])
         return
@@ -57,7 +57,7 @@ export default function RecapMonthlyPage() {
       setErrorMessage(null)
       setRecords((data ?? []) as AttendanceRecord[])
     } catch (err: any) {
-      console.error('[ShiftTrack] Unexpected error loading monthly recap:', err)
+      console.error('[SIPATEN] Unexpected error loading monthly recap:', err)
       setErrorMessage(err?.message || 'Terjadi kesalahan sistem saat memuat rekap bulanan.')
     } finally {
       setIsLoading(false)

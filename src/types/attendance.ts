@@ -1,5 +1,5 @@
 // ============================================================
-// ShiftTrack — TypeScript Types
+// SIPATEN — TypeScript Types
 // ============================================================
 
 export type UserRole = 'admin' | 'CS' | 'Security' | 'user'

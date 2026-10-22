@@ -1,5 +1,5 @@
 // ============================================================
-// ShiftTrack — Full-Screen Splash Screen
+// SIPATEN — Full-Screen Splash Screen
 // Genuine full-viewport layout with cinematic animations
 // No phone mockup frame — fills 100% of any screen
 // ============================================================
@@ -116,7 +116,7 @@ export default function SplashScreen() {
             />
             <img
               src="/logo.jpg"
-              alt="ShiftTrack Logo"
+              alt="SIPATEN Logo"
               className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-3xl object-cover border border-white/10 shadow-2xl"
               style={{ boxShadow: '0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.08)' }}
             />
@@ -132,7 +132,7 @@ export default function SplashScreen() {
           }}
         >
           <h1 className="text-4xl sm:text-5xl font-black tracking-tighter text-white leading-none">
-            ShiftTrack
+            SIPATEN
           </h1>
         </div>
 

@@ -1,5 +1,5 @@
 // ============================================================
-// ShiftTrack — Employee Bottom Nav (Mobile Only, < md)
+// SIPATEN — Employee Bottom Nav (Mobile Only, < md)
 // Rendered inside EmployeeLayout only for mobile.
 // On desktop, EmployeeSidebar handles navigation.
 // ============================================================

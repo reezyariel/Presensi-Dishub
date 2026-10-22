@@ -1,5 +1,5 @@
 // ============================================================
-// ShiftTrack — Pengaturan Lokasi Kantor & Manajemen Preset Geofence
+// SIPATEN — Pengaturan Lokasi Kantor & Manajemen Preset Geofence
 // Desktop-Optimized 2-Column Split Console
 // Full Admin Preset Management: Add, Edit, Delete, Select, Save, Activate
 // 100% Real Supabase DB & RPC integration (No hardcoded preset overrides)
@@ -24,7 +24,7 @@ export default function SettingsLocationPage() {
   const [officeLat, setOfficeLat] = useState<number>(-6.175392)
   const [officeLng, setOfficeLng] = useState<number>(106.827153)
   const [officeRadius, setOfficeRadius] = useState<number>(100)
-  const [officeName, setOfficeName] = useState<string>('Kantor Pusat ShiftTrack')
+  const [officeName, setOfficeName] = useState<string>('Kantor Pusat SIPATEN')
   const [officeAddress, setOfficeAddress] = useState<string>('')
   const [activePresetId, setActivePresetId] = useState<string | null>(null)
 
@@ -350,11 +350,10 @@ export default function SettingsLocationPage() {
       {/* ─── Notification Banner ─── */}
       {feedback && (
         <div
-          className={`p-4 rounded-xl shadow-xs flex items-center justify-between gap-3 text-xs font-medium animate-fade-in ${
-            feedback.type === 'success'
+          className={`p-4 rounded-xl shadow-xs flex items-center justify-between gap-3 text-xs font-medium animate-fade-in ${feedback.type === 'success'
               ? 'bg-neutral-900 text-white'
               : 'bg-neutral-100 border border-neutral-300 text-neutral-900'
-          }`}
+            }`}
         >
           <div className="flex items-center gap-2.5">
             {feedback.type === 'success' ? (
@@ -398,7 +397,7 @@ export default function SettingsLocationPage() {
                   type="text"
                   value={officeName}
                   onChange={(e) => setOfficeName(e.target.value)}
-                  placeholder="Misal: Kantor Pusat ShiftTrack"
+                  placeholder="Misal: Kantor Pusat SIPATEN"
                   className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-xs text-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
                 />
               </div>
@@ -478,11 +477,10 @@ export default function SettingsLocationPage() {
                       key={r}
                       type="button"
                       onClick={() => setOfficeRadius(r)}
-                      className={`flex-1 py-1 text-[11px] font-mono rounded border transition-colors ${
-                        officeRadius === r
+                      className={`flex-1 py-1 text-[11px] font-mono rounded border transition-colors ${officeRadius === r
                           ? 'bg-neutral-900 text-white border-neutral-900 font-bold'
                           : 'bg-neutral-50 text-neutral-700 border-neutral-200 hover:bg-neutral-100'
-                      }`}
+                        }`}
                     >
                       {r}m
                     </button>
@@ -543,11 +541,10 @@ export default function SettingsLocationPage() {
                   return (
                     <div
                       key={preset.id}
-                      className={`p-3.5 rounded-xl border transition-all ${
-                        isActive
+                      className={`p-3.5 rounded-xl border transition-all ${isActive
                           ? 'border-neutral-900 bg-neutral-50/80 ring-1 ring-neutral-900/10'
                           : 'border-neutral-200 bg-white hover:border-neutral-300'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">

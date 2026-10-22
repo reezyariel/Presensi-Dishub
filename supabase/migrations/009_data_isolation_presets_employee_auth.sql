@@ -1,5 +1,5 @@
 -- ============================================================
--- ShiftTrack Migration 009: Data Isolation, Presets, and Employee Auth
+-- SIPATEN Migration 009: Data Isolation, Presets, and Employee Auth
 -- 1. Strict Data Isolation for CS, Security, and Admin:
 --    - Add employee_profile_id & auth_uid to attendance_records
 --    - Harden RLS policies so employees ONLY access their own records
@@ -324,12 +324,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_employee_profiles_email_unique
 -- Populate demo accounts codes
 UPDATE public.employee_profiles
 SET employee_code = 'CS001',
-    email = 'cs@shifttrack.app'
+    email = 'cs@SIPATEN.app'
 WHERE normalized_name = 'demo cs officer' OR full_name ILIKE '%demo cs%';
 
 UPDATE public.employee_profiles
 SET employee_code = 'SEC001',
-    email = 'security@shifttrack.app'
+    email = 'security@SIPATEN.app'
 WHERE normalized_name = 'demo security officer' OR full_name ILIKE '%demo security%';
 
 -- Update active_employees_directory view to include employee_code & email
@@ -696,9 +696,9 @@ BEGIN
 
   -- 4. Friendly aliases for standard demo logins
   IF v_clean IN ('cs001', 'cs', 'demo-cs', 'democs') THEN
-    RETURN 'cs@shifttrack.app';
+    RETURN 'cs@SIPATEN.app';
   ELSIF v_clean IN ('sec001', 'sec', 'security', 'security001', 'demo-sec', 'demosec') THEN
-    RETURN 'security@shifttrack.app';
+    RETURN 'security@SIPATEN.app';
   END IF;
 
   RETURN NULL;

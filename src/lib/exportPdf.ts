@@ -5,7 +5,7 @@ import type { MonthlyEmployeeSummary } from './exportExcel'
 import { formatJakartaTime, formatJakartaDate } from './scheduleEngine'
 
 /**
- * Generate Header with ShiftTrack branding
+ * Generate Header with SIPATEN branding
  */
 function addPdfHeader(
   doc: jsPDF,
@@ -19,7 +19,7 @@ function addPdfHeader(
   doc.setTextColor(255, 255, 255)
   doc.setFontSize(14)
   doc.setFont('helvetica', 'bold')
-  doc.text('ShiftTrack — Sistem Rekapitulasi Presensi', 14, 14)
+  doc.text('SIPATEN — Sistem Rekapitulasi Presensi', 14, 14)
 
   doc.setTextColor(30, 41, 59)
   doc.setFontSize(13)
@@ -132,7 +132,7 @@ export function exportDailyRecapPdf(
     },
   })
 
-  doc.save(`ShiftTrack_Rekap_Harian_${selectedDate}.pdf`)
+  doc.save(`SIPATEN_Rekap_Harian_${selectedDate}.pdf`)
 }
 
 /**
@@ -210,5 +210,5 @@ export function exportMonthlyRecapPdf(
     },
   })
 
-  doc.save(`ShiftTrack_Rekap_Bulanan_${monthLabel.replace(/\s+/g, '_')}.pdf`)
+  doc.save(`SIPATEN_Rekap_Bulanan_${monthLabel.replace(/\s+/g, '_')}.pdf`)
 }

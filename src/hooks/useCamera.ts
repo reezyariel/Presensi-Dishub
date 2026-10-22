@@ -1,5 +1,5 @@
 // ============================================================
-// ShiftTrack — Robust Device Camera Hook
+// SIPATEN — Robust Device Camera Hook
 // Full cross-browser support, front/back camera toggling,
 // safe stream binding, dimension validation, and cleanup
 // ============================================================
@@ -42,7 +42,7 @@ export function useCamera() {
       navigator.mediaDevices.enumerateDevices().then(devices => {
         const videoInputs = devices.filter(d => d.kind === 'videoinput')
         setHasMultipleCameras(videoInputs.length > 1)
-      }).catch(() => {})
+      }).catch(() => { })
     }
   }, [])
 
@@ -59,7 +59,7 @@ export function useCamera() {
       if (playPromise !== undefined) {
         playPromise.catch(err => {
           // Auto-play might be restricted until user interacts or loadedmetadata fires
-          console.warn('[ShiftTrack Camera] Video play deferred:', err.message)
+          console.warn('[SIPATEN Camera] Video play deferred:', err.message)
         })
       }
     }
@@ -145,7 +145,7 @@ export function useCamera() {
         }
         activeStream = await navigator.mediaDevices.getUserMedia(constraints)
       } catch (err) {
-        console.warn('[ShiftTrack Camera] Strategy A failed, trying generic constraints:', err)
+        console.warn('[SIPATEN Camera] Strategy A failed, trying generic constraints:', err)
         // Strategy B: Fallback without specific facingMode or resolution limits
         const fallbackConstraints: MediaStreamConstraints = {
           audio: false,
@@ -203,7 +203,7 @@ export function useCamera() {
   const capturePhoto = useCallback((): string | null => {
     const video = videoRef.current
     if (!video || !streamRef.current) {
-      console.warn('[ShiftTrack Camera] Cannot capture: video or stream unavailable')
+      console.warn('[SIPATEN Camera] Cannot capture: video or stream unavailable')
       return null
     }
 
@@ -212,7 +212,7 @@ export function useCamera() {
     const height = video.videoHeight || 480
 
     if (width === 0 || height === 0) {
-      console.warn('[ShiftTrack Camera] Video dimensions are 0, frame not ready yet')
+      console.warn('[SIPATEN Camera] Video dimensions are 0, frame not ready yet')
       return null
     }
 

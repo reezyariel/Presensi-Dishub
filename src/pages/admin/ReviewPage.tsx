@@ -1,5 +1,5 @@
 // ============================================================
-// ShiftTrack — Review & Verifikasi Presensi (Enterprise Desktop Layout)
+// SIPATEN — Review & Verifikasi Presensi (Enterprise Desktop Layout)
 // Tab Filters, Wide Data Table, Split Desktop Verification Modal
 // ============================================================
 
@@ -172,7 +172,7 @@ export default function ReviewPage() {
         'admin_delete_attendance_record',
         {
           p_record_id: recordSnapshot.id,
-          p_reason:    deleteReason.trim(),
+          p_reason: deleteReason.trim(),
         }
       )
 
@@ -195,9 +195,9 @@ export default function ReviewPage() {
 
         const userMsg: Record<string, string> = {
           'NOT_AUTHENTICATED': 'Sesi login habis. Silakan login ulang.',
-          'NOT_ADMIN':         'Hanya Administrator yang dapat menghapus rekaman.',
-          'RECORD_NOT_FOUND':  'Rekaman tidak ditemukan — mungkin sudah dihapus sebelumnya.',
-          'REASON_REQUIRED':   'Alasan penghapusan wajib diisi.',
+          'NOT_ADMIN': 'Hanya Administrator yang dapat menghapus rekaman.',
+          'RECORD_NOT_FOUND': 'Rekaman tidak ditemukan — mungkin sudah dihapus sebelumnya.',
+          'REASON_REQUIRED': 'Alasan penghapusan wajib diisi.',
         }
         setDeleteError(userMsg[code] ?? `Gagal menghapus rekaman (${code}).`)
         return
@@ -239,17 +239,15 @@ export default function ReviewPage() {
             {/* Perlu Tindak Lanjut */}
             <button
               onClick={() => setReviewFilter('perlu_tindak_lanjut')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
-                reviewFilter === 'perlu_tindak_lanjut'
+              className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${reviewFilter === 'perlu_tindak_lanjut'
                   ? 'bg-neutral-900 text-white shadow-xs'
                   : 'text-neutral-600 hover:text-black hover:bg-neutral-200/50'
-              }`}
+                }`}
             >
               <AlertTriangle size={15} />
               <span>Perlu Tindak Lanjut</span>
-              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                reviewFilter === 'perlu_tindak_lanjut' ? 'bg-white text-black' : 'bg-neutral-200 text-neutral-800'
-              }`}>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${reviewFilter === 'perlu_tindak_lanjut' ? 'bg-white text-black' : 'bg-neutral-200 text-neutral-800'
+                }`}>
                 {tabCounts.perlu}
               </span>
             </button>
@@ -257,17 +255,15 @@ export default function ReviewPage() {
             {/* Belum Diperiksa */}
             <button
               onClick={() => setReviewFilter('belum_diperiksa')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
-                reviewFilter === 'belum_diperiksa'
+              className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${reviewFilter === 'belum_diperiksa'
                   ? 'bg-neutral-900 text-white shadow-xs'
                   : 'text-neutral-600 hover:text-black hover:bg-neutral-200/50'
-              }`}
+                }`}
             >
               <Clock size={15} />
               <span>Belum Diperiksa</span>
-              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                reviewFilter === 'belum_diperiksa' ? 'bg-white text-black' : 'bg-neutral-200 text-neutral-800'
-              }`}>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${reviewFilter === 'belum_diperiksa' ? 'bg-white text-black' : 'bg-neutral-200 text-neutral-800'
+                }`}>
                 {tabCounts.belum}
               </span>
             </button>
@@ -275,17 +271,15 @@ export default function ReviewPage() {
             {/* Sudah Diperiksa */}
             <button
               onClick={() => setReviewFilter('sudah_diperiksa')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
-                reviewFilter === 'sudah_diperiksa'
+              className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${reviewFilter === 'sudah_diperiksa'
                   ? 'bg-neutral-900 text-white shadow-xs'
                   : 'text-neutral-600 hover:text-black hover:bg-neutral-200/50'
-              }`}
+                }`}
             >
               <CheckCircle2 size={15} />
               <span>Sudah Diperiksa</span>
-              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                reviewFilter === 'sudah_diperiksa' ? 'bg-white text-black' : 'bg-neutral-200 text-neutral-800'
-              }`}>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${reviewFilter === 'sudah_diperiksa' ? 'bg-white text-black' : 'bg-neutral-200 text-neutral-800'
+                }`}>
                 {tabCounts.sudah}
               </span>
             </button>
@@ -567,11 +561,10 @@ export default function ReviewPage() {
                     <button
                       type="button"
                       onClick={() => setNewStatus('sudah_diperiksa')}
-                      className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                        newStatus === 'sudah_diperiksa'
+                      className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${newStatus === 'sudah_diperiksa'
                           ? 'bg-neutral-900 text-white border-neutral-900 shadow-2xs'
                           : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-50'
-                      }`}
+                        }`}
                     >
                       <CheckCircle size={14} />
                       <span>Setujui (Sudah Diperiksa)</span>
@@ -580,11 +573,10 @@ export default function ReviewPage() {
                     <button
                       type="button"
                       onClick={() => setNewStatus('perlu_tindak_lanjut')}
-                      className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                        newStatus === 'perlu_tindak_lanjut'
+                      className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${newStatus === 'perlu_tindak_lanjut'
                           ? 'bg-neutral-900 text-white border-neutral-900 shadow-2xs'
                           : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-50'
-                      }`}
+                        }`}
                     >
                       <AlertTriangle size={14} />
                       <span>Perlu Tindak Lanjut</span>

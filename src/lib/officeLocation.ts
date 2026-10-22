@@ -1,5 +1,5 @@
 // ============================================================
-// ShiftTrack — Office Location & GPS Distance Engine
+// SIPATEN — Office Location & GPS Distance Engine
 // Haversine formula calculation, Admin authoritative configuration,
 // and location validation utilities (Zero hardcoded override)
 // ============================================================
@@ -26,7 +26,7 @@ export const DEFAULT_OFFICE_CONFIG: OfficeLocationConfig = {
   latitude: -6.175392,
   longitude: 106.827153,
   radiusMeters: 100,
-  name: 'Kantor Pusat ShiftTrack',
+  name: 'Kantor Pusat SIPATEN',
   address: 'Jakarta Pusat, DKI Jakarta',
   isConfigured: true,
 }

@@ -162,12 +162,12 @@ export default function Sidebar({ isMobileOpen = false, onClose }: SidebarProps)
           <div className="flex items-center gap-2.5">
             <img
               src="/logo.jpg"
-              alt="ShiftTrack Logo"
+              alt="SIPATEN Logo"
               className="w-8 h-8 rounded-lg object-cover flex-shrink-0"
             />
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="font-bold text-sm tracking-tight text-white">ShiftTrack</span>
+                <span className="font-bold text-sm tracking-tight text-white">SIPATEN</span>
                 <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded bg-neutral-800 text-neutral-300 border border-neutral-700">
                   ADMIN
                 </span>

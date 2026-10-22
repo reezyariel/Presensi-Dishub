@@ -1,5 +1,5 @@
 // ============================================================
-// ShiftTrack — Profil Page (Responsive)
+// SIPATEN — Profil Page (Responsive)
 // Desktop: Two-column layout with profile card + info sections
 // Mobile: Compact single-column list
 // No window.alert, no window.confirm, clean sign-out flow
@@ -79,7 +79,7 @@ export default function ProfilePage() {
         {
           label: 'Bantuan & Dukungan',
           icon: HelpCircle,
-          onClick: () => {/* no-op */},
+          onClick: () => {/* no-op */ },
           desc: 'Hubungi IT Helpdesk',
         },
       ],
@@ -125,7 +125,7 @@ export default function ProfilePage() {
                   <BadgeCheck size={15} className="text-neutral-700 flex-shrink-0" />
                   <div>
                     <p className="text-[10px] font-bold text-neutral-700">Akun Terverifikasi</p>
-                    <p className="text-[10px] text-neutral-400">ShiftTrack ID aktif</p>
+                    <p className="text-[10px] text-neutral-400">SIPATEN ID aktif</p>
                   </div>
                 </div>
               </div>
@@ -204,7 +204,7 @@ export default function ProfilePage() {
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-red-600">Keluar dari Akun</p>
-                      <p className="text-[11px] text-neutral-400">Akhiri sesi ShiftTrack</p>
+                      <p className="text-[11px] text-neutral-400">Akhiri sesi SIPATEN</p>
                     </div>
                   </div>
                   <ChevronRight size={16} className="text-neutral-300" />
@@ -215,7 +215,7 @@ export default function ProfilePage() {
             {/* App version info */}
             <div className="flex items-center justify-center gap-2 text-[10px] text-neutral-400 py-2">
               <Clock size={11} />
-              <span>ShiftTrack v1.0 · Absensi &amp; Manajemen Shift</span>
+              <span>SIPATEN v1.0 · Absensi &amp; Manajemen Shift</span>
             </div>
           </div>
         </div>
@@ -231,7 +231,7 @@ export default function ProfilePage() {
               </div>
               <div>
                 <h3 className="text-sm font-bold text-neutral-900">Keluar dari Akun?</h3>
-                <p className="text-xs text-neutral-500 mt-0.5">Sesi ShiftTrack akan diakhiri di perangkat ini.</p>
+                <p className="text-xs text-neutral-500 mt-0.5">Sesi SIPATEN akan diakhiri di perangkat ini.</p>
               </div>
             </div>
             <div className="flex items-center gap-3">

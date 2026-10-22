@@ -1,5 +1,5 @@
 // ============================================================
-// ShiftTrack — AttendanceDetailPage Component
+// SIPATEN — AttendanceDetailPage Component
 // Desktop-Optimized for Admin Console (/admin/attendance/:id)
 // Single-column Mobile Shell for CS & Security Field Workers
 // ============================================================

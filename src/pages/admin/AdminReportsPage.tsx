@@ -1,5 +1,5 @@
 // ============================================================
-// ShiftTrack — Laporan / Rekap Absensi (Unified Report Hub)
+// SIPATEN — Laporan / Rekap Absensi (Unified Report Hub)
 // Consolidates Daily & Monthly Recaps with Tab Switcher,
 // Filter Toolbar, Live Matrix Tables, and Excel / PDF Exports
 // ============================================================
@@ -20,11 +20,10 @@ export default function AdminReportsPage() {
           <button
             type="button"
             onClick={() => setActiveTab('daily')}
-            className={`px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition-colors ${
-              activeTab === 'daily'
+            className={`px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition-colors ${activeTab === 'daily'
                 ? 'bg-neutral-900 text-white shadow-xs'
                 : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
-            }`}
+              }`}
           >
             <Calendar size={15} />
             <span>Rekapitulasi Harian</span>
@@ -33,11 +32,10 @@ export default function AdminReportsPage() {
           <button
             type="button"
             onClick={() => setActiveTab('monthly')}
-            className={`px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition-colors ${
-              activeTab === 'monthly'
+            className={`px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition-colors ${activeTab === 'monthly'
                 ? 'bg-neutral-900 text-white shadow-xs'
                 : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
-            }`}
+              }`}
           >
             <CalendarRange size={15} />
             <span>Rekapitulasi Bulanan</span>

@@ -6,7 +6,7 @@
 -- ============================================================
 --
 -- DESKRIPSI & ANALISIS KOMPATIBILITAS:
--- 1. Aplikasi ShiftTrack telah dirancang backward & forward compatible.
+-- 1. Aplikasi SIPATEN telah dirancang backward & forward compatible.
 --    Edge Function 'submit-attendance' dan portal presensi secara otomatis
 --    mencatat koordinat GPS, akurasi, jarak ke kantor, serta alasan di kolom
 --    'admin_notes' jika kolom-kolom baru di bawah ini belum ada di database live.
@@ -37,7 +37,7 @@ INSERT INTO public.attendance_settings (setting_key, setting_value, description,
 VALUES
   (
     'office_coordinates',
-    '{"latitude": -6.175392, "longitude": 106.827153, "name": "Kantor Pusat ShiftTrack", "address": "Jl. Medan Merdeka Barat, Gambir, Jakarta Pusat"}'::jsonb,
+    '{"latitude": -6.175392, "longitude": 106.827153, "name": "Kantor Pusat SIPATEN", "address": "Jl. Medan Merdeka Barat, Gambir, Jakarta Pusat"}'::jsonb,
     'Koordinat titik kantor pusat untuk validasi geofence GPS presensi',
     NOW()
   ),

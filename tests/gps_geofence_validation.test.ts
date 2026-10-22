@@ -1,5 +1,5 @@
 // ============================================================
-// ShiftTrack — GPS Geofence & Location Validation Test Suite
+// SIPATEN — GPS Geofence & Location Validation Test Suite
 // Verifies Haversine formula, geofence radius calculations,
 // office configuration fallback, and reason requirement logic.
 // ============================================================
@@ -19,7 +19,7 @@ function assert(condition: boolean, msg: string) {
 }
 
 console.log('============================================================')
-console.log('📍 ShiftTrack GPS Geofence & Location Validation Tests')
+console.log('📍 SIPATEN GPS Geofence & Location Validation Tests')
 console.log('============================================================\n')
 
 // TEST 1: Haversine Calculation Accuracy

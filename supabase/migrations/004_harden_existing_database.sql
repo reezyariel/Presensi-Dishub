@@ -1,5 +1,5 @@
 -- ============================================================
--- ShiftTrack Migration 004: Harden Existing Database
+-- SIPATEN Migration 004: Harden Existing Database
 -- Non-destructive security patch for existing Supabase instance.
 -- Preserves all existing tables, attendance records, and verified admin accounts.
 -- ============================================================

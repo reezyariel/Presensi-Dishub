@@ -103,7 +103,7 @@ export async function exportDailyRecapExcel(
   selectedDate: string
 ) {
   const workbook = new ExcelJS.Workbook()
-  workbook.creator = 'ShiftTrack'
+  workbook.creator = 'SIPATEN'
   workbook.created = new Date()
 
   const worksheet = workbook.addWorksheet('Rekap Harian', {
@@ -144,15 +144,15 @@ export async function exportDailyRecapExcel(
         rec.review_status === 'sudah_diperiksa'
           ? 'Sudah Diperiksa'
           : rec.review_status === 'perlu_tindak_lanjut'
-          ? 'Perlu Tindak Lanjut'
-          : 'Belum Diperiksa',
+            ? 'Perlu Tindak Lanjut'
+            : 'Belum Diperiksa',
       admin_notes: rec.admin_notes || '',
     })
   })
 
   styleDataRows(worksheet)
 
-  const filename = `ShiftTrack_Rekap_Harian_${selectedDate}.xlsx`
+  const filename = `SIPATEN_Rekap_Harian_${selectedDate}.xlsx`
   await downloadWorkbook(workbook, filename)
 }
 
@@ -164,7 +164,7 @@ export async function exportMonthlyRecapExcel(
   monthLabel: string
 ) {
   const workbook = new ExcelJS.Workbook()
-  workbook.creator = 'ShiftTrack'
+  workbook.creator = 'SIPATEN'
   workbook.created = new Date()
 
   const worksheet = workbook.addWorksheet('Rekap Bulanan', {
@@ -199,7 +199,7 @@ export async function exportMonthlyRecapExcel(
 
   styleDataRows(worksheet)
 
-  const filename = `ShiftTrack_Rekap_Bulanan_${monthLabel.replace(/\s+/g, '_')}.xlsx`
+  const filename = `SIPATEN_Rekap_Bulanan_${monthLabel.replace(/\s+/g, '_')}.xlsx`
   await downloadWorkbook(workbook, filename)
 }
 
@@ -208,10 +208,10 @@ export async function exportMonthlyRecapExcel(
  */
 export async function exportAttendanceListExcel(
   records: AttendanceRecord[],
-  filenamePrefix = 'ShiftTrack_Data_Absensi'
+  filenamePrefix = 'SIPATEN_Data_Absensi'
 ) {
   const workbook = new ExcelJS.Workbook()
-  workbook.creator = 'ShiftTrack'
+  workbook.creator = 'SIPATEN'
   workbook.created = new Date()
 
   const worksheet = workbook.addWorksheet('Data Absensi', {
@@ -249,8 +249,8 @@ export async function exportAttendanceListExcel(
         rec.review_status === 'sudah_diperiksa'
           ? 'Sudah Diperiksa'
           : rec.review_status === 'perlu_tindak_lanjut'
-          ? 'Perlu Tindak Lanjut'
-          : 'Belum Diperiksa',
+            ? 'Perlu Tindak Lanjut'
+            : 'Belum Diperiksa',
       admin_notes: rec.admin_notes || '',
     })
   })

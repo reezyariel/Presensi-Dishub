@@ -1,5 +1,5 @@
 // ============================================================
-// ShiftTrack — Schedule Engine (Dynamic DB-backed)
+// SIPATEN — Schedule Engine (Dynamic DB-backed)
 // CS masuk: open=07:30, ontime_deadline=08:00, close=11:59
 //   before open        → tombol disabled (presensi ditolak)
 //   open..deadline     → tombol aktif, status tepat_waktu
@@ -39,22 +39,22 @@ export interface CSScheduleWindow {
 }
 
 export interface CSSchedule {
-  masuk:     CSScheduleWindow
+  masuk: CSScheduleWindow
   istirahat: { start: string; end: string }
-  pulang:    { start: string; end: string }
+  pulang: { start: string; end: string }
 }
 
 export const DEFAULT_CS_SCHEDULE: CSSchedule = {
-  masuk:     { open: '07:30', ontime_deadline: '08:00', close: '11:59', start: '07:30', end: '08:00' },
+  masuk: { open: '07:30', ontime_deadline: '08:00', close: '11:59', start: '07:30', end: '08:00' },
   istirahat: { start: '12:00', end: '14:00' },
-  pulang:    { start: '16:00', end: '18:00' },
+  pulang: { start: '16:00', end: '18:00' },
 }
 
 // Legacy alias — keep for backward compat (reads from new structure)
 export const CS_SCHEDULE = {
-  masuk:     { start: DEFAULT_CS_SCHEDULE.masuk.open, windowEnd: DEFAULT_CS_SCHEDULE.masuk.ontime_deadline },
+  masuk: { start: DEFAULT_CS_SCHEDULE.masuk.open, windowEnd: DEFAULT_CS_SCHEDULE.masuk.ontime_deadline },
   istirahat: { start: DEFAULT_CS_SCHEDULE.istirahat.start, windowEnd: DEFAULT_CS_SCHEDULE.istirahat.end },
-  pulang:    { start: DEFAULT_CS_SCHEDULE.pulang.start,    windowEnd: DEFAULT_CS_SCHEDULE.pulang.end },
+  pulang: { start: DEFAULT_CS_SCHEDULE.pulang.start, windowEnd: DEFAULT_CS_SCHEDULE.pulang.end },
 } as const
 
 // ─────────────────────────────────────────────────────────────
@@ -123,17 +123,17 @@ export function normalizeCSSchedule(raw: any): CSSchedule {
     isValidTimeString(rawMasuk.open)
       ? rawMasuk.open.trim()
       : isValidTimeString(rawMasuk.start)
-      ? rawMasuk.start.trim()
-      : DEFAULT_CS_SCHEDULE.masuk.open
+        ? rawMasuk.start.trim()
+        : DEFAULT_CS_SCHEDULE.masuk.open
 
   const ontime_deadline: string =
     isValidTimeString(rawMasuk.ontime_deadline)
       ? rawMasuk.ontime_deadline.trim()
       : isValidTimeString(rawMasuk.end)
-      ? rawMasuk.end.trim()
-      : isValidTimeString(rawMasuk.windowEnd)
-      ? rawMasuk.windowEnd.trim()
-      : DEFAULT_CS_SCHEDULE.masuk.ontime_deadline
+        ? rawMasuk.end.trim()
+        : isValidTimeString(rawMasuk.windowEnd)
+          ? rawMasuk.windowEnd.trim()
+          : DEFAULT_CS_SCHEDULE.masuk.ontime_deadline
 
   const close: string =
     isValidTimeString(rawMasuk.close)
@@ -149,8 +149,8 @@ export function normalizeCSSchedule(raw: any): CSSchedule {
     isValidTimeString(rawIstirahat.end)
       ? rawIstirahat.end.trim()
       : isValidTimeString(rawIstirahat.windowEnd)
-      ? rawIstirahat.windowEnd.trim()
-      : DEFAULT_CS_SCHEDULE.istirahat.end
+        ? rawIstirahat.windowEnd.trim()
+        : DEFAULT_CS_SCHEDULE.istirahat.end
 
   const pulangStart: string =
     isValidTimeString(rawPulang.start)
@@ -161,8 +161,8 @@ export function normalizeCSSchedule(raw: any): CSSchedule {
     isValidTimeString(rawPulang.end)
       ? rawPulang.end.trim()
       : isValidTimeString(rawPulang.windowEnd)
-      ? rawPulang.windowEnd.trim()
-      : DEFAULT_CS_SCHEDULE.pulang.end
+        ? rawPulang.windowEnd.trim()
+        : DEFAULT_CS_SCHEDULE.pulang.end
 
   return {
     masuk: {
@@ -502,10 +502,10 @@ export function calculateAttendanceStatus(
     //   (Penolakan sebelum open / setelah close ditangani di edge function)
     const cs = getCSScheduleSync()
     const scheduledStart = cs.masuk.open             // '07:30'
-    const scheduledEnd   = cs.masuk.ontime_deadline   // '08:00' — batas tepat_waktu
+    const scheduledEnd = cs.masuk.ontime_deadline   // '08:00' — batas tepat_waktu
 
     const lateDeadline = parseTimeOnDate(scheduledEnd, workDate)
-    const diffMs  = recorded.getTime() - lateDeadline.getTime()
+    const diffMs = recorded.getTime() - lateDeadline.getTime()
     const diffMin = Math.floor(diffMs / 60000)
 
     if (diffMin > 0) {
@@ -569,18 +569,18 @@ export function checkAttendanceWindow(
     const cs = getCSScheduleSync()
     if (attendanceType === 'masuk') {
       // masuk: 3-boundary system
-      const openTime  = parseTimeOnDate(cs.masuk.open,            workDate)
-      const closeTime = parseTimeOnDate(cs.masuk.close,           workDate)
-      if (current < openTime)  return 'not_yet'
+      const openTime = parseTimeOnDate(cs.masuk.open, workDate)
+      const closeTime = parseTimeOnDate(cs.masuk.close, workDate)
+      if (current < openTime) return 'not_yet'
       if (current > closeTime) return 'closed'
       return 'open'  // open includes both tepat_waktu and terlambat zones
     }
     // istirahat / pulang: simple start/end window
     const s = attendanceType === 'istirahat' ? cs.istirahat : cs.pulang
     const start = parseTimeOnDate(s.start, workDate)
-    const end   = parseTimeOnDate(s.end,   workDate)
+    const end = parseTimeOnDate(s.end, workDate)
     if (current < start) return 'not_yet'
-    if (current <= end)  return 'open'
+    if (current <= end) return 'open'
     return 'closed_accept'
   }
 
@@ -589,18 +589,18 @@ export function checkAttendanceWindow(
   const s = getSecuritySchedule(workDateStr, shift)
 
   if (attendanceType === 'masuk') {
-    const start = parseTimeOnDate(s.start,      workDate)
-    const end   = parseTimeOnDate(s.window_end, workDate)
+    const start = parseTimeOnDate(s.start, workDate)
+    const end = parseTimeOnDate(s.window_end, workDate)
     if (current < start) return 'not_yet'
-    if (current <= end)  return 'open'
+    if (current <= end) return 'open'
     return 'closed_accept'
   }
 
   // pulang
-  const start = parseTimeOnDate(s.end,            workDate, s.end_next_day)
-  const end   = parseTimeOnDate(s.end_window_end, workDate, s.end_window_end_next_day)
+  const start = parseTimeOnDate(s.end, workDate, s.end_next_day)
+  const end = parseTimeOnDate(s.end_window_end, workDate, s.end_window_end_next_day)
   if (current < start) return 'not_yet'
-  if (current <= end)  return 'open'
+  if (current <= end) return 'open'
   return 'closed_accept'
 }
 
@@ -665,9 +665,9 @@ export function getNextAttendanceInfo(
   workDateStr: string,
   now: Date = new Date(),
 ): NextAttendanceInfo | null {
-  const hasMasuk     = completedTypes.includes('masuk')
+  const hasMasuk = completedTypes.includes('masuk')
   const hasIstirahat = completedTypes.includes('istirahat')
-  const hasPulang    = completedTypes.includes('pulang')
+  const hasPulang = completedTypes.includes('pulang')
 
   // All done
   if (hasPulang) return null
@@ -712,67 +712,67 @@ export function getNextAttendanceInfo(
 // ─────────────────────────────────────────────────────────────
 export type AttendanceButtonState =
   | {
-      status: 'workday_holiday'
-      title: string
-      message: string
-    }
+    status: 'workday_holiday'
+    title: string
+    message: string
+  }
   | {
-      status: 'waiting_masuk'
-      title: string
-      startTime: string
-      message: string
-      openTime?: string
-      deadlineTime?: string
-      closeTime?: string
-    }
+    status: 'waiting_masuk'
+    title: string
+    startTime: string
+    message: string
+    openTime?: string
+    deadlineTime?: string
+    closeTime?: string
+  }
   | {
-      status: 'can_masuk'
-      title: string
-      startTime: string
-      endTime: string
-      isLate: boolean  // true jika saat ini sudah melewati ontime_deadline
-      openTime?: string
-      deadlineTime?: string
-      closeTime?: string
-    }
+    status: 'can_masuk'
+    title: string
+    startTime: string
+    endTime: string
+    isLate: boolean  // true jika saat ini sudah melewati ontime_deadline
+    openTime?: string
+    deadlineTime?: string
+    closeTime?: string
+  }
   | {
-      status: 'window_closed'  // jendela presensi masuk sudah ditutup
-      title: string
-      message: string
-      openTime?: string
-      deadlineTime?: string
-      closeTime?: string
-    }
+    status: 'window_closed'  // jendela presensi masuk sudah ditutup
+    title: string
+    message: string
+    openTime?: string
+    deadlineTime?: string
+    closeTime?: string
+  }
   | {
-      status: 'waiting_istirahat'
-      title: string
-      startTime: string
-      message: string
-    }
+    status: 'waiting_istirahat'
+    title: string
+    startTime: string
+    message: string
+  }
   | {
-      status: 'can_istirahat'
-      title: string
-      startTime: string
-      endTime: string
-    }
+    status: 'can_istirahat'
+    title: string
+    startTime: string
+    endTime: string
+  }
   | {
-      status: 'waiting_pulang'
-      title: string
-      startTime: string
-      message: string
-      note?: string
-    }
+    status: 'waiting_pulang'
+    title: string
+    startTime: string
+    message: string
+    note?: string
+  }
   | {
-      status: 'can_pulang'
-      title: string
-      startTime: string
-      note?: string
-    }
+    status: 'can_pulang'
+    title: string
+    startTime: string
+    note?: string
+  }
   | {
-      status: 'completed'
-      title: string
-      message: string
-    }
+    status: 'completed'
+    title: string
+    message: string
+  }
 
 export function getAttendanceButtonState(
   category: 'CS' | 'Security',
@@ -803,12 +803,12 @@ export function getAttendanceButtonState(
   // ─────────────────────────────────────────────────────────────
   if (category === 'CS') {
     const cs = getCSScheduleSync()
-    const masukOpenMins     = getTimeInMinutes(cs.masuk.open)
+    const masukOpenMins = getTimeInMinutes(cs.masuk.open)
     const masukDeadlineMins = getTimeInMinutes(cs.masuk.ontime_deadline)
-    const masukCloseMins    = getTimeInMinutes(cs.masuk.close)
+    const masukCloseMins = getTimeInMinutes(cs.masuk.close)
     const istirahatStartMins = getTimeInMinutes(cs.istirahat.start)
-    const istirahatEndMins   = getTimeInMinutes(cs.istirahat.end)
-    const pulangStartMins    = getTimeInMinutes(cs.pulang.start)
+    const istirahatEndMins = getTimeInMinutes(cs.istirahat.end)
+    const pulangStartMins = getTimeInMinutes(cs.pulang.start)
 
     // A. Before Check-In
     if (!completedRecords.masuk) {
@@ -1031,7 +1031,7 @@ export interface RecapMasukRecord {
 }
 
 /**
- * Authoritative 30-day attendance recap calculator for ShiftTrack.
+ * Authoritative 30-day attendance recap calculator for SIPATEN.
  *
  * Rules:
  * 1. Counts WORKDAYS (unique work_date), never raw rows, preventing duplicate counting.

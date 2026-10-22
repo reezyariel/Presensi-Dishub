@@ -1,5 +1,5 @@
 // ============================================================
-// ShiftTrack — Dashboard Admin Page (Professional Desktop Layout)
+// SIPATEN — Dashboard Admin Page (Professional Desktop Layout)
 // 5 Top Stat Cards, Donut Chart, 7-Day Trend, Activity Table, Quick Recap
 // 100% Real Database Queries, Clean Monochrome Styling
 // ============================================================
@@ -114,7 +114,7 @@ export default function DashboardPage() {
 
       setSevenDaysData(sevenDays)
     } catch (err) {
-      console.warn('[ShiftTrack] Dashboard load error:', err)
+      console.warn('[SIPATEN] Dashboard load error:', err)
     } finally {
       setIsLoading(false)
     }
@@ -154,7 +154,7 @@ export default function DashboardPage() {
   const handleQuickExport = async () => {
     setIsExporting(true)
     try {
-      await exportRecapToExcel(todayRecords, `ShiftTrack_Rekap_Harian_${today}`)
+      await exportRecapToExcel(todayRecords, `SIPATEN_Rekap_Harian_${today}`)
     } catch {
       alert('Gagal mengekspor laporan.')
     } finally {

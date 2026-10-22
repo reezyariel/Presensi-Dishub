@@ -1,5 +1,5 @@
 // ============================================================
-// ShiftTrack — Jadwal Kerja Page (Responsive & Division-Safe)
+// SIPATEN — Jadwal Kerja Page (Responsive & Division-Safe)
 // CS: fixed 3-boundary daytime schedule (Masuk, Istirahat, Pulang)
 // Security: 3-shift 24h rotation (Shift I, Shift II, Shift III)
 //
@@ -165,13 +165,13 @@ export default function SchedulePage() {
   // CS Schedule Computation
   // ─────────────────────────────────────────────────────────────
   const csSchedule = {
-    masukStart:    csScheduleData.masuk.open.replace(':', '.'),
-    masukEnd:      csScheduleData.masuk.ontime_deadline.replace(':', '.'),
-    masukClose:    csScheduleData.masuk.close?.replace(':', '.'),
+    masukStart: csScheduleData.masuk.open.replace(':', '.'),
+    masukEnd: csScheduleData.masuk.ontime_deadline.replace(':', '.'),
+    masukClose: csScheduleData.masuk.close?.replace(':', '.'),
     istirahatStart: csScheduleData.istirahat.start.replace(':', '.'),
-    istirahatEnd:   csScheduleData.istirahat.end.replace(':', '.'),
-    pulangStart:   csScheduleData.pulang.start.replace(':', '.'),
-    pulangEnd:     csScheduleData.pulang.end.replace(':', '.'),
+    istirahatEnd: csScheduleData.istirahat.end.replace(':', '.'),
+    pulangStart: csScheduleData.pulang.start.replace(':', '.'),
+    pulangEnd: csScheduleData.pulang.end.replace(':', '.'),
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -244,9 +244,8 @@ export default function SchedulePage() {
             type="button"
             id="tab-schedule-cs"
             onClick={() => setActiveTab('CS')}
-            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
-              activeTab === 'CS' ? 'bg-neutral-900 text-white shadow-sm' : 'text-neutral-600 hover:text-neutral-900'
-            }`}
+            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === 'CS' ? 'bg-neutral-900 text-white shadow-sm' : 'text-neutral-600 hover:text-neutral-900'
+              }`}
           >
             Cleaning Service
           </button>
@@ -254,9 +253,8 @@ export default function SchedulePage() {
             type="button"
             id="tab-schedule-security"
             onClick={() => setActiveTab('Security')}
-            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
-              activeTab === 'Security' ? 'bg-neutral-900 text-white shadow-sm' : 'text-neutral-600 hover:text-neutral-900'
-            }`}
+            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === 'Security' ? 'bg-neutral-900 text-white shadow-sm' : 'text-neutral-600 hover:text-neutral-900'
+              }`}
           >
             Security
           </button>
@@ -402,26 +400,24 @@ export default function SchedulePage() {
                 return (
                   <div
                     key={shift.name}
-                    className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${
-                      isMyShift && !isAdmin
+                    className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${isMyShift && !isAdmin
                         ? 'border-neutral-900 ring-2 ring-neutral-900/10'
                         : shift.isMidnight
-                        ? 'border-neutral-300'
-                        : 'border-neutral-200'
-                    }`}
+                          ? 'border-neutral-300'
+                          : 'border-neutral-200'
+                      }`}
                   >
                     <div className="px-5 pt-5 pb-4">
                       {/* Card Header */}
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2.5">
                           <div
-                            className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                              isMyShift && !isAdmin
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center ${isMyShift && !isAdmin
                                 ? 'bg-neutral-900 text-white'
                                 : shift.isMidnight
-                                ? 'bg-neutral-800 text-white'
-                                : 'bg-neutral-100 text-neutral-700'
-                            }`}
+                                  ? 'bg-neutral-800 text-white'
+                                  : 'bg-neutral-100 text-neutral-700'
+                              }`}
                           >
                             <Icon size={16} />
                           </div>
@@ -475,11 +471,10 @@ export default function SchedulePage() {
                     </div>
 
                     <div
-                      className={`px-5 py-2.5 border-t text-[10px] font-semibold flex items-center justify-between ${
-                        shift.isMidnight
+                      className={`px-5 py-2.5 border-t text-[10px] font-semibold flex items-center justify-between ${shift.isMidnight
                           ? 'bg-neutral-900 text-white border-neutral-800'
                           : 'bg-neutral-50 text-neutral-600 border-neutral-100'
-                      }`}
+                        }`}
                     >
                       <span>Periode: {shift.period}</span>
                       {shift.isMidnight && <span>Selesai di hari berikutnya</span>}

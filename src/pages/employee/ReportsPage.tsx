@@ -1,5 +1,5 @@
 // ============================================================
-// ShiftTrack — Laporan & Rekapitulasi Presensi (Strict Personal Isolation)
+// SIPATEN — Laporan & Rekapitulasi Presensi (Strict Personal Isolation)
 // CS & Security: Only access & see personal attendance records & stats
 // Admin: Access full company reports
 // 100% real Supabase data, Zero data leakage, Zero window.alert
@@ -204,11 +204,10 @@ export default function ReportsPage() {
       {/* ─── Notification Banner ─── */}
       {feedback && (
         <div
-          className={`flex items-center gap-3 p-4 rounded-xl border text-xs font-semibold animate-fade-in ${
-            feedback.type === 'success'
+          className={`flex items-center gap-3 p-4 rounded-xl border text-xs font-semibold animate-fade-in ${feedback.type === 'success'
               ? 'bg-neutral-900 text-white border-neutral-900'
               : 'bg-neutral-100 text-neutral-900 border-neutral-300'
-          }`}
+            }`}
         >
           {feedback.type === 'success' ? (
             <CheckCircle2 size={16} className="text-white flex-shrink-0" />
@@ -260,11 +259,10 @@ export default function ReportsPage() {
                 key={tab}
                 type="button"
                 onClick={() => setTimeframe(tab)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                  timeframe === tab
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${timeframe === tab
                     ? 'bg-neutral-900 text-white shadow-xs'
                     : 'text-neutral-600 hover:text-neutral-900'
-                }`}
+                  }`}
               >
                 {tab}
               </button>
@@ -512,9 +510,8 @@ export default function ReportsPage() {
                         {rec.recorded_at ? formatJakartaTime(new Date(rec.recorded_at)) : '--:--'}
                       </td>
                       <td className="px-5 py-3">
-                        <span className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                          isLate ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-700 border border-neutral-200'
-                        }`}>
+                        <span className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ${isLate ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-700 border border-neutral-200'
+                          }`}>
                           {isLate ? 'Terlambat' : 'Tepat Waktu'}
                         </span>
                       </td>

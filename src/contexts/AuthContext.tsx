@@ -86,13 +86,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const normEmailPrefix = normalizeName(emailPrefix)
 
         const empList = employees as unknown as (EmployeeProfile & { auth_uid?: string; email?: string; employee_code?: string })[]
-        
+
         // Match by auth_uid, exact id, metadata employee_id, or email
         let matched = empList.find(
           e => (e.auth_uid && e.auth_uid === authUser.id) ||
-               e.id === authUser.id ||
-               (metaEmpId && (e.id === metaEmpId || e.employee_code === metaEmpId)) ||
-               (e.email && e.email.toLowerCase() === email),
+            e.id === authUser.id ||
+            (metaEmpId && (e.id === metaEmpId || e.employee_code === metaEmpId)) ||
+            (e.email && e.email.toLowerCase() === email),
         )
 
         // Match by normalized full name
@@ -338,10 +338,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!resolved) {
         const lower = cleanId.toLowerCase()
         if (lower === 'cs001' || lower === 'cs' || lower === 'cs-demo' || lower === 'demo-cs') {
-          emailToAuth = 'cs@shifttrack.app'
+          emailToAuth = 'cs@SIPATEN.app'
           resolved = true
         } else if (lower === 'sec001' || lower === 'security' || lower === 'sec' || lower === 'security001' || lower === 'demo-sec') {
-          emailToAuth = 'security@shifttrack.app'
+          emailToAuth = 'security@SIPATEN.app'
           resolved = true
         }
       }
@@ -362,9 +362,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
 
           if (empMatch.employee_role === 'CS') {
-            emailToAuth = 'cs@shifttrack.app'
+            emailToAuth = 'cs@SIPATEN.app'
           } else if (empMatch.employee_role === 'Security') {
-            emailToAuth = 'security@shifttrack.app'
+            emailToAuth = 'security@SIPATEN.app'
           } else {
             throw new Error(`Karyawan "${empMatch.full_name}" terdaftar, silakan gunakan Email resmi Anda untuk masuk.`)
           }
@@ -397,11 +397,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await supabase.auth.signOut()
     } catch (err) {
-      console.warn('[ShiftTrack Auth] signOut error:', err)
+      console.warn('[SIPATEN Auth] signOut error:', err)
     } finally {
       try {
         sessionStorage.clear()
-        localStorage.removeItem('shifttrack_active_role')
+        localStorage.removeItem('SIPATEN_active_role')
       } catch {
         // ignore
       }

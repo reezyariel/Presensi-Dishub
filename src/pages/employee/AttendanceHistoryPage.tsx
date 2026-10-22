@@ -1,5 +1,5 @@
 // ============================================================
-// ShiftTrack — Riwayat Absensi Page (Responsive)
+// SIPATEN — Riwayat Absensi Page (Responsive)
 // Desktop: Wide table with filters and pagination
 // Mobile: Card-based list
 // 100% real Supabase data
@@ -171,11 +171,10 @@ export default function AttendanceHistoryPage() {
                 <button
                   key={tab}
                   onClick={() => { setSelectedCategory(tab); setPage(1) }}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                    selectedCategory === tab
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${selectedCategory === tab
                       ? 'bg-neutral-900 text-white'
                       : 'bg-white text-neutral-600 border border-neutral-200 hover:bg-neutral-50'
-                  }`}
+                    }`}
                 >
                   {tab}
                 </button>
@@ -255,9 +254,8 @@ export default function AttendanceHistoryPage() {
                         </td>
                         <td className="px-6 py-3.5 font-mono text-neutral-700">{time}</td>
                         <td className="px-6 py-3.5">
-                          <span className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                            isLate ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-700 border border-neutral-200'
-                          }`}>
+                          <span className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ${isLate ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-700 border border-neutral-200'
+                            }`}>
                             {isLate ? 'Terlambat' : 'Tepat Waktu'}
                           </span>
                         </td>

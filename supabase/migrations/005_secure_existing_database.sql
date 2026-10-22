@@ -1,5 +1,5 @@
 -- ============================================================
--- ShiftTrack Migration 005: Secure Existing Database
+-- SIPATEN Migration 005: Secure Existing Database
 -- Target: Live Supabase Database with Existing Production Data
 -- Description:
 --   Non-destructive security patch based on live database audit.

@@ -44,7 +44,7 @@ export default function RecapDailyPage() {
 
       const { data, error } = await q
       if (error) {
-        console.error('[ShiftTrack] Failed to load daily recap:', error.message)
+        console.error('[SIPATEN] Failed to load daily recap:', error.message)
         setErrorMessage(error.message || 'Gagal memuat data rekap harian.')
         setRecords([])
         return
@@ -53,7 +53,7 @@ export default function RecapDailyPage() {
       setErrorMessage(null)
       setRecords((data ?? []) as AttendanceRecord[])
     } catch (err: any) {
-      console.error('[ShiftTrack] Unexpected error loading daily recap:', err)
+      console.error('[SIPATEN] Unexpected error loading daily recap:', err)
       setErrorMessage(err?.message || 'Terjadi kesalahan sistem saat memuat rekap.')
     } finally {
       setIsLoading(false)
@@ -186,11 +186,10 @@ export default function RecapDailyPage() {
           <div className="flex items-center gap-1.5 bg-neutral-100/60 p-1 rounded-lg border border-neutral-200/80">
             <button
               onClick={() => setRelativeDate(0)}
-              className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors ${
-                selectedDate === todayJakarta()
+              className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors ${selectedDate === todayJakarta()
                   ? 'bg-neutral-900 text-white shadow-xs'
                   : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200/60'
-              }`}
+                }`}
             >
               Hari Ini
             </button>

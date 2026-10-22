@@ -1,5 +1,5 @@
 // ============================================================
-// ShiftTrack — Employee Topbar (Desktop)
+// SIPATEN — Employee Topbar (Desktop)
 // Shown at top of content area on ≥md breakpoint
 // Breadcrumb, date/time, user info, hamburger for mobile
 // ============================================================
@@ -35,7 +35,7 @@ export default function EmployeeTopbar({ category, onMenuToggle }: EmployeeTopba
   // Determine page title from last URL segment
   const basePath = category === 'Security' ? '/security' : '/cs'
   const pathSuffix = location.pathname.replace(basePath, '').replace(/^\//, '')
-  const pageTitle = pageTitles[pathSuffix] ?? 'ShiftTrack'
+  const pageTitle = pageTitles[pathSuffix] ?? 'SIPATEN'
 
   const displayName = employeeProfile?.full_name || profile?.full_name || 'Karyawan'
   const shortName = displayName.split(' ')[0]

@@ -1,5 +1,5 @@
 -- ============================================================
--- ShiftTrack Migration 002: Fix RLS Recursion & Admin Roles
+-- SIPATEN Migration 002: Fix RLS Recursion & Admin Roles
 -- Non-destructive migration: preserves all existing data.
 -- ============================================================
 
@@ -117,8 +117,8 @@ create policy "Allow verified admins to read selfies"
 
 -- Metode Aman 2: Kaitkan berdasarkan email admin yang sudah terverifikasi di auth.users
 -- INSERT INTO public.admin_profiles (id, full_name)
--- SELECT id, coalesce(raw_user_meta_data->>'full_name', 'Administrator ShiftTrack')
+-- SELECT id, coalesce(raw_user_meta_data->>'full_name', 'Administrator SIPATEN')
 -- FROM auth.users
--- WHERE email = 'admin@shifttrack.local' -- Ganti dengan email admin resmi yang valid
+-- WHERE email = 'admin@SIPATEN.local' -- Ganti dengan email admin resmi yang valid
 -- ON CONFLICT (id) DO NOTHING;
 

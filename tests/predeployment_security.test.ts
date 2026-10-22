@@ -8,7 +8,7 @@ import {
 } from '../src/lib/scheduleEngine'
 
 console.log('============================================================')
-console.log('🛡️  ShiftTrack Pre-Deployment Security, Logic & Compatibility Test Suite')
+console.log('🛡️  SIPATEN Pre-Deployment Security, Logic & Compatibility Test Suite')
 console.log('============================================================\n')
 
 // ============================================================
@@ -121,7 +121,7 @@ function simulateServerEmployeeValidation(
   if (!matched) {
     return {
       status: 400,
-      error: `Pegawai "${inputName}" tidak terdaftar dalam sistem ShiftTrack. Absensi ditolak.`,
+      error: `Pegawai "${inputName}" tidak terdaftar dalam sistem SIPATEN. Absensi ditolak.`,
     }
   }
 
@@ -398,10 +398,10 @@ function resolveShiftIIIWorkDateServer(
   // Query for open Shift III masuk record from yesterday or today
   const openMasuk = dbRecords.find(
     r => r.normalized_name === employeeNormalized &&
-         r.category === 'Security' &&
-         r.shift === 'Shift III' &&
-         r.attendance_type === 'masuk' &&
-         (r.work_date === yesterdayDateStr || r.work_date === todayDateStr)
+      r.category === 'Security' &&
+      r.shift === 'Shift III' &&
+      r.attendance_type === 'masuk' &&
+      (r.work_date === yesterdayDateStr || r.work_date === todayDateStr)
   )
 
   if (openMasuk) {
@@ -481,8 +481,8 @@ function submitAttendanceSimulated(payload: {
   const normalized = normalizeName(payload.employee_name)
   const duplicate = mockRecordStore.find(
     r => r.normalized_name === normalized &&
-         r.work_date === payload.work_date &&
-         r.attendance_type === payload.attendance_type
+      r.work_date === payload.work_date &&
+      r.attendance_type === payload.attendance_type
   )
   if (duplicate) {
     return { status: 409, message: 'DUPLICATE_REJECTED' }

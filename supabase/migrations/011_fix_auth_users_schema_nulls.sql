@@ -1,5 +1,5 @@
 -- ============================================================
--- ShiftTrack Migration 011: Fix "Database error querying schema"
+-- SIPATEN Migration 011: Fix "Database error querying schema"
 --
 -- ROOT CAUSE:
 -- GoTrue (Supabase Auth server in Go) queries auth.users on login.

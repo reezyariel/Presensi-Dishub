@@ -1,5 +1,5 @@
 // ============================================================
-// ShiftTrack — Daftar Absensi Page (Enterprise Desktop Layout)
+// SIPATEN — Daftar Absensi Page (Enterprise Desktop Layout)
 // Full Desktop Toolbar, Comprehensive Filters, Wide Data Table, Excel Export
 // ============================================================
 
@@ -72,7 +72,7 @@ export default function AttendanceListPage() {
 
       const { data, count, error } = await q
       if (error) {
-        console.error('[ShiftTrack] Failed to load attendance records:', error.message)
+        console.error('[SIPATEN] Failed to load attendance records:', error.message)
         setErrorMessage(error.message || 'Gagal memuat catatan absensi dari server.')
         setRecords([])
         setTotal(0)
@@ -130,7 +130,7 @@ export default function AttendanceListPage() {
     if (records.length === 0) return
     setIsExporting(true)
     try {
-      const filename = `ShiftTrack_Presensi_${filters.date_from || 'Semua'}_sd_${filters.date_to || 'Semua'}`
+      const filename = `SIPATEN_Presensi_${filters.date_from || 'Semua'}_sd_${filters.date_to || 'Semua'}`
       await exportRecapToExcel(records, filename)
     } catch {
       alert('Gagal mengekspor laporan excel.')
@@ -224,18 +224,16 @@ export default function AttendanceListPage() {
               <button
                 type="button"
                 onClick={setFilterToday}
-                className={`px-3 py-1.5 rounded-lg font-semibold transition-all ${
-                  isTodayOnly ? 'bg-neutral-900 text-white shadow-xs' : 'text-neutral-600 hover:text-neutral-900'
-                }`}
+                className={`px-3 py-1.5 rounded-lg font-semibold transition-all ${isTodayOnly ? 'bg-neutral-900 text-white shadow-xs' : 'text-neutral-600 hover:text-neutral-900'
+                  }`}
               >
                 Hari Ini
               </button>
               <button
                 type="button"
                 onClick={setFilterAllDates}
-                className={`px-3 py-1.5 rounded-lg font-semibold transition-all ${
-                  isAllDates ? 'bg-neutral-900 text-white shadow-xs' : 'text-neutral-600 hover:text-neutral-900'
-                }`}
+                className={`px-3 py-1.5 rounded-lg font-semibold transition-all ${isAllDates ? 'bg-neutral-900 text-white shadow-xs' : 'text-neutral-600 hover:text-neutral-900'
+                  }`}
               >
                 Semua Tanggal
               </button>
@@ -244,9 +242,8 @@ export default function AttendanceListPage() {
             {/* Filter Toggle */}
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`btn-secondary text-xs py-2 px-3 relative flex items-center gap-1.5 ${
-                showFilters ? 'bg-neutral-100 border-neutral-300 text-black' : ''
-              }`}
+              className={`btn-secondary text-xs py-2 px-3 relative flex items-center gap-1.5 ${showFilters ? 'bg-neutral-100 border-neutral-300 text-black' : ''
+                }`}
             >
               <Filter size={14} />
               <span>Filter Lanjutan</span>
