@@ -9,17 +9,23 @@
 // Reads authoritative schedule from attendance_settings
 // ============================================================
 
-import type { ShiftType, AttendanceType, AttendanceStatus, ScheduleInfo, AttendanceRecord } from '../types/attendance'
+import type { ShiftType, SecurityShiftOption, WeekendSession, AttendanceType, AttendanceStatus, ScheduleInfo, AttendanceRecord } from '../types/attendance'
 import { formatInTimeZone, toZonedTime } from 'date-fns-tz'
 import { getDay, parseISO, subDays } from 'date-fns'
 import { supabase } from './supabase'
 
 export const TIMEZONE = 'Asia/Jakarta'
 
-// Day of week helpers (0=Sun, 1=Mon, ... 4=Thu, 5=Fri)
+// Day of week helpers (0=Sun, 1=Mon, ... 4=Thu, 5=Fri, 6=Sat)
 const isThursdayOrFriday = (date: Date): boolean => {
   const day = getDay(date)
   return day === 4 || day === 5
+}
+
+// Saturday = 6, Sunday = 0
+export function isWeekend(date: Date): boolean {
+  const day = getDay(date)
+  return day === 0 || day === 6
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -78,7 +84,7 @@ export const DEFAULT_SECURITY_SCHEDULE: SecuritySchedule = {
   thursday_friday_shift_minutes: 30,
   shifts: {
     'Shift I': {
-      start: '07:30', window_end: '08:00',
+      start: '07:00', window_end: '07:30',
       end: '16:00', end_window_end: '16:30',
       end_next_day: false, end_window_end_next_day: false,
     },
@@ -89,10 +95,131 @@ export const DEFAULT_SECURITY_SCHEDULE: SecuritySchedule = {
     },
     'Shift III': {
       start: '20:00', window_end: '20:30',
-      end: '07:30', end_window_end: '08:00',
+      end: '07:00', end_window_end: '07:30',
       end_next_day: true, end_window_end_next_day: true,
     },
   },
+}
+
+// ─────────────────────────────────────────────────────────────
+// Weekend Security Schedule (Sabtu & Minggu)
+// Jendela masuk: Sesi Pagi 08:00–08:30, Sesi Malam 20:00–20:30
+// Tidak menggunakan label Shift I/II/III pada akhir pekan.
+// ─────────────────────────────────────────────────────────────
+export interface WeekendSessionSchedule {
+  open: string        // HH:mm — mulai jendela masuk
+  close: string       // HH:mm — tutup jendela masuk (inklusif)
+}
+
+export interface SecurityWeekendSchedule {
+  sesiPagi: WeekendSessionSchedule
+  sesiMalam: WeekendSessionSchedule
+}
+
+export const DEFAULT_SECURITY_WEEKEND_SCHEDULE: SecurityWeekendSchedule = {
+  sesiPagi:  { open: '08:00', close: '08:30' },
+  sesiMalam: { open: '20:00', close: '20:30' },
+}
+
+/**
+ * Returns available SecurityShiftOptions for the given work date.
+ * - Weekday (Mon–Fri): returns ['Shift I', 'Shift II', 'Shift III']
+ * - Weekend (Sat–Sun): returns ['Sesi Pagi', 'Sesi Malam']
+ */
+export function getSecurityAvailableOptions(workDateStr: string): SecurityShiftOption[] {
+  const date = parseISO(workDateStr)
+  if (isWeekend(date)) {
+    return ['Sesi Pagi', 'Sesi Malam']
+  }
+  return ['Shift I', 'Shift II', 'Shift III']
+}
+
+/**
+ * Returns true if the given SecurityShiftOption is a weekend session.
+ */
+export function isWeekendSession(shift: SecurityShiftOption | null): shift is WeekendSession {
+  return shift === 'Sesi Pagi' || shift === 'Sesi Malam'
+}
+
+/**
+ * Returns the WeekendSessionSchedule for a given session label.
+ */
+export function getWeekendSessionSchedule(session: WeekendSession): WeekendSessionSchedule {
+  const ws = getSecurityWeekendScheduleSync()
+  return session === 'Sesi Pagi' ? ws.sesiPagi : ws.sesiMalam
+}
+
+export interface SecurityOptionWindowInfo {
+  option: SecurityShiftOption
+  label: string
+  sublabel: string
+  scheduledStart: string
+  scheduledEnd: string
+  timeRangeDisplay: string
+  workHoursDisplay: string
+  windowStatus: WindowStatus
+  isOpenNow: boolean
+}
+
+/**
+ * Returns complete time window and status info for a specific Security shift option.
+ */
+export function getSecurityOptionInfo(
+  option: SecurityShiftOption,
+  workDateStr: string,
+  now: Date = new Date(),
+): SecurityOptionWindowInfo {
+  const windowStatus = checkAttendanceWindow('Security', 'masuk', option, workDateStr, now)
+  const isOpenNow = windowStatus === 'open'
+
+  if (isWeekendSession(option)) {
+    const ws = getWeekendSessionSchedule(option)
+    return {
+      option,
+      label: option,
+      sublabel: option === 'Sesi Pagi' ? 'Sesi Akhir Pekan Pagi' : 'Sesi Akhir Pekan Malam',
+      scheduledStart: ws.open,
+      scheduledEnd: ws.close,
+      timeRangeDisplay: `${ws.open.replace(':', '.')} – ${ws.close.replace(':', '.')} WIB`,
+      workHoursDisplay: option === 'Sesi Pagi' ? '08.00 – 20.00 WIB' : '20.00 – 08.00 WIB (H+1)',
+      windowStatus,
+      isOpenNow,
+    }
+  }
+
+  const shiftKey = option as ShiftType
+  const s = getSecuritySchedule(workDateStr, shiftKey)
+  const sublabel =
+    option === 'Shift I'
+      ? 'Shift Pagi – Sore'
+      : option === 'Shift II'
+        ? 'Shift Sore – Malam'
+        : 'Shift Malam – Pagi'
+
+  const workHours = `${s.start.replace(':', '.')} – ${s.end.replace(':', '.')}${s.end_next_day ? ' (H+1)' : ''} WIB`
+
+  return {
+    option,
+    label: option,
+    sublabel,
+    scheduledStart: s.start,
+    scheduledEnd: s.window_end,
+    timeRangeDisplay: `${s.start.replace(':', '.')} – ${s.window_end.replace(':', '.')} WIB`,
+    workHoursDisplay: workHours,
+    windowStatus,
+    isOpenNow,
+  }
+}
+
+/**
+ * Quick helper to check if a specific security shift's masuk window is open.
+ */
+export function checkSecurityMasukWindow(
+  option: SecurityShiftOption,
+  workDateStr: string,
+  now: Date = new Date(),
+): WindowStatus {
+  return checkAttendanceWindow('Security', 'masuk', option, workDateStr, now)
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -291,11 +418,35 @@ export function isSecurityScheduleValid(sec: any, shift?: ShiftType | null): boo
   return true
 }
 
+/**
+ * Normalizes any raw DB/API Security weekend schedule object into a strictly-typed SecurityWeekendSchedule.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function normalizeSecurityWeekendSchedule(raw: any): SecurityWeekendSchedule {
+  if (!raw || typeof raw !== 'object') {
+    return { ...DEFAULT_SECURITY_WEEKEND_SCHEDULE }
+  }
+
+  const rawPagi = raw.sesi_pagi || raw.sesiPagi || {}
+  const rawMalam = raw.sesi_malam || raw.sesiMalam || {}
+
+  const pagiOpen = isValidTimeString(rawPagi.open) ? rawPagi.open.trim() : DEFAULT_SECURITY_WEEKEND_SCHEDULE.sesiPagi.open
+  const pagiClose = isValidTimeString(rawPagi.close) ? rawPagi.close.trim() : DEFAULT_SECURITY_WEEKEND_SCHEDULE.sesiPagi.close
+  const malamOpen = isValidTimeString(rawMalam.open) ? rawMalam.open.trim() : DEFAULT_SECURITY_WEEKEND_SCHEDULE.sesiMalam.open
+  const malamClose = isValidTimeString(rawMalam.close) ? rawMalam.close.trim() : DEFAULT_SECURITY_WEEKEND_SCHEDULE.sesiMalam.close
+
+  return {
+    sesiPagi: { open: pagiOpen, close: pagiClose },
+    sesiMalam: { open: malamOpen, close: malamClose },
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
 // DB Settings Cache (module-level, refreshed on demand)
 // ─────────────────────────────────────────────────────────────
 let _csScheduleCache: CSSchedule | null = null
 let _securityScheduleCache: SecuritySchedule | null = null
+let _securityWeekendScheduleCache: SecurityWeekendSchedule | null = null
 let _cacheLoadedAt = 0
 
 async function loadScheduleCache(force = false): Promise<void> {
@@ -306,7 +457,7 @@ async function loadScheduleCache(force = false): Promise<void> {
     const { data, error } = await supabase
       .from('attendance_settings')
       .select('setting_key, setting_value')
-      .in('setting_key', ['cs_schedule', 'security_schedule'])
+      .in('setting_key', ['cs_schedule', 'security_schedule', 'security_weekend_schedule'])
 
     if (error) {
       console.warn('Failed to load schedule from attendance_settings:', error.message)
@@ -318,6 +469,8 @@ async function loadScheduleCache(force = false): Promise<void> {
           _csScheduleCache = normalizeCSSchedule(row.setting_value)
         } else if (row.setting_key === 'security_schedule') {
           _securityScheduleCache = normalizeSecuritySchedule(row.setting_value)
+        } else if (row.setting_key === 'security_weekend_schedule') {
+          _securityWeekendScheduleCache = normalizeSecurityWeekendSchedule(row.setting_value)
         }
       }
     }
@@ -337,8 +490,16 @@ export async function getSecurityScheduleFromDB(): Promise<SecuritySchedule> {
   return _securityScheduleCache ? normalizeSecuritySchedule(_securityScheduleCache) : DEFAULT_SECURITY_SCHEDULE
 }
 
+export async function getSecurityWeekendScheduleFromDB(): Promise<SecurityWeekendSchedule> {
+  await loadScheduleCache()
+  return getSecurityWeekendScheduleSync()
+}
+
 export function invalidateScheduleCache(): void {
   _cacheLoadedAt = 0
+  _csScheduleCache = null
+  _securityScheduleCache = null
+  _securityWeekendScheduleCache = null
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -350,6 +511,10 @@ export function getCSScheduleSync(): CSSchedule {
 
 export function getSecurityScheduleSync(): SecuritySchedule {
   return _securityScheduleCache ? normalizeSecuritySchedule(_securityScheduleCache) : DEFAULT_SECURITY_SCHEDULE
+}
+
+export function getSecurityWeekendScheduleSync(): SecurityWeekendSchedule {
+  return _securityWeekendScheduleCache ? normalizeSecurityWeekendSchedule(_securityWeekendScheduleCache) : DEFAULT_SECURITY_WEEKEND_SCHEDULE
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -400,7 +565,7 @@ export async function preloadSchedules(): Promise<void> {
 export function getScheduleInfo(
   category: 'CS' | 'Security',
   attendanceType: AttendanceType,
-  shift: ShiftType | null,
+  shift: SecurityShiftOption | null,
   workDate: string,
 ): ScheduleInfo | null {
   if (category === 'CS') {
@@ -423,9 +588,27 @@ export function getScheduleInfo(
   }
 
   if (!shift) return null
+
+  // Weekend sessions: only masuk info
+  if (isWeekendSession(shift)) {
+    const ws = getWeekendSessionSchedule(shift)
+    if (attendanceType === 'masuk') {
+      return {
+        scheduledStart: ws.open,
+        scheduledEnd: ws.close,
+        isNextDay: false,
+        dayType: 'normal',
+      }
+    }
+    // pulang for weekend: no specific scheduled window
+    return null
+  }
+
+  // Weekday shift (Shift I/II/III)
+  const shiftKey = shift as ShiftType
   const date = parseISO(workDate)
   const sec = getSecurityScheduleSync()
-  const base = sec.shifts[shift] ?? DEFAULT_SECURITY_SCHEDULE.shifts[shift]
+  const base = sec.shifts[shiftKey] ?? DEFAULT_SECURITY_SCHEDULE.shifts[shiftKey]
   const shifted = isThursdayOrFriday(date)
   const s = shifted ? getShiftedSchedule(base, sec.thursday_friday_shift_minutes) : base
 
@@ -483,7 +666,7 @@ export function determineShiftIIIWorkDate(recordedAt: Date): string {
 export function calculateAttendanceStatus(
   category: 'CS' | 'Security',
   attendanceType: AttendanceType,
-  shift: ShiftType | null,
+  shift: SecurityShiftOption | null,
   workDateStr: string,
   recordedAt: Date,
 ): { status: AttendanceStatus; lateMinutes: number; scheduledStart: string; scheduledEnd: string } {
@@ -525,12 +708,27 @@ export function calculateAttendanceStatus(
   }
 
   if (!shift) throw new Error('shift required for Security')
-  const s = getSecuritySchedule(workDateStr, shift)
+
+  // Weekend sessions: tepat_waktu if within [open, close], terlambat after close
+  if (isWeekendSession(shift)) {
+    const ws = getWeekendSessionSchedule(shift)
+    const closeDate = parseTimeOnDate(ws.close, workDate)
+    const diffMs = recorded.getTime() - closeDate.getTime()
+    const diffMin = Math.floor(diffMs / 60000)
+    if (diffMin <= 0) {
+      return { status: 'tepat_waktu', lateMinutes: 0, scheduledStart: ws.open, scheduledEnd: ws.close }
+    }
+    return { status: 'terlambat', lateMinutes: diffMin, scheduledStart: ws.open, scheduledEnd: ws.close }
+  }
+
+  // Weekday shift (Shift I/II/III)
+  const shiftKey = shift as ShiftType
+  const s = getSecuritySchedule(workDateStr, shiftKey)
   const startStr = s.start
   const endStr = s.window_end
 
-  const scheduledStartDate = parseTimeOnDate(startStr, workDate)
-  const diffMs = recorded.getTime() - scheduledStartDate.getTime()
+  const windowEndDate = parseTimeOnDate(endStr, workDate)
+  const diffMs = recorded.getTime() - windowEndDate.getTime()
   const diffMin = Math.floor(diffMs / 60000)
 
   if (diffMin <= 0) {
@@ -558,7 +756,7 @@ export type WindowStatus = 'not_yet' | 'open' | 'closed_accept' | 'closed'
 export function checkAttendanceWindow(
   category: 'CS' | 'Security',
   attendanceType: AttendanceType,
-  shift: ShiftType | null,
+  shift: SecurityShiftOption | null,
   workDateStr: string,
   now: Date,
 ): WindowStatus {
@@ -584,9 +782,22 @@ export function checkAttendanceWindow(
     return 'closed_accept'
   }
 
-  // Security — unchanged
+  // Security
   if (!shift) return 'not_yet'
-  const s = getSecuritySchedule(workDateStr, shift)
+
+  // Weekend sessions
+  if (isWeekendSession(shift)) {
+    const ws = getWeekendSessionSchedule(shift)
+    const openTime = parseTimeOnDate(ws.open, workDate)
+    const closeTime = parseTimeOnDate(ws.close, workDate)
+    if (current < openTime) return 'not_yet'
+    if (current <= closeTime) return 'open'
+    return 'closed'
+  }
+
+  // Weekday shifts (Shift I/II/III)
+  const shiftKey = shift as ShiftType
+  const s = getSecuritySchedule(workDateStr, shiftKey)
 
   if (attendanceType === 'masuk') {
     const start = parseTimeOnDate(s.start, workDate)
@@ -661,7 +872,7 @@ export function getTimeInMinutes(timeStr: string): number {
 export function getNextAttendanceInfo(
   category: 'CS' | 'Security',
   completedTypes: AttendanceType[],
-  shift: ShiftType | null,
+  shift: SecurityShiftOption | null,
   workDateStr: string,
   now: Date = new Date(),
 ): NextAttendanceInfo | null {
@@ -690,7 +901,19 @@ export function getNextAttendanceInfo(
 
   // Security
   if (!shift) return null
-  const s = getSecuritySchedule(workDateStr, shift)
+
+  // Weekend sessions
+  if (isWeekendSession(shift)) {
+    const ws = getWeekendSessionSchedule(shift)
+    if (!hasMasuk) {
+      return { type: 'masuk', label: 'Presensi Masuk', startTime: ws.open }
+    }
+    return { type: 'pulang', label: 'Presensi Pulang', startTime: ws.close }
+  }
+
+  // Weekday shifts
+  const shiftKey = shift as ShiftType
+  const s = getSecuritySchedule(workDateStr, shiftKey)
 
   if (!hasMasuk) {
     return { type: 'masuk', label: 'Presensi Masuk', startTime: s.start }
@@ -781,7 +1004,7 @@ export function getAttendanceButtonState(
     istirahat: AttendanceRecord | null
     pulang: AttendanceRecord | null
   },
-  shift: ShiftType | null,
+  shift: SecurityShiftOption | null,
   workDateStr: string,
   now: Date = new Date(),
 ): AttendanceButtonState {
@@ -921,7 +1144,50 @@ export function getAttendanceButtonState(
   // ─────────────────────────────────────────────────────────────
   // Security Branch
   // ─────────────────────────────────────────────────────────────
-  const currentShift = shift || 'Shift I'
+
+  // Weekend sessions (Sesi Pagi / Sesi Malam)
+  if (shift && isWeekendSession(shift)) {
+    const ws = getWeekendSessionSchedule(shift)
+    const openMins = getTimeInMinutes(ws.open)
+    const closeMins = getTimeInMinutes(ws.close)
+    const sessionLabel = shift === 'Sesi Pagi' ? 'Pagi' : 'Malam'
+
+    if (!completedRecords.masuk) {
+      if (currentMinutes < openMins) {
+        return {
+          status: 'waiting_masuk',
+          title: `Presensi Masuk Sesi ${sessionLabel} Dibuka Pukul ${ws.open.replace(':', '.')} WIB`,
+          startTime: ws.open,
+          message: `Sesi ${sessionLabel} akhir pekan belum dibuka. Tombol aktif pukul ${ws.open.replace(':', '.')} WIB.`,
+        }
+      }
+      if (currentMinutes > closeMins) {
+        return {
+          status: 'window_closed',
+          title: `Jendela Presensi Sesi ${sessionLabel} Ditutup`,
+          message: `Waktu presensi masuk sesi ${sessionLabel.toLowerCase()} telah berakhir pukul ${ws.close.replace(':', '.')} WIB.`,
+        }
+      }
+      return {
+        status: 'can_masuk',
+        title: `Absen Masuk — Sesi ${sessionLabel}`,
+        startTime: ws.open,
+        endTime: ws.close,
+        isLate: false,
+      }
+    }
+
+    // After masuk on weekend: just waiting for pulang
+    return {
+      status: 'waiting_pulang',
+      title: `Presensi selesai untuk Sesi ${sessionLabel}`,
+      startTime: ws.close,
+      message: 'Check-in sesi akhir pekan telah tercatat. Presensi pulang tidak terjadwal secara ketat.',
+    }
+  }
+
+  // Weekday shifts (Shift I/II/III)
+  const currentShift = (shift as ShiftType) || 'Shift I'
   const s = getSecuritySchedule(workDateStr, currentShift)
   const masukStartMins = getTimeInMinutes(s.start)
   const pulangStartMins = getTimeInMinutes(s.end)
@@ -1050,7 +1316,7 @@ export function calculate30DayRecap(
   masukRecords: RecapMasukRecord[],
   joinDateStr?: string | null,
   now: Date = new Date(),
-  _shift?: ShiftType | null,
+  _shift?: SecurityShiftOption | null,
 ): RecapDayStats {
   void _shift
 

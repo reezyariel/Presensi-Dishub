@@ -7,6 +7,10 @@ export type EmployeeRole = 'CS' | 'Security'
 export type Category = 'CS' | 'Security'
 export type AttendanceType = 'masuk' | 'istirahat' | 'pulang'
 export type ShiftType = 'Shift I' | 'Shift II' | 'Shift III'
+/** Weekend session labels used exclusively for Security on Sabtu–Minggu */
+export type WeekendSession = 'Sesi Pagi' | 'Sesi Malam'
+/** All possible Security shift/session values (weekday + weekend) */
+export type SecurityShiftOption = ShiftType | WeekendSession
 export type AttendanceStatus = 'tepat_waktu' | 'terlambat'
 export type ReviewStatus = 'belum_diperiksa' | 'sudah_diperiksa' | 'perlu_tindak_lanjut'
 
@@ -33,7 +37,7 @@ export interface AttendanceRecord {
   auth_uid?: string | null
   category: Category
   attendance_type: AttendanceType
-  shift: ShiftType | null
+  shift: SecurityShiftOption | null
   work_date: string              // ISO date YYYY-MM-DD
   recorded_at: string            // ISO timestamptz
   scheduled_start: string | null // HH:mm
@@ -116,7 +120,7 @@ export interface AttendanceSubmitPayload {
   employee_name: string
   category: Category
   attendance_type: AttendanceType
-  shift?: ShiftType | null
+  shift?: SecurityShiftOption | null
   selfie_base64: string
   selfie_mime?: string
   idempotency_key: string

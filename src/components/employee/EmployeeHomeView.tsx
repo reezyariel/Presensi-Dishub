@@ -22,9 +22,11 @@ import {
   getNextAttendanceInfo,
   getAttendanceButtonState,
   calculate30DayRecap,
+  isWeekend,
 } from '../../lib/scheduleEngine'
-import type { AttendanceRecord, ShiftType } from '../../types/attendance'
+import type { AttendanceRecord, SecurityShiftOption } from '../../types/attendance'
 import TakeAttendanceModal from '../../pages/attendance/TakeAttendanceModal'
+import ShiftSelectionModal from './ShiftSelectionModal'
 import ServiceMenuGrid from './ServiceMenuGrid'
 
 interface EmployeeHomeViewProps {
@@ -58,9 +60,13 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
   const [attendanceTypeToTake, setAttendanceTypeToTake] = useState<'masuk' | 'istirahat' | 'pulang'>('masuk')
   const [isLoading, setIsLoading] = useState(true)
 
-  const [selectedShift, setSelectedShift] = useState<ShiftType>(
-    (employeeProfile?.default_shift as ShiftType) || 'Shift I'
-  )
+  const isTodayWeekend = isWeekend(new Date())
+  const [selectedShift, setSelectedShift] = useState<SecurityShiftOption>(() => {
+    if (isTodayWeekend) return 'Sesi Pagi'
+    return (employeeProfile?.default_shift as SecurityShiftOption) || 'Shift I'
+  })
+  // Shift selection modal state (Security masuk only)
+  const [isShiftPickerOpen, setIsShiftPickerOpen] = useState(false)
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000)
@@ -243,7 +249,18 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
   }, [category, selectedShift, today])
 
   const handleOpenTakeModal = (type: 'masuk' | 'istirahat' | 'pulang') => {
+    if (category === 'Security' && type === 'masuk') {
+      setIsShiftPickerOpen(true)
+      return
+    }
     setAttendanceTypeToTake(type)
+    setIsTakeModalOpen(true)
+  }
+
+  const handleConfirmSecurityShift = (confirmedShift: SecurityShiftOption) => {
+    setSelectedShift(confirmedShift)
+    setIsShiftPickerOpen(false)
+    setAttendanceTypeToTake('masuk')
     setIsTakeModalOpen(true)
   }
 
@@ -549,12 +566,20 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
                     <p className="text-2xl font-bold text-neutral-300 font-mono">--:--</p>
                   )}
                   {todayRecords.masuk && (
-                    <span className={`mt-1 inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ${todayRecords.masuk.attendance_status === 'terlambat'
-                        ? 'bg-neutral-900 text-white'
-                        : 'bg-neutral-100 text-neutral-700 border border-neutral-200'
-                      }`}>
-                      {todayRecords.masuk.attendance_status === 'terlambat' ? 'Terlambat' : 'Tepat Waktu'}
-                    </span>
+                    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                      <span className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ${todayRecords.masuk.attendance_status === 'terlambat'
+                          ? 'bg-neutral-900 text-white'
+                          : 'bg-neutral-100 text-neutral-700 border border-neutral-200'
+                        }`}>
+                        {todayRecords.masuk.attendance_status === 'terlambat' ? 'Terlambat' : 'Tepat Waktu'}
+                      </span>
+                      {todayRecords.masuk.shift && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-800 border border-neutral-200">
+                          <Clock size={10} />
+                          {todayRecords.masuk.shift}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
 
@@ -794,7 +819,16 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
                         return (
                           <tr key={rec.id} className="border-b border-neutral-50 hover:bg-neutral-50/60 transition-colors">
                             <td className="px-5 py-3 font-medium text-neutral-700">{rec.work_date}</td>
-                            <td className="px-5 py-3 font-semibold text-neutral-900">{typeLabel}</td>
+                            <td className="px-5 py-3 font-semibold text-neutral-900">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span>{typeLabel}</span>
+                                {rec.shift && (
+                                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-700 border border-neutral-200">
+                                    {rec.shift}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
                             <td className="px-5 py-3 font-mono text-neutral-700">{timeStr}</td>
                             <td className="px-5 py-3">
                               <span className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ${isLate ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-700 border border-neutral-200'
@@ -828,7 +862,9 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
                           </div>
                           <div>
                             <p className="text-xs font-bold text-neutral-900">{typeLabel}</p>
-                            <p className="text-[11px] text-neutral-400 mt-0.5">{rec.work_date} · {timeStr}</p>
+                            <p className="text-[11px] text-neutral-400 mt-0.5">
+                              {rec.work_date} · {timeStr} {rec.shift ? `· ${rec.shift}` : ''}
+                            </p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -993,6 +1029,17 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
           </div>
         </div>
       </div>
+
+      {/* Security Shift Selection Modal (Masuk only) */}
+      {isShiftPickerOpen && (
+        <ShiftSelectionModal
+          isOpen={isShiftPickerOpen}
+          workDateStr={today}
+          currentShift={selectedShift}
+          onClose={() => setIsShiftPickerOpen(false)}
+          onConfirm={handleConfirmSecurityShift}
+        />
+      )}
 
       {/* Attendance Modal */}
       {isTakeModalOpen && (

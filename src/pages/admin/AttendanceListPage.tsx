@@ -324,9 +324,11 @@ export default function AttendanceListPage() {
                 className="form-input text-xs py-1.5"
               >
                 <option value="">Semua Shift</option>
-                <option value="Shift I">Shift I</option>
-                <option value="Shift II">Shift II</option>
-                <option value="Shift III">Shift III</option>
+                <option value="Shift I">Shift I (Weekday)</option>
+                <option value="Shift II">Shift II (Weekday)</option>
+                <option value="Shift III">Shift III (Weekday)</option>
+                <option value="Sesi Pagi">Sesi Pagi (Weekend)</option>
+                <option value="Sesi Malam">Sesi Malam (Weekend)</option>
               </select>
             </div>
 

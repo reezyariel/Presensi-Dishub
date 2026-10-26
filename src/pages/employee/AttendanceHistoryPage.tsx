@@ -326,7 +326,9 @@ export default function AttendanceHistoryPage() {
                           </div>
                           <div>
                             <p className="text-xs font-bold text-neutral-900">{typeLabel(rec.attendance_type)}</p>
-                            <p className="text-[11px] text-neutral-500 font-mono mt-0.5">{time}</p>
+                            <p className="text-[11px] text-neutral-500 font-mono mt-0.5">
+                              {time} {rec.shift ? `· ${rec.shift}` : ''}
+                            </p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">

@@ -22,12 +22,12 @@ import {
 } from '../../lib/officeLocation'
 import { supabase } from '../../lib/supabase'
 import { formatJakartaTime, getScheduleInfo, todayJakarta, getCSScheduleSync } from '../../lib/scheduleEngine'
-import type { AttendanceRecord, AttendanceType, ShiftType } from '../../types/attendance'
+import type { AttendanceRecord, AttendanceType, SecurityShiftOption } from '../../types/attendance'
 
 interface TakeAttendanceModalProps {
   category: 'CS' | 'Security'
   attendanceType: AttendanceType
-  shift?: ShiftType
+  shift?: SecurityShiftOption
   onClose: () => void
   onSuccess?: () => void
 }
@@ -37,7 +37,7 @@ type ModalStep = 'initial' | 'camera' | 'form' | 'submitting' | 'result'
 export default function TakeAttendanceModal({
   category,
   attendanceType,
-  shift = 'Shift I',
+  shift,
   onClose,
   onSuccess,
 }: TakeAttendanceModalProps) {
@@ -118,10 +118,10 @@ export default function TakeAttendanceModal({
         pulang: fmt(cs.pulang.start, cs.pulang.end),
       }
     } else {
-      const sched = getScheduleInfo('Security', attendanceType, shift, today)
-      const schedEnd = getScheduleInfo('Security', 'pulang', shift, today)
+      const sched = getScheduleInfo('Security', attendanceType, shift ?? null, today)
+      const schedEnd = getScheduleInfo('Security', 'pulang', shift ?? null, today)
       return {
-        masuk: sched ? `${sched.scheduledStart.replace(':', '.')} WIB` : '07.30 WIB',
+        masuk: sched ? `${sched.scheduledStart.replace(':', '.')} WIB` : '07.00 WIB',
         istirahat: 'Shift Kerja Berlanjut',
         pulang: schedEnd ? `${schedEnd.scheduledStart.replace(':', '.')}${schedEnd.isNextDay ? ' (H+1)' : ''} WIB` : '16.00 WIB',
       }
