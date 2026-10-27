@@ -414,6 +414,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         sessionStorage.clear()
         localStorage.removeItem('SIPATEN_active_role')
+        localStorage.removeItem('shifttrack_last_activity_ts')
+        localStorage.removeItem('shifttrack_active_user_id')
+        localStorage.removeItem('shifttrack_active_user_role')
       } catch {
         // ignore
       }

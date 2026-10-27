@@ -11,7 +11,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
-import { User, Lock, Eye, EyeOff, AlertCircle, ArrowRight } from 'lucide-react'
+import { User, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Clock } from 'lucide-react'
 
 export default function LoginPage() {
   const { signIn, isAuthenticated, isAdmin, role, isLoading: authLoading } = useAuth()
@@ -19,7 +19,9 @@ export default function LoginPage() {
   const location = useLocation()
   const [mounted, setMounted] = useState(false)
 
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname
+  const isSessionExpired = Boolean((location.state as { sessionExpired?: boolean })?.sessionExpired)
+  const [sessionExpiredNotice, setSessionExpiredNotice] = useState(isSessionExpired)
+  const from = isSessionExpired ? undefined : (location.state as { from?: { pathname: string } })?.from?.pathname
 
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
@@ -61,6 +63,7 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+    setSessionExpiredNotice(false)
 
     if (!identifier.trim()) {
       setError('Harap masukkan ID Karyawan atau Email Anda.')
@@ -232,6 +235,16 @@ export default function LoginPage() {
               Masuk dengan ID Karyawan atau Email Anda
             </p>
           </div>
+
+          {/* ── Session Expired Banner ── */}
+          {sessionExpiredNotice && !error && (
+            <div className="mb-4 p-3 rounded-xl bg-amber-950/70 border border-amber-500/40 backdrop-blur-md flex items-start gap-2.5 text-amber-200 text-xs shadow-lg animate-fade-in">
+              <Clock size={15} className="text-amber-400 flex-shrink-0 mt-0.5" />
+              <p className="leading-relaxed">
+                Sesi Anda telah berakhir secara otomatis karena tidak ada aktivitas. Silakan masuk kembali.
+              </p>
+            </div>
+          )}
 
           {/* ── Error Banner ── */}
           {error && (
