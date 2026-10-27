@@ -73,6 +73,11 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'SISTEM & KONFIGURASI',
     items: [
       {
+        label: 'Kelola Admin',
+        path: '/admin/admins',
+        icon: <ShieldCheck size={17} strokeWidth={2} />,
+      },
+      {
         label: 'Pengaturan Jadwal',
         path: '/admin/settings/schedule',
         icon: <Clock size={17} strokeWidth={2} />,

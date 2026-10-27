@@ -226,7 +226,7 @@ export default function AuditLogPage() {
                             {log.admin_profiles?.full_name || 'Admin SIPATEN'}
                           </div>
                           <div className="text-[10px] font-mono text-neutral-400">
-                            ID: {log.admin_id.substring(0, 8)}
+                            ID: {log.admin_id ? log.admin_id.substring(0, 8) : '-'}
                           </div>
                         </div>
                       </div>

@@ -40,8 +40,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .maybeSingle()
 
       if (!adminErr && adminData) {
+        if (adminData.is_active === false) {
+          return {
+            profile: null,
+            employeeProfile: null,
+            role: null,
+            isAdmin: false,
+            error: 'Akun Administrator Anda telah dinonaktifkan. Hubungi Administrator lain.',
+          }
+        }
         return {
-          profile: adminData as AdminProfile,
+          profile: {
+            ...adminData,
+            email: adminData.email || authUser.email || null,
+          } as AdminProfile,
           employeeProfile: null,
           role: 'admin' as UserRole,
           isAdmin: true,

@@ -23,6 +23,7 @@ import ReviewPage from '../pages/admin/ReviewPage'
 import SettingsSchedulePage from '../pages/admin/SettingsSchedulePage'
 import SettingsLocationPage from '../pages/admin/SettingsLocationPage'
 import AuditLogPage from '../pages/admin/AuditLogPage'
+import ManageAdminsPage from '../pages/admin/ManageAdminsPage'
 
 import ProtectedRoute from './ProtectedRoute'
 import { useAuth } from '../hooks/useAuth'
@@ -166,6 +167,8 @@ export default function AppRouter() {
         <Route path="settings/location" element={<SettingsLocationPage />} />
         <Route path="audit" element={<AuditLogPage />} />
         <Route path="audit-log" element={<AuditLogPage />} />
+        <Route path="admins" element={<ManageAdminsPage />} />
+        <Route path="manage-admins" element={<Navigate to="/admin/admins" replace />} />
       </Route>
 
       {/* Catch-all redirect */}
