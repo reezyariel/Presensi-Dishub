@@ -22,12 +22,23 @@ import {
   getNextAttendanceInfo,
   getAttendanceButtonState,
   calculate30DayRecap,
+  calculateSecurity30DayRecap,
+  buildSecurityShiftSessions,
   isWeekend,
+  type Security30DayRecap,
+  type SecurityShiftSession,
 } from '../../lib/scheduleEngine'
 import type { AttendanceRecord, SecurityShiftOption } from '../../types/attendance'
 import TakeAttendanceModal from '../../pages/attendance/TakeAttendanceModal'
 import ShiftSelectionModal from './ShiftSelectionModal'
 import ServiceMenuGrid from './ServiceMenuGrid'
+import {
+  SecurityShiftStatusCard,
+  SecurityScheduleCard,
+  Security30DayRecapCard,
+  SecurityShiftHistoryCard,
+  SecurityWeeklyChartCard,
+} from './SecurityDashboard'
 
 interface EmployeeHomeViewProps {
   category: 'CS' | 'Security'
@@ -53,6 +64,14 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
   }>({ masuk: null, istirahat: null, pulang: null })
 
   const [monthStats, setMonthStats] = useState({ hadir: 0, terlambat: 0, tidakHadir: 0 })
+  const [securityRecap, setSecurityRecap] = useState<Security30DayRecap>({
+    shiftSelesai: 0,
+    keterlambatan: 0,
+    pulangBelumLengkap: 0,
+    totalCatatan: 0,
+    totalShifts: 0,
+  })
+  const [securitySessions, setSecuritySessions] = useState<SecurityShiftSession[]>([])
   const [weekChartData, setWeekChartData] = useState<WeekDayCount[]>([])
   const [recentRecords, setRecentRecords] = useState<AttendanceRecord[]>([])
 
@@ -84,6 +103,8 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
     // Clean cache on account switch
     setTodayRecords({ masuk: null, istirahat: null, pulang: null })
     setMonthStats({ hadir: 0, terlambat: 0, tidakHadir: 0 })
+    setSecurityRecap({ shiftSelesai: 0, keterlambatan: 0, pulangBelumLengkap: 0, totalCatatan: 0, totalShifts: 0 })
+    setSecuritySessions([])
     setWeekChartData([])
     setRecentRecords([])
     loadAttendanceData()
@@ -100,24 +121,45 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
       ? `auth_uid.eq.${user.id},employee_profile_id.eq.${employeeProfile?.id || user.id},normalized_name.eq.${normName}`
       : `normalized_name.eq.${normName}`
 
+    // For Security Shift III overnight crossover, also query yesterday's records.
+    // A guard who checked in yesterday evening (masuk) will do checkout this morning (H+1);
+    // their masuk and pulang both have yesterday's work_date.
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    const yesterdayStr = yesterday.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' })
+
     try {
-      // 1. Today's records
-      const { data: todayList } = await supabase
+      // 1. Today's records (and yesterday for Security Shift III H+1 crossover)
+      const datesToQuery = category === 'Security' ? [today, yesterdayStr] : [today]
+      const { data: recentList } = await supabase
         .from('attendance_records')
         .select('*')
-        .eq('work_date', today)
+        .in('work_date', datesToQuery)
         .eq('category', category)
         .or(idFilter)
 
-      if (todayList) {
-        const filteredToday = todayList.filter(r => {
+      if (recentList) {
+        const filtered = recentList.filter(r => {
           if (r.auth_uid && user?.id && r.auth_uid === user.id) return true
           if (employeeProfile?.id && r.employee_profile_id === employeeProfile.id) return true
           return r.category === category && (r.normalized_name === normName || r.employee_name === employeeName)
         })
-        const masuk = filteredToday.find(r => r.attendance_type === 'masuk') || null
-        const istirahat = filteredToday.find(r => r.attendance_type === 'istirahat') || null
-        const pulang = filteredToday.find(r => r.attendance_type === 'pulang') || null
+
+        // For Security: prefer records from today. If no masuk today but Shift III masuk was yesterday,
+        // use yesterday's masuk (and pulang) as the "current" session.
+        let masuk = filtered.find(r => r.attendance_type === 'masuk' && r.work_date === today) || null
+        let istirahat = filtered.find(r => r.attendance_type === 'istirahat' && r.work_date === today) || null
+        let pulang = filtered.find(r => r.attendance_type === 'pulang' && r.work_date === today) || null
+
+        if (category === 'Security' && !masuk) {
+          // Check yesterday for Shift III overnight session
+          const yMasuk = filtered.find(r => r.attendance_type === 'masuk' && r.work_date === yesterdayStr) || null
+          if (yMasuk && (yMasuk.shift === 'Shift III' || yMasuk.shift === 'Shift 3')) {
+            masuk = yMasuk
+            pulang = filtered.find(r => r.attendance_type === 'pulang' && r.work_date === yesterdayStr) || null
+          }
+        }
+
         setTodayRecords({ masuk, istirahat, pulang })
         if (masuk?.shift) setSelectedShift(masuk.shift)
       }
@@ -129,7 +171,7 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
       const past30Days = past30StartDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' })
       const { data: monthList } = await supabase
         .from('attendance_records')
-        .select('work_date, attendance_type, attendance_status, auth_uid, employee_profile_id, normalized_name, category')
+        .select('id, work_date, attendance_type, attendance_status, shift, recorded_at, auth_uid, employee_profile_id, normalized_name, category, employee_name')
         .eq('category', category)
         .or(idFilter)
         .gte('work_date', past30Days)
@@ -138,29 +180,37 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
         const personalMonth = monthList.filter(r => {
           if (r.auth_uid && user?.id && r.auth_uid === user.id) return true
           if (employeeProfile?.id && r.employee_profile_id === employeeProfile.id) return true
-          return r.category === category && r.normalized_name === normName
+          return r.category === category && (r.normalized_name === normName || r.employee_name === employeeName)
         })
-        const masukRecords = personalMonth.filter(r => r.attendance_type === 'masuk')
 
-        // Tanggal bergabung pegawai (YYYY-MM-DD) dalam timezone Jakarta
-        // Cek employeeProfile.created_at, profile.created_at, atau user.created_at
-        const rawCreatedAt =
-          (employeeProfile as { created_at?: string } | null)?.created_at ||
-          profile?.created_at ||
-          user?.created_at
+        if (category === 'Security') {
+          const secRecap = calculateSecurity30DayRecap(personalMonth, today, yesterdayStr, new Date())
+          setSecurityRecap(secRecap)
+          const secSessions = buildSecurityShiftSessions(personalMonth, today, yesterdayStr, new Date())
+          setSecuritySessions(secSessions)
+        } else {
+          const masukRecords = personalMonth.filter(r => r.attendance_type === 'masuk')
 
-        const joinDateStr: string | null = rawCreatedAt
-          ? new Date(rawCreatedAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' })
-          : null
+          // Tanggal bergabung pegawai (YYYY-MM-DD) dalam timezone Jakarta
+          // Cek employeeProfile.created_at, profile.created_at, atau user.created_at
+          const rawCreatedAt =
+            (employeeProfile as { created_at?: string } | null)?.created_at ||
+            profile?.created_at ||
+            user?.created_at
 
-        const recapStats = calculate30DayRecap(
-          category,
-          masukRecords,
-          joinDateStr,
-          new Date(),
-          selectedShift,
-        )
-        setMonthStats(recapStats)
+          const joinDateStr: string | null = rawCreatedAt
+            ? new Date(rawCreatedAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' })
+            : null
+
+          const recapStats = calculate30DayRecap(
+            category,
+            masukRecords,
+            joinDateStr,
+            new Date(),
+            selectedShift,
+          )
+          setMonthStats(recapStats)
+        }
       }
 
       // 3. Weekly bar chart data
@@ -540,234 +590,266 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
         <div className="lg:col-span-2 space-y-5">
 
           {/* A. Main Attendance Card */}
-          <div id="presensi-hari-ini-card" className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden scroll-mt-20">
-            {/* Card header */}
-            <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between">
-              <h3 className="text-sm font-bold text-neutral-900">Presensi Hari Ini</h3>
-              <span className="text-xs text-neutral-400">{formatJakartaDate(currentTime)}</span>
-            </div>
-
-            <div className="p-5">
-              {/* Check-in / Check-out time display */}
-              <div className="grid grid-cols-2 gap-4 mb-5">
-                {/* Check-In */}
-                <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-100">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Sunrise size={15} className="text-neutral-500" />
-                    <span className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wide">Check-In</span>
-                  </div>
-                  {todayRecords.masuk ? (
-                    <p className="text-2xl font-bold text-neutral-900 font-mono tabular-nums">
-                      {todayRecords.masuk.recorded_at
-                        ? formatJakartaTime(new Date(todayRecords.masuk.recorded_at))
-                        : '--:--'}
-                    </p>
-                  ) : (
-                    <p className="text-2xl font-bold text-neutral-300 font-mono">--:--</p>
-                  )}
-                  {todayRecords.masuk && (
-                    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                      <span className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ${todayRecords.masuk.attendance_status === 'terlambat'
-                          ? 'bg-neutral-900 text-white'
-                          : 'bg-neutral-100 text-neutral-700 border border-neutral-200'
-                        }`}>
-                        {todayRecords.masuk.attendance_status === 'terlambat' ? 'Terlambat' : 'Tepat Waktu'}
-                      </span>
-                      {todayRecords.masuk.shift && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-800 border border-neutral-200">
-                          <Clock size={10} />
-                          {todayRecords.masuk.shift}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Check-Out */}
-                <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-100">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Sunset size={15} className="text-neutral-500" />
-                    <span className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wide">Check-Out</span>
-                  </div>
-                  {todayRecords.pulang ? (
-                    <p className="text-2xl font-bold text-neutral-900 font-mono tabular-nums">
-                      {todayRecords.pulang.recorded_at
-                        ? formatJakartaTime(new Date(todayRecords.pulang.recorded_at))
-                        : '--:--'}
-                    </p>
-                  ) : (
-                    <p className="text-2xl font-bold text-neutral-300 font-mono">--:--</p>
-                  )}
-                  {todayRecords.pulang && (
-                    <span className="mt-1 inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-700 border border-neutral-200">
-                      Selesai
-                    </span>
-                  )}
-                </div>
+          {category === 'Security' ? (
+            <SecurityShiftStatusCard
+              status={
+                todayRecords.pulang
+                  ? 'selesai'
+                  : todayRecords.masuk
+                    ? buttonState.status === 'can_pulang'
+                      ? 'menunggu_pulang'
+                      : 'sedang_bertugas'
+                    : 'belum_masuk'
+              }
+              selectedShift={selectedShift}
+              workDateStr={todayRecords.masuk?.work_date || today}
+              masukTime={todayRecords.masuk?.recorded_at ? formatJakartaTime(new Date(todayRecords.masuk.recorded_at)) : '--:--'}
+              pulangTime={
+                todayRecords.pulang?.recorded_at
+                  ? `${formatJakartaTime(new Date(todayRecords.pulang.recorded_at))}${
+                      selectedShift === 'Shift III' || selectedShift === 'Shift 3' || selectedShift === 'Sesi Malam' ? ' (H+1)' : ''
+                    }`
+                  : '--:--'
+              }
+              isLate={todayRecords.masuk?.attendance_status === 'terlambat'}
+              isOvernight={selectedShift === 'Shift III' || selectedShift === 'Shift 3' || selectedShift === 'Sesi Malam'}
+              buttonStateTitle={buttonState.title}
+              canTakeMasuk={buttonState.status === 'can_masuk'}
+              canTakePulang={buttonState.status === 'can_pulang'}
+              waitingMessage={'message' in buttonState ? (buttonState as { message?: string }).message : buttonState.title}
+              masukRecordId={todayRecords.masuk?.id}
+              onOpenTakeModal={handleOpenTakeModal}
+              onChangeShiftClick={() => setIsShiftPickerOpen(true)}
+            />
+          ) : (
+            <div id="presensi-hari-ini-card" className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden scroll-mt-20">
+              {/* Card header */}
+              <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between">
+                <h3 className="text-sm font-bold text-neutral-900">Presensi Hari Ini</h3>
+                <span className="text-xs text-neutral-400">{formatJakartaDate(currentTime)}</span>
               </div>
 
-              {/* Action Button & Scheduling Area */}
-              {buttonState.status === 'workday_holiday' ? (
-                <div className="p-5 bg-neutral-50 rounded-xl border border-neutral-200 text-center space-y-2">
-                  <div className="w-10 h-10 rounded-full bg-neutral-200 text-neutral-600 flex items-center justify-center mx-auto">
-                    <Calendar size={18} />
+              <div className="p-5">
+                {/* Check-in / Check-out time display */}
+                <div className="grid grid-cols-2 gap-4 mb-5">
+                  {/* Check-In */}
+                  <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-100">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Sunrise size={15} className="text-neutral-500" />
+                      <span className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wide">Check-In</span>
+                    </div>
+                    {todayRecords.masuk ? (
+                      <p className="text-2xl font-bold text-neutral-900 font-mono tabular-nums">
+                        {todayRecords.masuk.recorded_at
+                          ? formatJakartaTime(new Date(todayRecords.masuk.recorded_at))
+                          : '--:--'}
+                      </p>
+                    ) : (
+                      <p className="text-2xl font-bold text-neutral-300 font-mono">--:--</p>
+                    )}
+                    {todayRecords.masuk && (
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        <span className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ${todayRecords.masuk.attendance_status === 'terlambat'
+                            ? 'bg-neutral-900 text-white'
+                            : 'bg-neutral-100 text-neutral-700 border border-neutral-200'
+                          }`}>
+                          {todayRecords.masuk.attendance_status === 'terlambat' ? 'Terlambat' : 'Tepat Waktu'}
+                        </span>
+                        {todayRecords.masuk.shift && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-800 border border-neutral-200">
+                            <Clock size={10} />
+                            {todayRecords.masuk.shift}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <p className="text-xs font-bold text-neutral-900">{buttonState.title}</p>
-                  <p className="text-[11px] text-neutral-500 leading-relaxed max-w-sm mx-auto">
-                    {buttonState.message}
-                  </p>
+
+                  {/* Check-Out */}
+                  <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-100">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Sunset size={15} className="text-neutral-500" />
+                      <span className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wide">Check-Out</span>
+                    </div>
+                    {todayRecords.pulang ? (
+                      <p className="text-2xl font-bold text-neutral-900 font-mono tabular-nums">
+                        {todayRecords.pulang.recorded_at
+                          ? formatJakartaTime(new Date(todayRecords.pulang.recorded_at))
+                          : '--:--'}
+                      </p>
+                    ) : (
+                      <p className="text-2xl font-bold text-neutral-300 font-mono">--:--</p>
+                    )}
+                    {todayRecords.pulang && (
+                      <span className="mt-1 inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-700 border border-neutral-200">
+                        Selesai
+                      </span>
+                    )}
+                  </div>
                 </div>
-              ) : buttonState.status === 'waiting_masuk' ? (
-                <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-200 space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-neutral-100 border border-neutral-200 flex items-center justify-center flex-shrink-0 text-neutral-600">
-                      <Clock size={16} />
+
+                {/* Action Button & Scheduling Area */}
+                {buttonState.status === 'workday_holiday' ? (
+                  <div className="p-5 bg-neutral-50 rounded-xl border border-neutral-200 text-center space-y-2">
+                    <div className="w-10 h-10 rounded-full bg-neutral-200 text-neutral-600 flex items-center justify-center mx-auto">
+                      <Calendar size={18} />
+                    </div>
+                    <p className="text-xs font-bold text-neutral-900">{buttonState.title}</p>
+                    <p className="text-[11px] text-neutral-500 leading-relaxed max-w-sm mx-auto">
+                      {buttonState.message}
+                    </p>
+                  </div>
+                ) : buttonState.status === 'waiting_masuk' ? (
+                  <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-200 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-neutral-100 border border-neutral-200 flex items-center justify-center flex-shrink-0 text-neutral-600">
+                        <Clock size={16} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-neutral-900">{buttonState.title}</p>
+                        <p className="text-[11px] text-neutral-500 mt-0.5">{buttonState.message}</p>
+                      </div>
+                    </div>
+                    <button
+                      disabled
+                      className="w-full py-3.5 bg-neutral-200 text-neutral-400 font-bold text-sm rounded-xl flex items-center justify-center gap-2.5 cursor-not-allowed"
+                    >
+                      <Camera size={18} />
+                      <span>Absen Masuk (Belum Dibuka)</span>
+                    </button>
+                  </div>
+                ) : buttonState.status === 'window_closed' ? (
+                  <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-200 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-neutral-100 border border-neutral-200 flex items-center justify-center flex-shrink-0 text-neutral-600">
+                        <AlertCircle size={16} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-neutral-900">{buttonState.title}</p>
+                        <p className="text-[11px] text-neutral-500 mt-0.5">{buttonState.message}</p>
+                      </div>
+                    </div>
+                    <button
+                      disabled
+                      className="w-full py-3.5 bg-neutral-200 text-neutral-400 font-bold text-sm rounded-xl flex items-center justify-center gap-2.5 cursor-not-allowed"
+                    >
+                      <Camera size={18} />
+                      <span>Absen Masuk (Jendela Ditutup)</span>
+                    </button>
+                  </div>
+                ) : buttonState.status === 'can_masuk' ? (
+                  <button
+                    onClick={() => handleOpenTakeModal('masuk')}
+                    className="w-full py-4 bg-neutral-900 hover:bg-black text-white font-bold text-sm rounded-xl flex items-center justify-center gap-3 transition-all shadow-sm active:scale-[0.99]"
+                  >
+                    <Camera size={20} />
+                    <span>{buttonState.title || 'Ambil Foto & Absen Masuk'}</span>
+                  </button>
+                ) : buttonState.status === 'waiting_istirahat' ? (
+                  <div className="space-y-3">
+                    <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-200 flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-full bg-neutral-100 border border-neutral-200 flex items-center justify-center flex-shrink-0 text-neutral-600 mt-0.5">
+                        <Clock size={16} />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs font-bold text-neutral-900">{buttonState.title}</p>
+                        <p className="text-[11px] text-neutral-500 mt-0.5 leading-relaxed">
+                          {buttonState.message}
+                        </p>
+                      </div>
+                    </div>
+                    {todayRecords.masuk?.id && (
+                      <Link
+                        to={`/attendance/${todayRecords.masuk.id}`}
+                        className="w-full py-2.5 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold rounded-xl border border-neutral-200 flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        <span>Lihat Detail Absen Masuk</span>
+                        <ChevronRight size={14} />
+                      </Link>
+                    )}
+                  </div>
+                ) : buttonState.status === 'can_istirahat' ? (
+                  <div className="space-y-3">
+                    <button
+                      onClick={() => handleOpenTakeModal('istirahat')}
+                      className="w-full py-3.5 bg-neutral-900 hover:bg-black text-white font-bold text-sm rounded-xl flex items-center justify-center gap-3 transition-all shadow-sm active:scale-[0.99]"
+                    >
+                      <Camera size={18} />
+                      <span>Ambil Foto &amp; Absen Istirahat</span>
+                    </button>
+                    {todayRecords.masuk?.id && (
+                      <Link
+                        to={`/attendance/${todayRecords.masuk.id}`}
+                        className="w-full py-2.5 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold rounded-xl border border-neutral-200 flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        <span>Lihat Detail Absen Masuk</span>
+                        <ChevronRight size={14} />
+                      </Link>
+                    )}
+                  </div>
+                ) : buttonState.status === 'waiting_pulang' ? (
+                  <div className="space-y-3">
+                    <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-200 flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-full bg-neutral-100 border border-neutral-200 flex items-center justify-center flex-shrink-0 text-neutral-600 mt-0.5">
+                        <Clock size={16} />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs font-bold text-neutral-900">{buttonState.title}</p>
+                        <p className="text-[11px] text-neutral-500 mt-0.5 leading-relaxed">
+                          {buttonState.message}
+                        </p>
+                      </div>
+                    </div>
+                    {todayRecords.masuk?.id && (
+                      <Link
+                        to={`/attendance/${todayRecords.masuk.id}`}
+                        className="w-full py-2.5 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold rounded-xl border border-neutral-200 flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        <span>Lihat Detail Absen Masuk</span>
+                        <ChevronRight size={14} />
+                      </Link>
+                    )}
+                  </div>
+                ) : buttonState.status === 'can_pulang' ? (
+                  <div className="space-y-3">
+                    <button
+                      onClick={() => handleOpenTakeModal('pulang')}
+                      className="w-full py-3.5 bg-neutral-900 hover:bg-black text-white font-bold text-sm rounded-xl flex items-center justify-center gap-3 transition-all shadow-sm active:scale-[0.99]"
+                    >
+                      <Camera size={18} />
+                      <span>Ambil Foto &amp; Absen Pulang</span>
+                    </button>
+                    {todayRecords.masuk?.id && (
+                      <Link
+                        to={`/attendance/${todayRecords.masuk.id}`}
+                        className="w-full py-2.5 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold rounded-xl border border-neutral-200 flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        <span>Lihat Detail Absen Masuk</span>
+                        <ChevronRight size={14} />
+                      </Link>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center gap-3 p-4 bg-neutral-50 rounded-xl border border-neutral-100">
+                    <div className="w-10 h-10 rounded-full bg-neutral-900 flex items-center justify-center text-white flex-shrink-0">
+                      <Check size={20} strokeWidth={2.8} />
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-neutral-900">{buttonState.title}</p>
-                      <p className="text-[11px] text-neutral-500 mt-0.5">{buttonState.message}</p>
+                      <p className="text-sm font-bold text-neutral-900">Presensi Selesai</p>
+                      <p className="text-xs text-neutral-500">Semua presensi hari ini sudah tercatat.</p>
                     </div>
                   </div>
-                  <button
-                    disabled
-                    className="w-full py-3.5 bg-neutral-200 text-neutral-400 font-bold text-sm rounded-xl flex items-center justify-center gap-2.5 cursor-not-allowed"
-                  >
-                    <Camera size={18} />
-                    <span>Absen Masuk (Belum Dibuka)</span>
-                  </button>
-                </div>
-              ) : buttonState.status === 'window_closed' ? (
-                <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-200 space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-neutral-100 border border-neutral-200 flex items-center justify-center flex-shrink-0 text-neutral-600">
-                      <AlertCircle size={16} />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-neutral-900">{buttonState.title}</p>
-                      <p className="text-[11px] text-neutral-500 mt-0.5">{buttonState.message}</p>
-                    </div>
-                  </div>
-                  <button
-                    disabled
-                    className="w-full py-3.5 bg-neutral-200 text-neutral-400 font-bold text-sm rounded-xl flex items-center justify-center gap-2.5 cursor-not-allowed"
-                  >
-                    <Camera size={18} />
-                    <span>Absen Masuk (Jendela Ditutup)</span>
-                  </button>
-                </div>
-              ) : buttonState.status === 'can_masuk' ? (
-                <button
-                  onClick={() => handleOpenTakeModal('masuk')}
-                  className="w-full py-4 bg-neutral-900 hover:bg-black text-white font-bold text-sm rounded-xl flex items-center justify-center gap-3 transition-all shadow-sm active:scale-[0.99]"
-                >
-                  <Camera size={20} />
-                  <span>{buttonState.title || 'Ambil Foto & Absen Masuk'}</span>
-                </button>
-              ) : buttonState.status === 'waiting_istirahat' ? (
-                <div className="space-y-3">
-                  <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-200 flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-neutral-100 border border-neutral-200 flex items-center justify-center flex-shrink-0 text-neutral-600 mt-0.5">
-                      <Clock size={16} />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-xs font-bold text-neutral-900">{buttonState.title}</p>
-                      <p className="text-[11px] text-neutral-500 mt-0.5 leading-relaxed">
-                        {buttonState.message}
-                      </p>
-                    </div>
-                  </div>
-                  {todayRecords.masuk?.id && (
-                    <Link
-                      to={`/attendance/${todayRecords.masuk.id}`}
-                      className="w-full py-2.5 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold rounded-xl border border-neutral-200 flex items-center justify-center gap-1.5 transition-colors"
-                    >
-                      <span>Lihat Detail Absen Masuk</span>
-                      <ChevronRight size={14} />
-                    </Link>
-                  )}
-                </div>
-              ) : buttonState.status === 'can_istirahat' ? (
-                <div className="space-y-3">
-                  <button
-                    onClick={() => handleOpenTakeModal('istirahat')}
-                    className="w-full py-3.5 bg-neutral-900 hover:bg-black text-white font-bold text-sm rounded-xl flex items-center justify-center gap-3 transition-all shadow-sm active:scale-[0.99]"
-                  >
-                    <Camera size={18} />
-                    <span>Ambil Foto &amp; Absen Istirahat</span>
-                  </button>
-                  {todayRecords.masuk?.id && (
-                    <Link
-                      to={`/attendance/${todayRecords.masuk.id}`}
-                      className="w-full py-2.5 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold rounded-xl border border-neutral-200 flex items-center justify-center gap-1.5 transition-colors"
-                    >
-                      <span>Lihat Detail Absen Masuk</span>
-                      <ChevronRight size={14} />
-                    </Link>
-                  )}
-                </div>
-              ) : buttonState.status === 'waiting_pulang' ? (
-                <div className="space-y-3">
-                  <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-200 flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-neutral-100 border border-neutral-200 flex items-center justify-center flex-shrink-0 text-neutral-600 mt-0.5">
-                      <Clock size={16} />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-xs font-bold text-neutral-900">{buttonState.title}</p>
-                      <p className="text-[11px] text-neutral-500 mt-0.5 leading-relaxed">
-                        {buttonState.message}
-                      </p>
-                    </div>
-                  </div>
-                  {todayRecords.masuk?.id && (
-                    <Link
-                      to={`/attendance/${todayRecords.masuk.id}`}
-                      className="w-full py-2.5 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold rounded-xl border border-neutral-200 flex items-center justify-center gap-1.5 transition-colors"
-                    >
-                      <span>Lihat Detail Absen Masuk</span>
-                      <ChevronRight size={14} />
-                    </Link>
-                  )}
-                </div>
-              ) : buttonState.status === 'can_pulang' ? (
-                <div className="space-y-3">
-                  <button
-                    onClick={() => handleOpenTakeModal('pulang')}
-                    className="w-full py-3.5 bg-neutral-900 hover:bg-black text-white font-bold text-sm rounded-xl flex items-center justify-center gap-3 transition-all shadow-sm active:scale-[0.99]"
-                  >
-                    <Camera size={18} />
-                    <span>Ambil Foto &amp; Absen Pulang</span>
-                  </button>
-                  {todayRecords.masuk?.id && (
-                    <Link
-                      to={`/attendance/${todayRecords.masuk.id}`}
-                      className="w-full py-2.5 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-semibold rounded-xl border border-neutral-200 flex items-center justify-center gap-1.5 transition-colors"
-                    >
-                      <span>Lihat Detail Absen Masuk</span>
-                      <ChevronRight size={14} />
-                    </Link>
-                  )}
-                </div>
-              ) : (
-                <div className="flex items-center justify-center gap-3 p-4 bg-neutral-50 rounded-xl border border-neutral-100">
-                  <div className="w-10 h-10 rounded-full bg-neutral-900 flex items-center justify-center text-white flex-shrink-0">
-                    <Check size={20} strokeWidth={2.8} />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-neutral-900">Presensi Selesai</p>
-                    <p className="text-xs text-neutral-500">Semua presensi hari ini sudah tercatat.</p>
-                  </div>
+                )}
+              </div>
+
+              {/* ── Next Attendance Banner ── */}
+              {!isLoading && (
+                <div className={`mt-4 rounded-xl border px-4 py-3.5 flex items-start gap-3 ${bannerBg}`}>
+                  {nextAttendanceBanner}
                 </div>
               )}
             </div>
-
-            {/* ── Next Attendance Banner ── */}
-            {!isLoading && (
-              <div className={`mt-4 rounded-xl border px-4 py-3.5 flex items-start gap-3 ${bannerBg}`}>
-                {nextAttendanceBanner}
-              </div>
-            )}
-
-          </div>
+          )}
 
           {/* ── Menu Layanan (GoPay-inspired Modern Quick Actions Grid) ── */}
           <ServiceMenuGrid
@@ -775,249 +857,235 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
             onPresensiClick={handlePresensiMenuClick}
           />
 
-          {/* B. Recent Attendance Records (Desktop: Table, Mobile: Cards) */}
-          <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between">
-              <h3 className="text-sm font-bold text-neutral-900">Riwayat Terbaru</h3>
-              <Link
-                to={category === 'CS' ? '/cs/history' : '/security/history'}
-                className="text-xs font-semibold text-neutral-500 hover:text-neutral-900 flex items-center gap-1 transition-colors"
-              >
-                Lihat Semua <ChevronRight size={13} />
-              </Link>
-            </div>
-
-            {isLoading ? (
-              <div className="p-8 flex items-center justify-center">
-                <div className="w-6 h-6 border-2 border-neutral-900 border-t-transparent rounded-full animate-spin" />
+          {/* B. Recent Attendance Records */}
+          {category === 'Security' ? (
+            <SecurityShiftHistoryCard sessions={securitySessions} isLoading={isLoading} />
+          ) : (
+            <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between">
+                <h3 className="text-sm font-bold text-neutral-900">Riwayat Terbaru</h3>
+                <Link
+                  to={category === 'CS' ? '/cs/history' : '/security/history'}
+                  className="text-xs font-semibold text-neutral-500 hover:text-neutral-900 flex items-center gap-1 transition-colors"
+                >
+                  Lihat Semua <ChevronRight size={13} />
+                </Link>
               </div>
-            ) : recentRecords.length === 0 ? (
-              <div className="p-8 text-center">
-                <Calendar size={28} className="text-neutral-300 mx-auto mb-2" />
-                <p className="text-xs font-semibold text-neutral-500">Belum ada riwayat presensi</p>
-                <p className="text-[11px] text-neutral-400 mt-0.5">Presensi Anda akan muncul di sini</p>
-              </div>
-            ) : (
-              <>
-                {/* Desktop table */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-neutral-100">
-                        <th className="px-5 py-3 text-left font-semibold text-neutral-500 uppercase tracking-wide">Tanggal</th>
-                        <th className="px-5 py-3 text-left font-semibold text-neutral-500 uppercase tracking-wide">Tipe</th>
-                        <th className="px-5 py-3 text-left font-semibold text-neutral-500 uppercase tracking-wide">Waktu</th>
-                        <th className="px-5 py-3 text-left font-semibold text-neutral-500 uppercase tracking-wide">Status</th>
-                        <th className="px-5 py-3" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {recentRecords.map(rec => {
-                        const typeLabel = rec.attendance_type === 'masuk' ? 'Absen Masuk' : rec.attendance_type === 'istirahat' ? 'Istirahat' : 'Absen Pulang'
-                        const timeStr = rec.recorded_at ? formatJakartaTime(new Date(rec.recorded_at)) : '--:--'
-                        const isLate = rec.attendance_status === 'terlambat'
-                        return (
-                          <tr key={rec.id} className="border-b border-neutral-50 hover:bg-neutral-50/60 transition-colors">
-                            <td className="px-5 py-3 font-medium text-neutral-700">{rec.work_date}</td>
-                            <td className="px-5 py-3 font-semibold text-neutral-900">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span>{typeLabel}</span>
-                                {rec.shift && (
-                                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-700 border border-neutral-200">
-                                    {rec.shift}
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-5 py-3 font-mono text-neutral-700">{timeStr}</td>
-                            <td className="px-5 py-3">
-                              <span className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ${isLate ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-700 border border-neutral-200'
-                                }`}>
-                                {isLate ? 'Terlambat' : 'Tepat Waktu'}
-                              </span>
-                            </td>
-                            <td className="px-5 py-3">
-                              <Link to={`/attendance/${rec.id}`} className="text-neutral-400 hover:text-neutral-900 transition-colors">
-                                <ChevronRight size={15} />
-                              </Link>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+
+              {isLoading ? (
+                <div className="p-8 flex items-center justify-center">
+                  <div className="w-6 h-6 border-2 border-neutral-900 border-t-transparent rounded-full animate-spin" />
                 </div>
-
-                {/* Mobile cards */}
-                <div className="md:hidden divide-y divide-neutral-100">
-                  {recentRecords.map(rec => {
-                    const typeLabel = rec.attendance_type === 'masuk' ? 'Absen Masuk' : rec.attendance_type === 'istirahat' ? 'Istirahat' : 'Absen Pulang'
-                    const timeStr = rec.recorded_at ? formatJakartaTime(new Date(rec.recorded_at)) : '--:--'
-                    const isLate = rec.attendance_status === 'terlambat'
-                    return (
-                      <Link key={rec.id} to={`/attendance/${rec.id}`} className="p-4 flex items-center justify-between hover:bg-neutral-50 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full border border-neutral-200 flex items-center justify-center text-neutral-600 flex-shrink-0">
-                            <Clock size={14} />
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold text-neutral-900">{typeLabel}</p>
-                            <p className="text-[11px] text-neutral-400 mt-0.5">
-                              {rec.work_date} · {timeStr} {rec.shift ? `· ${rec.shift}` : ''}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${isLate ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-700 border border-neutral-200'}`}>
-                            {isLate ? 'Terlambat' : 'Tepat Waktu'}
-                          </span>
-                          <ChevronRight size={14} className="text-neutral-400" />
-                        </div>
-                      </Link>
-                    )
-                  })}
+              ) : recentRecords.length === 0 ? (
+                <div className="p-8 text-center">
+                  <Calendar size={28} className="text-neutral-300 mx-auto mb-2" />
+                  <p className="text-xs font-semibold text-neutral-500">Belum ada riwayat presensi</p>
+                  <p className="text-[11px] text-neutral-400 mt-0.5">Presensi Anda akan muncul di sini</p>
                 </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* ── RIGHT COLUMN (1/3 width on desktop): Schedule + Stats + Weekly chart ── */}
-        <div className="space-y-5">
-
-          {/* C. Today's Schedule Card */}
-          <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between">
-              <h3 className="text-sm font-bold text-neutral-900">Jadwal Hari Ini</h3>
-              {category === 'Security' && (
-                <span className="text-[10px] font-bold px-2 py-0.5 bg-neutral-100 border border-neutral-200 rounded-full text-neutral-700">
-                  {selectedShift}
-                </span>
-              )}
-            </div>
-            <div className="px-5 py-4 space-y-3">
-              {category === 'CS' ? (() => {
-                const cs = (() => { try { return getCSScheduleSync() } catch { return null } })()
-                return (
-                  <>
-                    {/* CS Masuk: 3 distinct boundaries */}
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-2 text-xs text-neutral-500 pt-0.5">
-                        <Sunrise size={14} />
-                        <span>Masuk</span>
-                      </div>
-                      <div className="text-right space-y-0.5">
-                        <p className="text-[10px] text-neutral-500">
-                          <span className="font-semibold text-neutral-700">Buka</span>{' '}
-                          {cs ? cs.masuk.open.replace(':', '.') : '--'} WIB
-                        </p>
-                        <p className="text-[10px] text-neutral-500">
-                          <span className="font-semibold text-neutral-700">Batas</span>{' '}
-                          {cs ? cs.masuk.ontime_deadline.replace(':', '.') : '--'} WIB
-                        </p>
-                        <p className="text-[10px] text-neutral-500">
-                          <span className="font-semibold text-neutral-700">Tutup</span>{' '}
-                          {cs ? cs.masuk.close.replace(':', '.') : '--'} WIB
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-xs text-neutral-500">
-                        <Clock size={14} />
-                        <span>Istirahat</span>
-                      </div>
-                      <span className="text-xs font-bold text-neutral-900 font-mono">{scheduleDisplay.istirahat}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-xs text-neutral-500">
-                        <Sunset size={14} />
-                        <span>Pulang</span>
-                      </div>
-                      <span className="text-xs font-bold text-neutral-900 font-mono">{scheduleDisplay.pulang}</span>
-                    </div>
-                  </>
-                )
-              })() : (
+              ) : (
                 <>
-                  {[
-                    { label: 'Masuk', value: scheduleDisplay.masuk, icon: Sunrise },
-                    { label: 'Istirahat', value: scheduleDisplay.istirahat, icon: Clock },
-                    { label: 'Pulang', value: scheduleDisplay.pulang, icon: Sunset },
-                  ].map(item => {
-                    const Icon = item.icon
-                    return (
-                      <div key={item.label} className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-xs text-neutral-500">
-                          <Icon size={14} />
-                          <span>{item.label}</span>
-                        </div>
-                        <span className="text-xs font-bold text-neutral-900 font-mono">{item.value}</span>
-                      </div>
-                    )
-                  })}
-                  <div className="pt-2 border-t border-neutral-100">
-                    <p className="text-[10px] text-neutral-400">Kamis &amp; Jumat: Shift bergeser +30 menit</p>
+                  {/* Desktop table */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-neutral-100">
+                          <th className="px-5 py-3 text-left font-semibold text-neutral-500 uppercase tracking-wide">Tanggal</th>
+                          <th className="px-5 py-3 text-left font-semibold text-neutral-500 uppercase tracking-wide">Tipe</th>
+                          <th className="px-5 py-3 text-left font-semibold text-neutral-500 uppercase tracking-wide">Waktu</th>
+                          <th className="px-5 py-3 text-left font-semibold text-neutral-500 uppercase tracking-wide">Status</th>
+                          <th className="px-5 py-3" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {recentRecords.map(rec => {
+                          const typeLabel = rec.attendance_type === 'masuk' ? 'Absen Masuk' : rec.attendance_type === 'istirahat' ? 'Istirahat' : 'Absen Pulang'
+                          const timeStr = rec.recorded_at ? formatJakartaTime(new Date(rec.recorded_at)) : '--:--'
+                          const isLate = rec.attendance_status === 'terlambat'
+                          return (
+                            <tr key={rec.id} className="border-b border-neutral-50 hover:bg-neutral-50/60 transition-colors">
+                              <td className="px-5 py-3 font-medium text-neutral-700">{rec.work_date}</td>
+                              <td className="px-5 py-3 font-semibold text-neutral-900">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span>{typeLabel}</span>
+                                  {rec.shift && (
+                                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-700 border border-neutral-200">
+                                      {rec.shift}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-5 py-3 font-mono text-neutral-700">{timeStr}</td>
+                              <td className="px-5 py-3">
+                                <span className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ${isLate ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-700 border border-neutral-200'
+                                  }`}>
+                                  {isLate ? 'Terlambat' : 'Tepat Waktu'}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3">
+                                <Link to={`/attendance/${rec.id}`} className="text-neutral-400 hover:text-neutral-900 transition-colors">
+                                  <ChevronRight size={15} />
+                                </Link>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile cards */}
+                  <div className="md:hidden divide-y divide-neutral-100">
+                    {recentRecords.map(rec => {
+                      const typeLabel = rec.attendance_type === 'masuk' ? 'Absen Masuk' : rec.attendance_type === 'istirahat' ? 'Istirahat' : 'Absen Pulang'
+                      const timeStr = rec.recorded_at ? formatJakartaTime(new Date(rec.recorded_at)) : '--:--'
+                      const isLate = rec.attendance_status === 'terlambat'
+                      return (
+                        <Link key={rec.id} to={`/attendance/${rec.id}`} className="p-4 flex items-center justify-between hover:bg-neutral-50 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full border border-neutral-200 flex items-center justify-center text-neutral-600 flex-shrink-0">
+                              <Clock size={14} />
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-neutral-900">{typeLabel}</p>
+                              <p className="text-[11px] text-neutral-400 mt-0.5">
+                                {rec.work_date} · {timeStr} {rec.shift ? `· ${rec.shift}` : ''}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${isLate ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-700 border border-neutral-200'}`}>
+                              {isLate ? 'Terlambat' : 'Tepat Waktu'}
+                            </span>
+                            <ChevronRight size={14} className="text-neutral-400" />
+                          </div>
+                        </Link>
+                      )
+                    })}
                   </div>
                 </>
               )}
             </div>
-          </div>
+          )}
+        </div>
 
-          {/* D. Monthly Stats */}
-          <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between">
-              <h3 className="text-sm font-bold text-neutral-900">Rekap 30 Hari</h3>
-              <TrendingUp size={15} className="text-neutral-400" />
-            </div>
-            <div className="px-5 py-4 grid grid-cols-2 gap-3 text-center">
-              <div>
-                <p className="text-xl font-bold text-neutral-900">{monthStats.hadir}</p>
-                <p className="text-[10px] font-medium text-neutral-500 mt-0.5 flex items-center justify-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-neutral-900 inline-block" />
-                  Hadir
-                </p>
+        {/* ── RIGHT COLUMN (1/3 width on desktop): Schedule + Stats + Weekly chart ── */}
+        <div className="space-y-5">
+          {category === 'Security' ? (
+            <>
+              <SecurityScheduleCard currentShift={selectedShift} workDateStr={today} />
+              <Security30DayRecapCard recap={securityRecap} />
+              <SecurityWeeklyChartCard weekChartData={weekChartData} todayDateStr={today} />
+            </>
+          ) : (
+            <>
+              {/* C. Today's Schedule Card */}
+              <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
+                <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-neutral-900">Jadwal Hari Ini</h3>
+                </div>
+                <div className="px-5 py-4 space-y-3">
+                  {(() => {
+                    const cs = (() => { try { return getCSScheduleSync() } catch { return null } })()
+                    return (
+                      <>
+                        {/* CS Masuk: 3 distinct boundaries */}
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-2 text-xs text-neutral-500 pt-0.5">
+                            <Sunrise size={14} />
+                            <span>Masuk</span>
+                          </div>
+                          <div className="text-right space-y-0.5">
+                            <p className="text-[10px] text-neutral-500">
+                              <span className="font-semibold text-neutral-700">Buka</span>{' '}
+                              {cs ? cs.masuk.open.replace(':', '.') : '--'} WIB
+                            </p>
+                            <p className="text-[10px] text-neutral-500">
+                              <span className="font-semibold text-neutral-700">Batas</span>{' '}
+                              {cs ? cs.masuk.ontime_deadline.replace(':', '.') : '--'} WIB
+                            </p>
+                            <p className="text-[10px] text-neutral-500">
+                              <span className="font-semibold text-neutral-700">Tutup</span>{' '}
+                              {cs ? cs.masuk.close.replace(':', '.') : '--'} WIB
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-xs text-neutral-500">
+                            <Clock size={14} />
+                            <span>Istirahat</span>
+                          </div>
+                          <span className="text-xs font-bold text-neutral-900 font-mono">{scheduleDisplay.istirahat}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-xs text-neutral-500">
+                            <Sunset size={14} />
+                            <span>Pulang</span>
+                          </div>
+                          <span className="text-xs font-bold text-neutral-900 font-mono">{scheduleDisplay.pulang}</span>
+                        </div>
+                      </>
+                    )
+                  })()}
+                </div>
               </div>
-              <div>
-                <p className="text-xl font-bold text-neutral-900">{monthStats.terlambat}</p>
-                <p className="text-[10px] font-medium text-neutral-500 mt-0.5 flex items-center justify-center gap-1">
-                  <AlertCircle size={10} />
-                  Terlambat
-                </p>
-              </div>
-            </div>
-          </div>
 
-          {/* E. Weekly Bar Chart */}
-          <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between">
-              <h3 className="text-sm font-bold text-neutral-900">Minggu Ini</h3>
-              <span className="text-[10px] text-neutral-400">Kehadiran per hari</span>
-            </div>
-            <div className="px-5 py-4">
-              <div className="flex items-end justify-between gap-2 h-20">
-                {weekChartData.map(w => {
-                  const isToday = w.dateStr === today
-                  const heightPercent = w.count > 0 ? 80 : 12
-                  return (
-                    <div key={w.day} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
-                      <div
-                        className={`w-full max-w-[20px] rounded-t transition-all duration-500 ${w.count > 0
-                            ? 'bg-neutral-900'
-                            : isToday
-                              ? 'bg-neutral-300 border border-dashed border-neutral-400'
-                              : 'bg-neutral-100'
-                          }`}
-                        style={{ height: `${heightPercent}%` }}
-                      />
-                      <span className={`text-[9px] font-medium ${isToday ? 'text-neutral-900 font-bold' : 'text-neutral-400'}`}>
-                        {w.day}
-                      </span>
-                    </div>
-                  )
-                })}
+              {/* D. Monthly Stats */}
+              <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
+                <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-neutral-900">Rekap 30 Hari</h3>
+                  <TrendingUp size={15} className="text-neutral-400" />
+                </div>
+                <div className="px-5 py-4 grid grid-cols-2 gap-3 text-center">
+                  <div>
+                    <p className="text-xl font-bold text-neutral-900">{monthStats.hadir}</p>
+                    <p className="text-[10px] font-medium text-neutral-500 mt-0.5 flex items-center justify-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-neutral-900 inline-block" />
+                      Hadir
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold text-neutral-900">{monthStats.terlambat}</p>
+                    <p className="text-[10px] font-medium text-neutral-500 mt-0.5 flex items-center justify-center gap-1">
+                      <AlertCircle size={10} />
+                      Terlambat
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+
+              {/* E. Weekly Bar Chart */}
+              <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
+                <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-neutral-900">Minggu Ini</h3>
+                  <span className="text-[10px] text-neutral-400">Kehadiran per hari</span>
+                </div>
+                <div className="px-5 py-4">
+                  <div className="flex items-end justify-between gap-2 h-20">
+                    {weekChartData.map(w => {
+                      const isToday = w.dateStr === today
+                      const heightPercent = w.count > 0 ? 80 : 12
+                      return (
+                        <div key={w.day} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
+                          <div
+                            className={`w-full max-w-[20px] rounded-t transition-all duration-500 ${w.count > 0
+                                ? 'bg-neutral-900'
+                                : isToday
+                                  ? 'bg-neutral-300 border border-dashed border-neutral-400'
+                                  : 'bg-neutral-100'
+                              }`}
+                            style={{ height: `${heightPercent}%` }}
+                          />
+                          <span className={`text-[9px] font-medium ${isToday ? 'text-neutral-900 font-bold' : 'text-neutral-400'}`}>
+                            {w.day}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
 
           {/* F. Location/GPS info pill */}
           <div className="bg-neutral-50 rounded-xl border border-neutral-200 px-4 py-3 flex items-center gap-2.5">

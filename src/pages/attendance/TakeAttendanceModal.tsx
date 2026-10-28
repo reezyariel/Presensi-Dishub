@@ -21,6 +21,7 @@ import {
   type OfficeLocationConfig
 } from '../../lib/officeLocation'
 import { supabase } from '../../lib/supabase'
+import { FunctionsHttpError } from '@supabase/supabase-js'
 import { formatJakartaTime, getScheduleInfo, todayJakarta, getCSScheduleSync } from '../../lib/scheduleEngine'
 import type { AttendanceRecord, AttendanceType, SecurityShiftOption } from '../../types/attendance'
 
@@ -81,6 +82,7 @@ export default function TakeAttendanceModal({
   const [confirmedPhoto, setConfirmedPhoto] = useState<string | null>(null)
   const [reason, setReason] = useState('')
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [serverRequiresReason, setServerRequiresReason] = useState(false)
   const [idempotencyKey] = useState(() => `idemp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`)
   const [resultRecord, setResultRecord] = useState<AttendanceRecord | null>(null)
   const [locationLoadError, setLocationLoadError] = useState<string | null>(null)
@@ -131,7 +133,7 @@ export default function TakeAttendanceModal({
   // Geofence reason requirement
   const isOutsideGeofence = isInsideRadius === false
   const isGpsMissing = !coords && !isGpsLoading
-  const requiresReason = isOutsideGeofence || isGpsMissing
+  const requiresReason = isOutsideGeofence || isGpsMissing || serverRequiresReason
 
   // Open camera step and start video stream
   const handleOpenLiveCamera = async () => {
@@ -207,7 +209,26 @@ export default function TakeAttendanceModal({
         body: payload,
       })
 
+      // In Supabase JS v2, non-2xx responses throw FunctionsHttpError and data is null.
+      // The real error JSON is inside error.context (the raw Response object).
       if (fnError) {
+        if (fnError instanceof FunctionsHttpError) {
+          try {
+            const errBody = await fnError.context.json() as { error?: string; requires_reason?: boolean }
+            if (errBody?.requires_reason) {
+              setServerRequiresReason(true)
+              setSubmitError(errBody.error || 'Harap sertakan alasan untuk melanjutkan.')
+              setStep('form')
+              return
+            }
+            if (errBody?.error) {
+              throw new Error(errBody.error)
+            }
+          } catch (parseErr) {
+            // If the error we caught is already the Error we threw above, rethrow it
+            if (parseErr instanceof Error && parseErr !== fnError) throw parseErr
+          }
+        }
         throw new Error(fnError.message || 'Gagal menghubungi server verifikasi presensi.')
       }
 
@@ -590,12 +611,12 @@ export default function TakeAttendanceModal({
               </p>
             </div>
 
-            {/* Reason Textarea (Required if out of bounds) */}
+            {/* Reason Textarea (Required if GPS missing, outside radius, or server requires reason for late/etc) */}
             {requiresReason && (
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-neutral-900">
-                    Alasan Presensi di Luar Radius
+                    {serverRequiresReason ? 'Alasan Wajib dari Server' : 'Alasan Presensi di Luar Radius'}
                   </label>
                   <span className="text-[10px] font-semibold text-neutral-900 bg-neutral-100 px-1.5 py-0.5 rounded border border-neutral-200">
                     Wajib (Min. 5 karakter)
@@ -604,12 +625,15 @@ export default function TakeAttendanceModal({
                 <textarea
                   value={reason}
                   onChange={e => setReason(e.target.value)}
-                  placeholder="Contoh: Bertugas dinas luar di gerbang timur / GPS mengalami deviasi..."
+                  placeholder={serverRequiresReason
+                    ? 'Contoh: Terlambat karena kemacetan / GPS tidak akurat...'
+                    : 'Contoh: Bertugas dinas luar di gerbang timur / GPS mengalami deviasi...'}
                   rows={3}
                   className="w-full p-3 border border-neutral-300 rounded-xl text-xs text-neutral-900 bg-white focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 outline-none placeholder:text-neutral-400"
                 />
               </div>
             )}
+
 
             {/* Action Buttons */}
             <div className="space-y-2 pt-2">

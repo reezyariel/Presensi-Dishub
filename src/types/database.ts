@@ -34,6 +34,7 @@ export interface Database {
           review_status?: 'belum_diperiksa' | 'sudah_diperiksa' | 'perlu_tindak_lanjut'
           admin_notes?: string | null
           idempotency_key: string
+          check_in_record_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -43,7 +44,7 @@ export interface Database {
           normalized_name?: string | null
           category?: 'CS' | 'Security'
           attendance_type?: 'masuk' | 'istirahat' | 'pulang'
-          shift?: 'Shift I' | 'Shift II' | 'Shift III' | null
+          shift?: 'Shift I' | 'Shift II' | 'Shift III' | 'Shift 1' | 'Shift 2' | 'Shift 3' | 'Sesi Pagi' | 'Sesi Malam' | null
           work_date?: string
           recorded_at?: string
           scheduled_start?: string | null
@@ -54,6 +55,7 @@ export interface Database {
           review_status?: 'belum_diperiksa' | 'sudah_diperiksa' | 'perlu_tindak_lanjut'
           admin_notes?: string | null
           idempotency_key?: string
+          check_in_record_id?: string | null
           created_at?: string
           updated_at?: string
         }

@@ -145,7 +145,16 @@ export function useCamera() {
         }
         activeStream = await navigator.mediaDevices.getUserMedia(constraints)
       } catch (err) {
-        console.warn('[SIPATEN Camera] Strategy A failed, trying generic constraints:', err)
+        // If permission was denied/dismissed, Strategy B will fail identically.
+        // Do NOT attempt fallback — surface the meaningful error immediately.
+        const isPermissionError = err instanceof DOMException &&
+          (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')
+
+        if (isPermissionError) {
+          throw err // jump to outer catch for user-facing error message
+        }
+
+        console.warn('[SIPATEN Camera] Strategy A failed (constraint issue), trying generic constraints:', err)
         // Strategy B: Fallback without specific facingMode or resolution limits
         const fallbackConstraints: MediaStreamConstraints = {
           audio: false,

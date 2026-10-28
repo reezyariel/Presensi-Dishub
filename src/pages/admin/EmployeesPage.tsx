@@ -146,7 +146,7 @@ export default function EmployeesPage() {
     setFormEmail(emp.email || '')
     setFormPassword('')
     setFormRole(emp.employee_role)
-    setFormDefaultShift(emp.default_shift || '')
+    setFormDefaultShift((emp.default_shift as ShiftType) || '')
     setFormIsActive(emp.is_active)
     setFormNotes(emp.notes || '')
     setFormError(null)

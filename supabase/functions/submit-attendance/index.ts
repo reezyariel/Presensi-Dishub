@@ -162,13 +162,8 @@ serve(async (req: Request) => {
     const employee_name = typeof body.employee_name === 'string' ? body.employee_name.trim() : ''
     const category = body.category as string
     const attendance_type = body.attendance_type as string
-    const shift = (typeof body.shift === 'string' ? body.shift : null) as
-      | 'Shift I'
-      | 'Shift II'
-      | 'Shift III'
-      | 'Sesi Pagi'
-      | 'Sesi Malam'
-      | null
+    const shift = (typeof body.shift === 'string' && body.shift.trim() ? body.shift.trim() : null) as string | null
+    const check_in_record_id = (typeof body.check_in_record_id === 'string' && body.check_in_record_id.trim()) ? body.check_in_record_id.trim() : null
     const selfie_base64 = typeof body.selfie_base64 === 'string' ? body.selfie_base64 : ''
     const idempotency_key = typeof body.idempotency_key === 'string' ? body.idempotency_key.trim() : ''
 
@@ -215,9 +210,14 @@ serve(async (req: Request) => {
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
-      if (!shift || !['Shift I', 'Shift II', 'Shift III', 'Sesi Pagi', 'Sesi Malam'].includes(shift)) {
+      const validShifts = [
+        'Shift 1', 'Shift 2', 'Shift 3',
+        'Shift I', 'Shift II', 'Shift III',
+        'Sesi Pagi', 'Sesi Malam'
+      ]
+      if (!shift || !validShifts.includes(shift)) {
         return new Response(
-          JSON.stringify({ error: 'Pilih shift atau sesi yang valid untuk Security (Shift I, Shift II, Shift III, Sesi Pagi, atau Sesi Malam).' }),
+          JSON.stringify({ error: 'Pilih shift yang valid untuk Security (Shift 1, Shift 2, Shift 3).' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
@@ -371,19 +371,25 @@ serve(async (req: Request) => {
       }
     }
 
-    // 5. Duplicate Attendance Prevention for Same Employee + Work Date + Type
-    const { data: duplicateRecord } = await supabase
+    // 5. Duplicate Attendance Prevention for Same Employee + Work Date + Type (+ Shift for Security)
+    const duplicateQuery = supabase
       .from('attendance_records')
       .select('id, recorded_at, attendance_type, work_date')
       .eq('normalized_name', normalizedName)
       .eq('work_date', workDate)
       .eq('attendance_type', attendance_type)
-      .maybeSingle()
+
+    // For Security, also scope by shift to avoid false conflicts between different shifts
+    const finalDuplicateQuery = (category === 'Security' && shift)
+      ? duplicateQuery.eq('shift', shift)
+      : duplicateQuery
+
+    const { data: duplicateRecord } = await finalDuplicateQuery.maybeSingle()
 
     if (duplicateRecord) {
       return new Response(
         JSON.stringify({
-          error: `Pegawai ${employee_name} sudah melakukan presensi ${attendance_type.toUpperCase()} untuk tanggal kerja ${workDate}.`,
+          error: `Pegawai ${employee_name} sudah melakukan presensi ${attendance_type.toUpperCase()} untuk tanggal kerja ${workDate}${shift ? ` (${shift})` : ''}.`,
         }),
         { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
@@ -554,11 +560,11 @@ serve(async (req: Request) => {
         let defaultStart = '07:00'
         let defaultWinEnd = '07:30'
         if (shift === 'Shift II') {
-          defaultStart = '16:00'
-          defaultWinEnd = '16:30'
+          defaultStart = '15:00'
+          defaultWinEnd = '15:30'
         } else if (shift === 'Shift III') {
-          defaultStart = '20:00'
-          defaultWinEnd = '20:30'
+          defaultStart = '19:30'
+          defaultWinEnd = '20:00'
         }
 
         let baseStart = (rawShift?.start && typeof rawShift.start === 'string') ? rawShift.start : defaultStart

@@ -39,19 +39,19 @@ export default function SettingsSchedulePage() {
   const [csPulangEnd, setCsPulangEnd] = useState('18:00')
 
   // Security Schedule (Senin–Jumat)
-  const [secShiftOffsetMin, setSecShiftOffsetMin] = useState(30)
+  const [secShiftOffsetMin, setSecShiftOffsetMin] = useState(0)
   const [secS1Start, setSecS1Start] = useState('07:00')
   const [secS1WinEnd, setSecS1WinEnd] = useState('07:30')
   const [secS1End, setSecS1End] = useState('16:00')
   const [secS1EndWin, setSecS1EndWin] = useState('16:30')
-  const [secS2Start, setSecS2Start] = useState('16:00')
-  const [secS2WinEnd, setSecS2WinEnd] = useState('16:30')
-  const [secS2End, setSecS2End] = useState('20:00')
-  const [secS2EndWin, setSecS2EndWin] = useState('20:30')
-  const [secS3Start, setSecS3Start] = useState('20:00')
-  const [secS3WinEnd, setSecS3WinEnd] = useState('20:30')
-  const [secS3End, setSecS3End] = useState('07:30')
-  const [secS3EndWin, setSecS3EndWin] = useState('08:00')
+  const [secS2Start, setSecS2Start] = useState('15:00')
+  const [secS2WinEnd, setSecS2WinEnd] = useState('15:30')
+  const [secS2End, setSecS2End] = useState('19:30')
+  const [secS2EndWin, setSecS2EndWin] = useState('20:00')
+  const [secS3Start, setSecS3Start] = useState('19:30')
+  const [secS3WinEnd, setSecS3WinEnd] = useState('20:00')
+  const [secS3End, setSecS3End] = useState('07:00')
+  const [secS3EndWin, setSecS3EndWin] = useState('07:30')
 
   // Security Weekend Schedule (Sabtu & Minggu - Sesi Pagi & Sesi Malam)
   const [secWkndPagiOpen, setSecWkndPagiOpen] = useState('08:00')
@@ -217,7 +217,7 @@ export default function SettingsSchedulePage() {
             'Shift III': { start: secS3Start, window_end: secS3WinEnd, end: secS3End, end_window_end: secS3EndWin, end_next_day: true, end_window_end_next_day: true },
           },
         },
-        description: 'Jadwal Security 3 shift 24 jam. Jendela masuk: Shift I 07.00–07.30, Shift II 16.00–16.30, Shift III 20.00–20.30 WIB.',
+        description: 'Jadwal Security 3 shift 24 jam. Jendela masuk: Shift I 07.00–07.30 (Sen-Kam), Shift II 15.00–15.30, Shift III 19.30–20.00 WIB.',
         updated_by: profile.id, updated_at: now,
       },
       {
@@ -531,8 +531,7 @@ export default function SettingsSchedulePage() {
                 {timeInput(secS1EndWin, setSecS1EndWin, 'Pulang Batas')}
               </div>
               <p className="text-[11px] text-neutral-500 mt-1.5">
-                Reguler: Check-In {secS1Start}–{secS1WinEnd} • Pulang {secS1End}–{secS1EndWin} &nbsp;|&nbsp;
-                Kamis/Jumat: +{secShiftOffsetMin} mnt
+                Reguler: Check-In {secS1Start}–{secS1WinEnd} • Pulang {secS1End}–{secS1EndWin}
               </p>
             </div>
 
@@ -551,8 +550,7 @@ export default function SettingsSchedulePage() {
                 {timeInput(secS2EndWin, setSecS2EndWin, 'Pulang Batas')}
               </div>
               <p className="text-[11px] text-neutral-500 mt-1.5">
-                Reguler: Check-In {secS2Start}–{secS2WinEnd} • Pulang {secS2End}–{secS2EndWin} &nbsp;|&nbsp;
-                Kamis/Jumat: +{secShiftOffsetMin} mnt
+                Reguler: Check-In {secS2Start}–{secS2WinEnd} • Pulang {secS2End}–{secS2EndWin}
               </p>
             </div>
 
@@ -574,8 +572,7 @@ export default function SettingsSchedulePage() {
                 {timeInput(secS3EndWin, setSecS3EndWin, 'Pulang Batas (H+1)')}
               </div>
               <p className="text-[11px] text-neutral-500 mt-1.5">
-                Reguler: Check-In {secS3Start}–{secS3WinEnd} • Pulang {secS3End}–{secS3EndWin} (H+1) &nbsp;|&nbsp;
-                Kamis/Jumat: +{secShiftOffsetMin} mnt
+                Reguler: Check-In {secS3Start}–{secS3WinEnd} • Pulang {secS3End}–{secS3EndWin} (H+1)
               </p>
             </div>
           </div>

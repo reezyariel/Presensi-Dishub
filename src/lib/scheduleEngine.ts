@@ -81,7 +81,7 @@ export interface SecuritySchedule {
 }
 
 export const DEFAULT_SECURITY_SCHEDULE: SecuritySchedule = {
-  thursday_friday_shift_minutes: 30,
+  thursday_friday_shift_minutes: 0,
   shifts: {
     'Shift I': {
       start: '07:00', window_end: '07:30',
@@ -89,12 +89,28 @@ export const DEFAULT_SECURITY_SCHEDULE: SecuritySchedule = {
       end_next_day: false, end_window_end_next_day: false,
     },
     'Shift II': {
-      start: '16:00', window_end: '16:30',
-      end: '20:00', end_window_end: '20:30',
+      start: '15:00', window_end: '15:30',
+      end: '19:30', end_window_end: '20:00',
       end_next_day: false, end_window_end_next_day: false,
     },
     'Shift III': {
-      start: '20:00', window_end: '20:30',
+      start: '19:30', window_end: '20:00',
+      end: '07:00', end_window_end: '07:30',
+      end_next_day: true, end_window_end_next_day: true,
+    },
+    // Numeric aliases (Shift 1/2/3) — same as Roman numerals
+    'Shift 1': {
+      start: '07:00', window_end: '07:30',
+      end: '16:00', end_window_end: '16:30',
+      end_next_day: false, end_window_end_next_day: false,
+    },
+    'Shift 2': {
+      start: '15:00', window_end: '15:30',
+      end: '19:30', end_window_end: '20:00',
+      end_next_day: false, end_window_end_next_day: false,
+    },
+    'Shift 3': {
+      start: '19:30', window_end: '20:00',
       end: '07:00', end_window_end: '07:30',
       end_next_day: true, end_window_end_next_day: true,
     },
@@ -375,6 +391,9 @@ export function normalizeSecuritySchedule(raw: any): SecuritySchedule {
     'Shift I': { ...DEFAULT_SECURITY_SCHEDULE.shifts['Shift I'] },
     'Shift II': { ...DEFAULT_SECURITY_SCHEDULE.shifts['Shift II'] },
     'Shift III': { ...DEFAULT_SECURITY_SCHEDULE.shifts['Shift III'] },
+    'Shift 1': { ...DEFAULT_SECURITY_SCHEDULE.shifts['Shift I'] },
+    'Shift 2': { ...DEFAULT_SECURITY_SCHEDULE.shifts['Shift II'] },
+    'Shift 3': { ...DEFAULT_SECURITY_SCHEDULE.shifts['Shift III'] },
   }
 
   const rawShifts = raw.shifts && typeof raw.shifts === 'object' ? raw.shifts : {}
@@ -382,7 +401,7 @@ export function normalizeSecuritySchedule(raw: any): SecuritySchedule {
     const rs = rawShifts[shiftName]
     const def = DEFAULT_SECURITY_SCHEDULE.shifts[shiftName]
     if (rs && typeof rs === 'object') {
-      shifts[shiftName] = {
+      const resolved: ShiftSchedule = {
         start: isValidTimeString(rs.start) ? rs.start.trim() : def.start,
         window_end: isValidTimeString(rs.window_end) ? rs.window_end.trim() : def.window_end,
         end: isValidTimeString(rs.end) ? rs.end.trim() : def.end,
@@ -390,6 +409,10 @@ export function normalizeSecuritySchedule(raw: any): SecuritySchedule {
         end_next_day: typeof rs.end_next_day === 'boolean' ? rs.end_next_day : def.end_next_day,
         end_window_end_next_day: typeof rs.end_window_end_next_day === 'boolean' ? rs.end_window_end_next_day : def.end_window_end_next_day,
       }
+      shifts[shiftName] = resolved
+      // Also sync numeric alias
+      const numAlias = shiftName.replace('Shift I', 'Shift 1').replace('Shift II', 'Shift 2').replace('Shift III', 'Shift 3') as ShiftType
+      if (numAlias !== shiftName) shifts[numAlias] = resolved
     }
   }
 
@@ -1389,5 +1412,211 @@ export function calculate30DayRecap(
     terlambat: totalLate,
     tidakHadir: absentCount,
   }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Security Operational 30-Day Recap & Shift Session Builder
+// Spec:
+// 1. Shift Selesai: Shifts with both check-in (masuk) and check-out (pulang)
+// 2. Keterlambatan Masuk: Check-ins marked 'terlambat'
+// 3. Pulang Belum Lengkap: Past shifts with check-in but no check-out
+// 4. Total Catatan Absensi: Total attendance records logged
+// 5. Shift III overnight crossover correctly paired (Day N masuk + Day N+1 pulang)
+// ─────────────────────────────────────────────────────────────
+
+export interface SecurityRecapRecord {
+  id?: string
+  work_date: string
+  attendance_type: 'masuk' | 'istirahat' | 'pulang' | string
+  attendance_status?: 'tepat_waktu' | 'terlambat' | string
+  shift?: SecurityShiftOption | string | null
+  recorded_at?: string
+  auth_uid?: string
+  employee_profile_id?: string
+  normalized_name?: string
+  category?: string
+  employee_name?: string
+}
+
+export interface Security30DayRecap {
+  shiftSelesai: number
+  keterlambatan: number
+  pulangBelumLengkap: number
+  totalCatatan: number
+  totalShifts: number
+}
+
+export interface SecurityShiftSession {
+  id: string
+  work_date: string
+  shift: SecurityShiftOption
+  isOvernight: boolean
+  masuk: SecurityRecapRecord | null
+  pulang: SecurityRecapRecord | null
+  status: 'selesai' | 'sedang_bertugas' | 'menunggu_pulang' | 'tidak_lengkap'
+  isLate: boolean
+  masukTime: string
+  pulangTime: string
+  masukRecordId?: string
+  pulangRecordId?: string
+}
+
+export function calculateSecurity30DayRecap(
+  records: SecurityRecapRecord[],
+  todayStr: string,
+  yesterdayStr: string,
+  now: Date = new Date(),
+): Security30DayRecap {
+  const groupMap = new Map<string, { masuk: SecurityRecapRecord | null; pulang: SecurityRecapRecord | null; work_date: string; shift: SecurityShiftOption }>()
+
+  for (const r of records) {
+    if (r.attendance_type !== 'masuk' && r.attendance_type !== 'pulang') continue
+    const shift = (r.shift as SecurityShiftOption) || 'Shift I'
+    const key = `${r.work_date}___${shift}`
+    if (!groupMap.has(key)) {
+      groupMap.set(key, { masuk: null, pulang: null, work_date: r.work_date, shift })
+    }
+    const grp = groupMap.get(key)!
+    if (r.attendance_type === 'masuk') {
+      grp.masuk = r
+    } else if (r.attendance_type === 'pulang') {
+      grp.pulang = r
+    }
+  }
+
+  let shiftSelesai = 0
+  let keterlambatan = 0
+  let pulangBelumLengkap = 0
+
+  // Current Jakarta hour to evaluate overnight Shift III handover
+  const currentJakartaHour = toZonedTime(now, TIMEZONE).getHours()
+
+  for (const grp of groupMap.values()) {
+    const hasMasuk = grp.masuk !== null
+    const hasPulang = grp.pulang !== null
+
+    if (hasMasuk && grp.masuk!.attendance_status === 'terlambat') {
+      keterlambatan++
+    }
+
+    if (hasMasuk && hasPulang) {
+      shiftSelesai++
+    } else if (hasMasuk && !hasPulang) {
+      const isOvernight = grp.shift === 'Shift III' || grp.shift === 'Shift 3' || grp.shift === 'Sesi Malam'
+      const isTodayShift = grp.work_date === todayStr
+      const isYesterdayShift = grp.work_date === yesterdayStr
+
+      if (isTodayShift) {
+        // Today's shift: guard is currently on duty or in shift window.
+        // Never penalize ongoing shift today as an incomplete past shift.
+      } else if (isYesterdayShift && isOvernight) {
+        // Shift III from yesterday evening: handover/checkout is this morning (07.00 - 07.30 WIB).
+        // If current hour is morning (< 11:00 WIB), guard is on duty or about to check out.
+        // If current hour >= 11:00 WIB and still no checkout, count as incomplete.
+        if (currentJakartaHour >= 11) {
+          pulangBelumLengkap++
+        }
+      } else {
+        // Any other past shift without checkout
+        pulangBelumLengkap++
+      }
+    }
+  }
+
+  const validRecords = records.filter(r => r.attendance_type === 'masuk' || r.attendance_type === 'pulang')
+
+  return {
+    shiftSelesai,
+    keterlambatan,
+    pulangBelumLengkap,
+    totalCatatan: validRecords.length,
+    totalShifts: groupMap.size,
+  }
+}
+
+export function buildSecurityShiftSessions(
+  records: SecurityRecapRecord[],
+  todayStr: string,
+  yesterdayStr: string,
+  now: Date = new Date(),
+): SecurityShiftSession[] {
+  const groupMap = new Map<string, { masuk: SecurityRecapRecord | null; pulang: SecurityRecapRecord | null; work_date: string; shift: SecurityShiftOption }>()
+
+  for (const r of records) {
+    if (r.attendance_type !== 'masuk' && r.attendance_type !== 'pulang') continue
+    const shift = (r.shift as SecurityShiftOption) || 'Shift I'
+    const key = `${r.work_date}___${shift}`
+    if (!groupMap.has(key)) {
+      groupMap.set(key, { masuk: null, pulang: null, work_date: r.work_date, shift })
+    }
+    const grp = groupMap.get(key)!
+    if (r.attendance_type === 'masuk') {
+      grp.masuk = r
+    } else if (r.attendance_type === 'pulang') {
+      grp.pulang = r
+    }
+  }
+
+  const sessions: SecurityShiftSession[] = []
+
+  for (const [key, grp] of groupMap.entries()) {
+    const isOvernight = grp.shift === 'Shift III' || grp.shift === 'Shift 3' || grp.shift === 'Sesi Malam'
+    const hasMasuk = grp.masuk !== null
+    const hasPulang = grp.pulang !== null
+
+    const isTodayShift = grp.work_date === todayStr
+    const isOvernightActive = isOvernight && grp.work_date === yesterdayStr
+
+    let status: SecurityShiftSession['status'] = 'selesai'
+
+    if (hasMasuk && hasPulang) {
+      status = 'selesai'
+    } else if (hasMasuk && !hasPulang) {
+      if (isTodayShift || isOvernightActive) {
+        const win = checkAttendanceWindow('Security', 'pulang', grp.shift, grp.work_date, now)
+        if (win === 'open') {
+          status = 'menunggu_pulang'
+        } else {
+          status = 'sedang_bertugas'
+        }
+      } else {
+        status = 'tidak_lengkap'
+      }
+    } else if (!hasMasuk && hasPulang) {
+      status = 'selesai'
+    }
+
+    const masukTime = grp.masuk?.recorded_at ? formatJakartaTime(new Date(grp.masuk.recorded_at)) : '--:--'
+    let pulangTime = '--:--'
+    if (grp.pulang?.recorded_at) {
+      const pt = formatJakartaTime(new Date(grp.pulang.recorded_at))
+      pulangTime = isOvernight ? `${pt} (H+1)` : pt
+    }
+
+    sessions.push({
+      id: key,
+      work_date: grp.work_date,
+      shift: grp.shift,
+      isOvernight,
+      masuk: grp.masuk,
+      pulang: grp.pulang,
+      status,
+      isLate: grp.masuk?.attendance_status === 'terlambat',
+      masukTime,
+      pulangTime,
+      masukRecordId: grp.masuk?.id,
+      pulangRecordId: grp.pulang?.id,
+    })
+  }
+
+  // Sort sessions descending by work_date (newest first), then by shift order
+  sessions.sort((a, b) => {
+    if (a.work_date !== b.work_date) {
+      return b.work_date.localeCompare(a.work_date)
+    }
+    return b.shift.localeCompare(a.shift)
+  })
+
+  return sessions
 }
 
