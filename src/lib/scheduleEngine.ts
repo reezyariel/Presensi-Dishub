@@ -165,6 +165,133 @@ export function getWeekendSessionSchedule(session: WeekendSession): WeekendSessi
   return session === 'Sesi Pagi' ? ws.sesiPagi : ws.sesiMalam
 }
 
+export type SecurityShiftWindowStatus = 'belum_dibuka' | 'tepat_waktu' | 'jendela_selesai'
+
+export interface SecurityShiftCheckInStatus {
+  option: SecurityShiftOption
+  label: string
+  sublabel: string
+  windowStatus: SecurityShiftWindowStatus
+  scheduledStart: string
+  scheduledEnd: string
+  timeRangeDisplay: string
+  workHoursDisplay: string
+  isOvernight: boolean
+  effectiveWorkDate: string
+}
+
+/**
+ * Pure evaluation function for Security shift check-in window.
+ * Calculates exact status ('belum_dibuka' | 'tepat_waktu' | 'jendela_selesai')
+ * based on Asia/Jakarta timezone, handling overnight crossovers and schedule configs.
+ */
+export function getSecurityShiftCheckInStatus(
+  option: SecurityShiftOption,
+  workDateStr: string,
+  now: Date = new Date(),
+): SecurityShiftCheckInStatus {
+  const jakartaNow = toZonedTime(now, TIMEZONE)
+  const todayJakartaStr = formatInTimeZone(jakartaNow, TIMEZONE, 'yyyy-MM-dd')
+  const currentHour = jakartaNow.getHours()
+  const currentMinutes = currentHour * 60 + jakartaNow.getMinutes()
+
+  const isOvernight = option === 'Shift III' || option === 'Shift 3' || option === 'Sesi Malam'
+
+  // Determine effective work date: for overnight shift post-midnight (hour < 12),
+  // the shift that is active or recently started belongs to yesterday.
+  let effectiveWorkDate = workDateStr
+  if (isOvernight && workDateStr === todayJakartaStr && currentHour < 12) {
+    effectiveWorkDate = determineShiftIIIWorkDate(now)
+  }
+
+  let label: string = option
+  let sublabel: string = ''
+  let scheduledStart: string = '07:00'
+  let scheduledEnd: string = '07:30'
+  let timeRangeDisplay: string = ''
+  let workHoursDisplay: string = ''
+
+  if (isWeekendSession(option)) {
+    const ws = getWeekendSessionSchedule(option)
+    scheduledStart = ws.open
+    scheduledEnd = ws.close
+    sublabel = option === 'Sesi Pagi' ? 'Sesi Akhir Pekan Pagi' : 'Sesi Akhir Pekan Malam'
+    timeRangeDisplay = `${ws.open.replace(':', '.')} – ${ws.close.replace(':', '.')} WIB`
+    workHoursDisplay = option === 'Sesi Pagi' ? '08.00 – 20.00 WIB' : '20.00 – 08.00 WIB (H+1)'
+  } else {
+    const shiftKey = (option === 'Shift 1' ? 'Shift I' : option === 'Shift 2' ? 'Shift II' : option === 'Shift 3' ? 'Shift III' : option) as ShiftType
+    const s = getSecuritySchedule(effectiveWorkDate, shiftKey)
+    scheduledStart = s.start
+    scheduledEnd = s.window_end
+    sublabel =
+      shiftKey === 'Shift I'
+        ? 'Shift Pagi – Sore'
+        : shiftKey === 'Shift II'
+          ? 'Shift Sore – Malam'
+          : 'Shift Malam – Pagi'
+    timeRangeDisplay = `${s.start.replace(':', '.')} – ${s.window_end.replace(':', '.')} WIB`
+    workHoursDisplay = `${s.start.replace(':', '.')} – ${s.end.replace(':', '.')}${s.end_next_day ? ' (H+1)' : ''} WIB`
+  }
+
+  // Calculate status:
+  let windowStatus: SecurityShiftWindowStatus = 'belum_dibuka'
+
+  if (effectiveWorkDate < todayJakartaStr) {
+    // If effective work date is in the past, all check-in windows have ended
+    windowStatus = 'jendela_selesai'
+  } else if (effectiveWorkDate > todayJakartaStr) {
+    // Future date
+    windowStatus = 'belum_dibuka'
+  } else {
+    // effectiveWorkDate === todayJakartaStr
+    const startMins = getTimeInMinutes(scheduledStart)
+    const endMins = getTimeInMinutes(scheduledEnd)
+
+    if (currentMinutes < startMins) {
+      windowStatus = 'belum_dibuka'
+    } else if (currentMinutes <= endMins) {
+      windowStatus = 'tepat_waktu'
+    } else {
+      windowStatus = 'jendela_selesai'
+    }
+  }
+
+  return {
+    option,
+    label,
+    sublabel,
+    windowStatus,
+    scheduledStart,
+    scheduledEnd,
+    timeRangeDisplay,
+    workHoursDisplay,
+    isOvernight,
+    effectiveWorkDate,
+  }
+}
+
+/**
+ * Evaluates available security shifts and auto-selects if EXACTLY ONE shift
+ * is currently in its check-in window ('tepat_waktu').
+ * Returns null if 0 shifts or multiple shifts are active.
+ */
+export function getAutoSelectSecurityShift(
+  workDateStr: string,
+  now: Date = new Date(),
+): SecurityShiftOption | null {
+  const options = getSecurityAvailableOptions(workDateStr)
+  const inWindow = options.filter(opt => {
+    const evalResult = getSecurityShiftCheckInStatus(opt, workDateStr, now)
+    return evalResult.windowStatus === 'tepat_waktu'
+  })
+
+  if (inWindow.length === 1) {
+    return inWindow[0]
+  }
+
+  return null
+}
+
 export interface SecurityOptionWindowInfo {
   option: SecurityShiftOption
   label: string
@@ -174,7 +301,10 @@ export interface SecurityOptionWindowInfo {
   timeRangeDisplay: string
   workHoursDisplay: string
   windowStatus: WindowStatus
+  checkInStatus: SecurityShiftWindowStatus
   isOpenNow: boolean
+  isOvernight: boolean
+  effectiveWorkDate: string
 }
 
 /**
@@ -185,45 +315,27 @@ export function getSecurityOptionInfo(
   workDateStr: string,
   now: Date = new Date(),
 ): SecurityOptionWindowInfo {
-  const windowStatus = checkAttendanceWindow('Security', 'masuk', option, workDateStr, now)
-  const isOpenNow = windowStatus === 'open'
-
-  if (isWeekendSession(option)) {
-    const ws = getWeekendSessionSchedule(option)
-    return {
-      option,
-      label: option,
-      sublabel: option === 'Sesi Pagi' ? 'Sesi Akhir Pekan Pagi' : 'Sesi Akhir Pekan Malam',
-      scheduledStart: ws.open,
-      scheduledEnd: ws.close,
-      timeRangeDisplay: `${ws.open.replace(':', '.')} – ${ws.close.replace(':', '.')} WIB`,
-      workHoursDisplay: option === 'Sesi Pagi' ? '08.00 – 20.00 WIB' : '20.00 – 08.00 WIB (H+1)',
-      windowStatus,
-      isOpenNow,
-    }
-  }
-
-  const shiftKey = option as ShiftType
-  const s = getSecuritySchedule(workDateStr, shiftKey)
-  const sublabel =
-    option === 'Shift I'
-      ? 'Shift Pagi – Sore'
-      : option === 'Shift II'
-        ? 'Shift Sore – Malam'
-        : 'Shift Malam – Pagi'
-
-  const workHours = `${s.start.replace(':', '.')} – ${s.end.replace(':', '.')}${s.end_next_day ? ' (H+1)' : ''} WIB`
+  const check = getSecurityShiftCheckInStatus(option, workDateStr, now)
+  const windowStatus: WindowStatus =
+    check.windowStatus === 'tepat_waktu'
+      ? 'open'
+      : check.windowStatus === 'belum_dibuka'
+        ? 'not_yet'
+        : 'closed_accept'
 
   return {
     option,
-    label: option,
-    sublabel,
-    scheduledStart: s.start,
-    scheduledEnd: s.window_end,
-    timeRangeDisplay: `${s.start.replace(':', '.')} – ${s.window_end.replace(':', '.')} WIB`,
-    workHoursDisplay: workHours,
+    label: check.label,
+    sublabel: check.sublabel,
+    scheduledStart: check.scheduledStart,
+    scheduledEnd: check.scheduledEnd,
+    timeRangeDisplay: check.timeRangeDisplay,
+    workHoursDisplay: check.workHoursDisplay,
     windowStatus,
-    isOpenNow,
+    checkInStatus: check.windowStatus,
+    isOpenNow: check.windowStatus === 'tepat_waktu',
+    isOvernight: check.isOvernight,
+    effectiveWorkDate: check.effectiveWorkDate,
   }
 }
 
@@ -811,12 +923,17 @@ export function checkAttendanceWindow(
   // Weekend sessions
   if (isWeekendSession(shift)) {
     const ws = getWeekendSessionSchedule(shift)
+    let effectiveDate = workDate
+    const todayStr = formatInTimeZone(current, TIMEZONE, 'yyyy-MM-dd')
+    if (shift === 'Sesi Malam' && current.getHours() < 12 && workDateStr === todayStr) {
+      effectiveDate = parseISO(determineShiftIIIWorkDate(now))
+    }
     if (attendanceType === 'masuk') {
-      const openTime = parseTimeOnDate(ws.open, workDate)
-      const closeTime = parseTimeOnDate(ws.close, workDate)
+      const openTime = parseTimeOnDate(ws.open, effectiveDate)
+      const closeTime = parseTimeOnDate(ws.close, effectiveDate)
       if (current < openTime) return 'not_yet'
       if (current <= closeTime) return 'open'
-      return 'closed'
+      return 'closed_accept'
     }
 
     // Weekend pulang: Sesi Pagi ends at 20:00 (same day), Sesi Malam ends at 08:00 (H+1)
@@ -827,7 +944,7 @@ export function checkAttendanceWindow(
     }
 
     if (shift === 'Sesi Malam') {
-      const pulangStart = parseTimeOnDate('08:00', workDate, true) // H+1
+      const pulangStart = parseTimeOnDate('08:00', effectiveDate, true) // H+1
       if (current < pulangStart) return 'not_yet'
       return 'open'
     }
@@ -836,12 +953,19 @@ export function checkAttendanceWindow(
   }
 
   // Weekday shifts (Shift I/II/III)
-  const shiftKey = shift as ShiftType
-  const s = getSecuritySchedule(workDateStr, shiftKey)
+  const shiftKey = (shift === 'Shift 1' ? 'Shift I' : shift === 'Shift 2' ? 'Shift II' : shift === 'Shift 3' ? 'Shift III' : shift) as ShiftType
+  let effectiveDate = workDate
+  let effectiveWorkDateStr = workDateStr
+  const todayStr = formatInTimeZone(current, TIMEZONE, 'yyyy-MM-dd')
+  if (shiftKey === 'Shift III' && current.getHours() < 12 && workDateStr === todayStr) {
+    effectiveWorkDateStr = determineShiftIIIWorkDate(now)
+    effectiveDate = parseISO(effectiveWorkDateStr)
+  }
+  const s = getSecuritySchedule(effectiveWorkDateStr, shiftKey)
 
   if (attendanceType === 'masuk') {
-    const start = parseTimeOnDate(s.start, workDate)
-    const end = parseTimeOnDate(s.window_end, workDate)
+    const start = parseTimeOnDate(s.start, effectiveDate)
+    const end = parseTimeOnDate(s.window_end, effectiveDate)
     if (current < start) return 'not_yet'
     if (current <= end) return 'open'
     return 'closed_accept'
@@ -1203,9 +1327,11 @@ export function getAttendanceButtonState(
       }
       if (currentMinutes > closeMins) {
         return {
-          status: 'window_closed',
-          title: `Jendela Presensi Sesi ${sessionLabel} Ditutup`,
-          message: `Waktu presensi masuk sesi ${sessionLabel.toLowerCase()} telah berakhir pukul ${ws.close.replace(':', '.')} WIB.`,
+          status: 'can_masuk',
+          title: `Absen Masuk (Terlambat) — Sesi ${sessionLabel}`,
+          startTime: ws.open,
+          endTime: ws.close,
+          isLate: true,
         }
       }
       return {

@@ -343,30 +343,38 @@ serve(async (req: Request) => {
     // 4c. Determine Work Date (Shift III and Sesi Malam Crossover Linked to Masuk Record)
     let workDate = jakartaDateToday
     const isOvernightShift = shift === 'Shift III' || shift === 'Shift 3' || shift === 'Sesi Malam'
-    if (category === 'Security' && isOvernightShift && attendance_type === 'pulang') {
-      const yesterday = new Date(serverNow.getTime() - 24 * 60 * 60 * 1000)
-      const yesterdayDateStr = getJakartaDateString(yesterday)
+    const yesterday = new Date(serverNow.getTime() - 24 * 60 * 60 * 1000)
+    const yesterdayDateStr = getJakartaDateString(yesterday)
 
-      // Query database for open masuk record from yesterday or today
-      const { data: openMasuk } = await supabase
-        .from('attendance_records')
-        .select('work_date, recorded_at')
-        .eq('normalized_name', normalizedName)
-        .eq('category', 'Security')
-        .eq('shift', shift)
-        .eq('attendance_type', 'masuk')
-        .in('work_date', [yesterdayDateStr, jakartaDateToday])
-        .order('recorded_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+    if (category === 'Security' && isOvernightShift) {
+      if (attendance_type === 'pulang') {
+        // Query database for open masuk record from yesterday or today
+        const { data: openMasuk } = await supabase
+          .from('attendance_records')
+          .select('work_date, recorded_at')
+          .eq('normalized_name', normalizedName)
+          .eq('category', 'Security')
+          .eq('shift', shift)
+          .eq('attendance_type', 'masuk')
+          .in('work_date', [yesterdayDateStr, jakartaDateToday])
+          .order('recorded_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
 
-      if (openMasuk?.work_date) {
-        // Linked authoritatively to the exact work_date when the shift started
-        workDate = openMasuk.work_date
-      } else {
-        // Fallback: If no previous masuk record exists (e.g. forgot to check in),
-        // any checkout before evening shift start (< 18:00 WIB) belongs to yesterday
-        if (currentHour < 18) {
+        if (openMasuk?.work_date) {
+          // Linked authoritatively to the exact work_date when the shift started
+          workDate = openMasuk.work_date
+        } else {
+          // Fallback: If no previous masuk record exists (e.g. forgot to check in),
+          // any checkout before evening shift start (< 18:00 WIB) belongs to yesterday
+          if (currentHour < 18) {
+            workDate = yesterdayDateStr
+          }
+        }
+      } else if (attendance_type === 'masuk') {
+        // For overnight check-in during post-midnight / early morning hours (< 12:00 WIB),
+        // the duty belongs to yesterday's evening shift (H+1 check-in).
+        if (currentHour < 12) {
           workDate = yesterdayDateStr
         }
       }
@@ -391,6 +399,7 @@ serve(async (req: Request) => {
       return new Response(
         JSON.stringify({
           error: `Pegawai ${employee_name} sudah melakukan presensi ${attendance_type.toUpperCase()} untuk tanggal kerja ${workDate}${shift ? ` (${shift})` : ''}.`,
+          error_code: 'DUPLICATE_ATTENDANCE',
         }),
         { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
@@ -471,6 +480,7 @@ serve(async (req: Request) => {
           return new Response(
             JSON.stringify({
               error: `Presensi masuk CS belum dibuka. Jendela check-in dimulai pukul ${csOpen} WIB.`,
+              error_code: 'WINDOW_NOT_OPEN',
               requires_reason: false,
             }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -482,6 +492,7 @@ serve(async (req: Request) => {
           return new Response(
             JSON.stringify({
               error: `Jendela presensi masuk CS telah ditutup pada pukul ${csClose} WIB. Presensi hari ini tidak dapat dilakukan.`,
+              error_code: 'WINDOW_CLOSED',
               requires_reason: false,
             }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -530,20 +541,24 @@ serve(async (req: Request) => {
         const closeMins = hhmm(scheduledEnd)
 
         if (attendance_type === 'masuk') {
-          if (currentMinutesFromMidnight < openMins) {
+          // If workDate is yesterday, shift started yesterday evening; elapsed time is 1440 + currentMinutesFromMidnight
+          const effectiveCurrentMins = (workDate < jakartaDateToday) ? 1440 + currentMinutesFromMidnight : currentMinutesFromMidnight
+
+          if (effectiveCurrentMins < openMins) {
             return new Response(
               JSON.stringify({
                 error: `Presensi masuk ${shift} akhir pekan belum dibuka. Jendela presensi masuk dimulai pukul ${scheduledStart} WIB.`,
+                error_code: 'WINDOW_NOT_OPEN',
                 requires_reason: false,
               }),
               { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
           }
 
-          if (currentMinutesFromMidnight > closeMins) {
+          if (effectiveCurrentMins > closeMins) {
             attendanceStatus = 'terlambat'
-            lateMinutes = currentMinutesFromMidnight - closeMins
-            adminNotes = `Terlambat ${lateMinutes} menit (Masuk pukul ${jakartaTimeStr} WIB, batas jendela ${scheduledEnd} WIB)`
+            lateMinutes = effectiveCurrentMins - closeMins
+            adminNotes = `Terlambat ${lateMinutes} menit (Masuk pukul ${jakartaTimeStr} WIB${workDate < jakartaDateToday ? ' (H+1)' : ''}, batas jendela ${scheduledEnd} WIB)`
           } else {
             attendanceStatus = 'tepat_waktu'
             lateMinutes = 0
@@ -638,21 +653,25 @@ serve(async (req: Request) => {
           const startMins = hhmm(scheduledStart)
           const windowEndMins = hhmm(scheduledEnd)
 
+          // If workDate is yesterday (overnight shift post-midnight), elapsed time is 1440 + currentMinutesFromMidnight
+          const effectiveCurrentMins = (workDate < jakartaDateToday) ? 1440 + currentMinutesFromMidnight : currentMinutesFromMidnight
+
           // Wajib tolak untuk SEMUA shift (Shift I, Shift II, Shift III) jika belum masuk jam buka
-          if (currentMinutesFromMidnight < startMins) {
+          if (effectiveCurrentMins < startMins) {
             return new Response(
               JSON.stringify({
                 error: `Presensi masuk ${shift} belum dibuka. Jendela presensi masuk dimulai pukul ${scheduledStart} WIB.`,
+                error_code: 'WINDOW_NOT_OPEN',
                 requires_reason: false,
               }),
               { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
           }
 
-          if (currentMinutesFromMidnight > windowEndMins) {
+          if (effectiveCurrentMins > windowEndMins) {
             attendanceStatus = 'terlambat'
-            lateMinutes = currentMinutesFromMidnight - windowEndMins
-            adminNotes = `Terlambat ${lateMinutes} menit (Masuk pukul ${jakartaTimeStr} WIB, batas jendela ${scheduledEnd} WIB)`
+            lateMinutes = effectiveCurrentMins - windowEndMins
+            adminNotes = `Terlambat ${lateMinutes} menit (Masuk pukul ${jakartaTimeStr} WIB${workDate < jakartaDateToday ? ' (H+1)' : ''}, batas jendela ${scheduledEnd} WIB)`
           } else {
             attendanceStatus = 'tepat_waktu'
             lateMinutes = 0
@@ -668,6 +687,7 @@ serve(async (req: Request) => {
               return new Response(
                 JSON.stringify({
                   error: `Presensi pulang ${shift} belum dibuka. Jendela presensi pulang dimulai besok pagi pukul ${baseEnd} WIB (H+1).`,
+                  error_code: 'WINDOW_NOT_OPEN',
                   requires_reason: false,
                 }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -676,6 +696,7 @@ serve(async (req: Request) => {
               return new Response(
                 JSON.stringify({
                   error: `Presensi pulang ${shift} belum dibuka. Jendela presensi pulang dimulai pukul ${baseEnd} WIB (H+1).`,
+                  error_code: 'WINDOW_NOT_OPEN',
                   requires_reason: false,
                 }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -687,6 +708,7 @@ serve(async (req: Request) => {
               return new Response(
                 JSON.stringify({
                   error: `Presensi pulang ${shift} belum dibuka. Jendela presensi pulang dimulai pukul ${baseEnd} WIB.`,
+                  error_code: 'WINDOW_NOT_OPEN',
                   requires_reason: false,
                 }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

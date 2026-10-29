@@ -38,8 +38,8 @@ export interface WeekDayCount {
 function getShiftTimeLabel(shift: SecurityShiftOption): string {
   switch (shift) {
     case 'Shift I': return '07.00 - 15.00'
-    case 'Shift II': return '15.00 - 23.00'
-    case 'Shift III': return '23.00 - 07.00'
+    case 'Shift II': return '15.00 - 20.00'
+    case 'Shift III': return '20.00 - 07.00'
     case 'Sesi Pagi': return '08.00 - 20.00'
     case 'Sesi Malam': return '20.00 - 08.00'
     default: return ''
@@ -149,9 +149,8 @@ export function SecurityShiftStatusCard({
         {/* Shift Badge & Banner */}
         <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-100 flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shadow-xs ${
-              selectedShift ? 'bg-white border-neutral-200 text-neutral-700' : 'bg-amber-100/70 border-amber-200 text-amber-700'
-            }`}>
+            <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shadow-xs ${selectedShift ? 'bg-white border-neutral-200 text-neutral-700' : 'bg-amber-100/70 border-amber-200 text-amber-700'
+              }`}>
               <StatusIcon size={20} />
             </div>
             <div>
@@ -177,11 +176,10 @@ export function SecurityShiftStatusCard({
           {status === 'belum_masuk' && onChangeShiftClick && (
             <button
               onClick={onChangeShiftClick}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${
-                selectedShift
+              className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${selectedShift
                   ? 'text-neutral-600 hover:text-neutral-900 bg-white hover:bg-neutral-100 border-neutral-200'
                   : 'text-neutral-900 bg-amber-200/70 hover:bg-amber-200 border-amber-300 font-bold'
-              }`}
+                }`}
             >
               {selectedShift ? 'Ganti Shift' : 'Pilih Shift'}
             </button>
@@ -205,11 +203,10 @@ export function SecurityShiftStatusCard({
                     key={opt}
                     type="button"
                     onClick={() => onSelectShift?.(opt)}
-                    className={`py-2 px-2.5 rounded-xl text-xs font-bold transition-all border text-center flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
-                      isSelected
+                    className={`py-2 px-2.5 rounded-xl text-xs font-bold transition-all border text-center flex flex-col items-center justify-center gap-0.5 cursor-pointer ${isSelected
                         ? 'bg-neutral-900 text-white border-neutral-900 shadow-sm ring-2 ring-neutral-900/10'
                         : 'bg-white hover:bg-neutral-50 text-neutral-700 border-neutral-200 hover:border-neutral-300'
-                    }`}
+                      }`}
                   >
                     <span>{opt}</span>
                     <span className={`text-[10px] font-normal ${isSelected ? 'text-neutral-300' : 'text-neutral-400'}`}>
@@ -235,9 +232,8 @@ export function SecurityShiftStatusCard({
             </p>
             <div className="mt-2 flex items-center gap-1.5 flex-wrap">
               {masukTime !== '--:--' ? (
-                <span className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                  isLate ? 'bg-neutral-900 text-white' : 'bg-neutral-200 text-neutral-800'
-                }`}>
+                <span className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ${isLate ? 'bg-neutral-900 text-white' : 'bg-neutral-200 text-neutral-800'
+                  }`}>
                   {isLate ? 'Terlambat' : 'Tepat Waktu'}
                 </span>
               ) : (
@@ -294,10 +290,15 @@ export function SecurityShiftStatusCard({
           ) : canTakeMasuk ? (
             <button
               onClick={() => onOpenTakeModal('masuk')}
-              className="w-full py-4 bg-neutral-900 hover:bg-black text-white font-bold text-sm rounded-xl flex items-center justify-center gap-3 transition-all shadow-sm active:scale-[0.99]"
+              className={`w-full py-4 text-white font-bold text-sm rounded-xl flex items-center justify-center gap-3 transition-all shadow-sm active:scale-[0.99] cursor-pointer ${isLate ? 'bg-amber-600 hover:bg-amber-700' : 'bg-neutral-900 hover:bg-black'
+                }`}
             >
               <Camera size={19} />
-              <span>Ambil Foto &amp; Absen Masuk ({selectedShift})</span>
+              <span>
+                {isLate
+                  ? `Ambil Foto & Absen Masuk (Terlambat) (${selectedShift})`
+                  : `Ambil Foto & Absen Masuk (${selectedShift})`}
+              </span>
             </button>
           ) : canTakePulang ? (
             <button
@@ -437,11 +438,10 @@ export function SecurityScheduleCard({
                     onSelectShift(s)
                   }
                 }}
-                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all text-center flex items-center justify-center gap-1 ${
-                  isSelected
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all text-center flex items-center justify-center gap-1 ${isSelected
                     ? 'bg-white text-neutral-900 shadow-xs'
                     : 'text-neutral-500 hover:text-neutral-900'
-                }`}
+                  }`}
               >
                 <span>{s}</span>
                 {isCurrent && (
@@ -640,9 +640,8 @@ export function SecurityShiftHistoryCard({ sessions, isLoading }: SecurityShiftH
                         <div className="flex items-center gap-1.5">
                           <span>{s.masukTime}</span>
                           {s.masuk && (
-                            <span className={`text-[9px] font-semibold px-1.5 py-0.2 rounded-full ${
-                              s.isLate ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-700 border border-neutral-200'
-                            }`}>
+                            <span className={`text-[9px] font-semibold px-1.5 py-0.2 rounded-full ${s.isLate ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-700 border border-neutral-200'
+                              }`}>
                               {s.isLate ? 'Terlambat' : 'Tepat Waktu'}
                             </span>
                           )}
@@ -769,57 +768,57 @@ export function SecurityWeeklyChartCard({ weekChartData, todayDateStr }: Securit
             </p>
           </div>
         ) : (
-            <div className="flex items-end justify-between gap-2 h-24 pt-4">
-              {weekChartData.map(w => {
-                const isToday = w.dateStr === todayDateStr
-                const hasAttendance = w.count > 0
-                const heightPercent = hasAttendance
-                  ? Math.max((w.count / maxCount) * 85, 22)
-                  : 0
+          <div className="flex items-end justify-between gap-2 h-24 pt-4">
+            {weekChartData.map(w => {
+              const isToday = w.dateStr === todayDateStr
+              const hasAttendance = w.count > 0
+              const heightPercent = hasAttendance
+                ? Math.max((w.count / maxCount) * 85, 22)
+                : 0
 
-                return (
-                  <div key={w.day} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
-                    {hasAttendance ? (
-                      <span className="text-[10px] font-bold text-neutral-800 font-mono">
-                        {w.count}
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-transparent select-none">-</span>
-                    )}
+              return (
+                <div key={w.day} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
+                  {hasAttendance ? (
+                    <span className="text-[10px] font-bold text-neutral-800 font-mono">
+                      {w.count}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-transparent select-none">-</span>
+                  )}
 
-                    {hasAttendance ? (
-                      <div
-                        className="w-full max-w-[20px] rounded-t bg-neutral-900 transition-all duration-500 shadow-xs"
-                        style={{ height: `${heightPercent}%` }}
-                      />
-                    ) : isToday ? (
-                      <div
-                        className="w-full max-w-[20px] h-1.5 rounded-full bg-neutral-300 ring-2 ring-neutral-400/40"
-                        title={`${w.label} (Hari ini): Belum ada presensi`}
-                      />
-                    ) : (
-                      <div
-                        className="w-full max-w-[20px] h-1 rounded-full bg-neutral-100"
-                        title={`${w.label}: Tidak ada presensi`}
-                      />
-                    )}
+                  {hasAttendance ? (
+                    <div
+                      className="w-full max-w-[20px] rounded-t bg-neutral-900 transition-all duration-500 shadow-xs"
+                      style={{ height: `${heightPercent}%` }}
+                    />
+                  ) : isToday ? (
+                    <div
+                      className="w-full max-w-[20px] h-1.5 rounded-full bg-neutral-300 ring-2 ring-neutral-400/40"
+                      title={`${w.label} (Hari ini): Belum ada presensi`}
+                    />
+                  ) : (
+                    <div
+                      className="w-full max-w-[20px] h-1 rounded-full bg-neutral-100"
+                      title={`${w.label}: Tidak ada presensi`}
+                    />
+                  )}
 
-                    {isToday ? (
-                      <span
-                        className="text-[9px] font-bold text-neutral-900 bg-neutral-100 border border-neutral-300 rounded-md px-1.5 py-0.5 leading-none"
-                        title="Hari ini"
-                      >
-                        {w.day}
-                      </span>
-                    ) : (
-                      <span className="text-[9px] font-medium text-neutral-400">
-                        {w.day}
-                      </span>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
+                  {isToday ? (
+                    <span
+                      className="text-[9px] font-bold text-neutral-900 bg-neutral-100 border border-neutral-300 rounded-md px-1.5 py-0.5 leading-none"
+                      title="Hari ini"
+                    >
+                      {w.day}
+                    </span>
+                  ) : (
+                    <span className="text-[9px] font-medium text-neutral-400">
+                      {w.day}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         )}
       </div>
     </div>

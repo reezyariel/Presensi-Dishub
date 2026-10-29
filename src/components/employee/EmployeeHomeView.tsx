@@ -22,6 +22,7 @@ import {
   getNextAttendanceInfo,
   getAttendanceButtonState,
   checkAttendanceWindow,
+  getSecurityShiftCheckInStatus,
   calculate30DayRecap,
   calculateSecurity30DayRecap,
   buildSecurityShiftSessions,
@@ -304,8 +305,8 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
   const handleConfirmSecurityShift = (confirmedShift: SecurityShiftOption) => {
     setSelectedShift(confirmedShift)
     setIsShiftPickerOpen(false)
-    const windowStatus = checkAttendanceWindow('Security', 'masuk', confirmedShift, today, currentTime)
-    if (windowStatus === 'not_yet') {
+    const check = getSecurityShiftCheckInStatus(confirmedShift, today, currentTime)
+    if (check.windowStatus === 'belum_dibuka') {
       // Shift is updated on the dashboard so officer sees the exact schedule and disabled button with countdown,
       // but camera modal is not opened because check-in window is not yet active.
       const card = document.getElementById('presensi-hari-ini-card')
@@ -637,7 +638,11 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
                     }`
                   : '--:--'
               }
-              isLate={todayRecords.masuk?.attendance_status === 'terlambat'}
+              isLate={
+                todayRecords.masuk
+                  ? todayRecords.masuk.attendance_status === 'terlambat'
+                  : Boolean(buttonState.status === 'can_masuk' && 'isLate' in buttonState && buttonState.isLate)
+              }
               isOvernight={Boolean(selectedShift && (selectedShift === 'Shift III' || selectedShift === 'Shift 3' || selectedShift === 'Sesi Malam'))}
               buttonStateTitle={buttonState.title}
               canTakeMasuk={Boolean(selectedShift && buttonState.status === 'can_masuk')}
