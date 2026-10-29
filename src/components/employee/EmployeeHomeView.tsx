@@ -21,7 +21,6 @@ import {
   preloadSchedules,
   getNextAttendanceInfo,
   getAttendanceButtonState,
-  checkAttendanceWindow,
   getSecurityShiftCheckInStatus,
   calculate30DayRecap,
   calculateSecurity30DayRecap,

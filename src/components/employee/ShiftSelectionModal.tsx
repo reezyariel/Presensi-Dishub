@@ -157,27 +157,25 @@ export default function ShiftSelectionModal({
               <div
                 key={option}
                 onClick={() => handleSelectOption(option)}
-                className={`relative rounded-2xl p-4 border-2 cursor-pointer transition-all ${
-                  isSelected
+                className={`relative rounded-2xl p-4 border-2 cursor-pointer transition-all ${isSelected
                     ? status.windowStatus === 'jendela_selesai'
                       ? 'border-amber-500 bg-amber-50/30 shadow-sm ring-1 ring-amber-400'
                       : status.windowStatus === 'belum_dibuka'
                         ? 'border-neutral-400 bg-neutral-50 shadow-sm'
                         : 'border-neutral-900 bg-neutral-900/[0.03] shadow-sm'
                     : 'border-neutral-200/80 bg-white hover:border-neutral-300 hover:bg-neutral-50/50'
-                }`}
+                  }`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3 flex-1 min-w-0">
                     {/* Icon */}
                     <div
-                      className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
-                        isSelected
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${isSelected
                           ? status.windowStatus === 'jendela_selesai'
                             ? 'bg-amber-600 text-white'
                             : 'bg-neutral-900 text-white'
                           : 'bg-neutral-100 text-neutral-600'
-                      }`}
+                        }`}
                     >
                       <Icon size={18} />
                     </div>
@@ -204,7 +202,7 @@ export default function ShiftSelectionModal({
                         {status.windowStatus === 'belum_dibuka' && (
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600 border border-neutral-200">
                             <Clock size={11} className="text-neutral-500" />
-                            Belum Dibuka
+                            Jendela Belum Dibuka
                           </span>
                         )}
                       </div>
@@ -226,13 +224,12 @@ export default function ShiftSelectionModal({
                   {/* Radio indicator */}
                   <div className="pt-1 flex-shrink-0">
                     <div
-                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                        isSelected
+                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${isSelected
                           ? status.windowStatus === 'jendela_selesai'
                             ? 'border-amber-600 bg-amber-600 text-white'
                             : 'border-neutral-900 bg-neutral-900 text-white'
                           : 'border-neutral-300 bg-white'
-                      }`}
+                        }`}
                     >
                       {isSelected && <Check size={12} strokeWidth={3} />}
                     </div>
@@ -265,10 +262,10 @@ export default function ShiftSelectionModal({
                   </div>
                 </div>
                 <p className="text-[11px] text-amber-900/90 leading-relaxed pt-1">
-                  Jendela presensi masuk untuk <strong>{selectedStatus.label}</strong> adalah pukul {selectedStatus.timeRangeDisplay}. Waktu saat ini ({formatJakartaTime(now)} WIB) telah melewati batas jendela masuk, sehingga presensi yang Anda ajukan <strong>berpotensi dicatat terlambat</strong>.
+                  Jendela presensi masuk untuk <strong>{selectedStatus.label}</strong> adalah pukul {selectedStatus.timeRangeDisplay}. Waktu saat ini ({formatJakartaTime(now)} WIB) telah melewati batas jendela masuk, sehingga presensi yang Anda ajukan <strong>akan tercatat terlambat</strong>.
                 </p>
                 <p className="text-[10px] text-amber-700 italic">
-                  * Status presensi dan durasi keterlambatan akan diverifikasi dan ditentukan oleh server SIPATEN.
+                  * Status presensi dan durasi keterlambatan diverifikasi otomatis oleh server SIPATEN.
                 </p>
               </div>
             ) : selectedStatus.windowStatus === 'tepat_waktu' ? (
@@ -299,7 +296,7 @@ export default function ShiftSelectionModal({
               <div className="mt-4 p-4 rounded-2xl bg-neutral-100/80 border border-neutral-200 text-neutral-800 space-y-2 animate-in fade-in duration-150">
                 <div className="flex items-center gap-2 text-xs font-bold text-neutral-900">
                   <Clock size={16} className="text-neutral-600 flex-shrink-0" />
-                  <span>Presensi {selectedStatus.label} Belum Dibuka</span>
+                  <span>Jendela Belum Dibuka</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs pt-1">
                   <div className="bg-white p-2.5 rounded-xl border border-neutral-200/80">
@@ -311,12 +308,12 @@ export default function ShiftSelectionModal({
                   <div className="bg-white p-2.5 rounded-xl border border-neutral-200/80">
                     <span className="text-[10px] text-neutral-500 font-medium block">Status Jendela Masuk</span>
                     <span className="text-xs font-bold mt-1 inline-block px-2 py-0.5 rounded-full bg-neutral-200 text-neutral-700">
-                      Belum Dibuka
+                      Jendela Belum Dibuka
                     </span>
                   </div>
                 </div>
                 <p className="text-[11px] text-neutral-600 leading-relaxed pt-1">
-                  Jendela presensi masuk untuk <strong>{selectedStatus.label}</strong> baru akan dibuka pada pukul <strong>{selectedStatus.scheduledStart.replace(':', '.')} WIB</strong>. Anda tidak dapat melakukan presensi lebih awal untuk shift ini.
+                  Jendela presensi masuk untuk <strong>{selectedStatus.label}</strong> baru akan dibuka pada pukul <strong>{selectedStatus.scheduledStart.replace(':', '.')} WIB</strong>. Tombol presensi dinonaktifkan sampai waktu masuk yang diizinkan.
                 </p>
               </div>
             )
@@ -360,7 +357,7 @@ export default function ShiftSelectionModal({
               title="Presensi belum dibuka untuk shift ini"
             >
               <Clock size={15} />
-              <span>Presensi Belum Dibuka (Mulai {selectedStatus.scheduledStart.replace(':', '.')} WIB)</span>
+              <span>Jendela Belum Dibuka (Mulai {selectedStatus.scheduledStart.replace(':', '.')} WIB)</span>
             </button>
           ) : selectedStatus?.windowStatus === 'jendela_selesai' ? (
             <button

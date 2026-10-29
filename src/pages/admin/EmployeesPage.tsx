@@ -822,8 +822,8 @@ export default function EmployeesPage() {
                     type="button"
                     onClick={() => handleRoleChange('CS')}
                     className={`py-2.5 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${formRole === 'CS'
-                        ? 'bg-neutral-900 text-white border-neutral-900'
-                        : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-50'
+                      ? 'bg-neutral-900 text-white border-neutral-900'
+                      : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-50'
                       }`}
                   >
                     <Headphones size={15} />
@@ -834,8 +834,8 @@ export default function EmployeesPage() {
                     type="button"
                     onClick={() => handleRoleChange('Security')}
                     className={`py-2.5 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${formRole === 'Security'
-                        ? 'bg-neutral-900 text-white border-neutral-900'
-                        : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-50'
+                      ? 'bg-neutral-900 text-white border-neutral-900'
+                      : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-50'
                       }`}
                   >
                     <Shield size={15} />
@@ -911,9 +911,9 @@ export default function EmployeesPage() {
                     className="form-input text-xs py-2.5"
                   >
                     <option value="">Pilih shift</option>
-                    <option value="Shift I">Shift I (Pagi: 07.00 - 15.00)</option>
-                    <option value="Shift II">Shift II (Siang: 15.00 - 23.00)</option>
-                    <option value="Shift III">Shift III (Malam: 23.00 - 07.00)</option>
+                    <option value="Shift I">Shift I (Pagi: 07.00 - 16.00)</option>
+                    <option value="Shift II">Shift II (Siang: 16.00 - 19.30)</option>
+                    <option value="Shift III">Shift III (Malam: 19.30 - 07.00)</option>
                   </select>
                 </div>
               )}
