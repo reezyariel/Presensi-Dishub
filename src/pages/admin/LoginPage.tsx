@@ -11,7 +11,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
-import { User, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Clock } from 'lucide-react'
+import { User, Lock, Eye, EyeOff, AlertCircle, ArrowRight } from 'lucide-react'
 
 export default function LoginPage() {
   const { signIn, isAuthenticated, isAdmin, role, isLoading: authLoading } = useAuth()
@@ -352,52 +352,9 @@ export default function LoginPage() {
             </div>
           </form>
 
-          {/* ── Akun Demo Cepat ── */}
-          <div
-            className="mt-5 pt-4 border-t border-white/10"
-            style={{
-              opacity: mounted ? 1 : 0,
-              transform: mounted ? 'translateY(0)' : 'translateY(8px)',
-              transition: 'opacity 0.4s ease-out 0.38s, transform 0.4s ease-out 0.38s',
-            }}
-          >
-            <p className="text-[10px] text-center text-neutral-400 font-bold mb-2.5 uppercase tracking-wider">
-              Akun Demo Cepat
-            </p>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                id="demo-cs"
-                title="Akun Demo Petugas Cleaning Service (CS)"
-                onClick={() => { setIdentifier('CS001'); setPassword('password123'); setError(null) }}
-                className="py-2 px-1.5 bg-white/[0.07] hover:bg-white/[0.14] border border-white/15 hover:border-white/30 rounded-xl text-[11px] font-semibold text-neutral-200 hover:text-white transition-all text-center active:scale-[0.96] hover:shadow-sm"
-              >
-                Demo CS
-              </button>
-              <button
-                type="button"
-                id="demo-security"
-                title="Akun Demo Petugas Security"
-                onClick={() => { setIdentifier('SEC001'); setPassword('password123'); setError(null) }}
-                className="py-2 px-1.5 bg-white/[0.07] hover:bg-white/[0.14] border border-white/15 hover:border-white/30 rounded-xl text-[11px] font-semibold text-neutral-200 hover:text-white transition-all text-center active:scale-[0.96] hover:shadow-sm"
-              >
-                Security
-              </button>
-              <button
-                type="button"
-                id="demo-admin"
-                title="Akun Demo Administrator Utama"
-                onClick={() => { setIdentifier('reezyfbi4@gmail.com'); setPassword('admin123'); setError(null) }}
-                className="py-2 px-1.5 bg-white/[0.07] hover:bg-white/[0.14] border border-white/15 hover:border-white/30 rounded-xl text-[11px] font-semibold text-neutral-200 hover:text-white transition-all text-center active:scale-[0.96] hover:shadow-sm"
-              >
-                Admin
-              </button>
-            </div>
-          </div>
-
           {/* ── Lupa Password & Footer ── */}
           <div
-            className="text-center mt-3.5"
+            className="text-center mt-5"
             style={{
               opacity: mounted ? 1 : 0,
               transition: 'opacity 0.4s ease-out 0.44s',
