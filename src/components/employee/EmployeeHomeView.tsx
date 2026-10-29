@@ -21,6 +21,7 @@ import {
   preloadSchedules,
   getNextAttendanceInfo,
   getAttendanceButtonState,
+  checkAttendanceWindow,
   calculate30DayRecap,
   calculateSecurity30DayRecap,
   buildSecurityShiftSessions,
@@ -304,6 +305,16 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
   const handleConfirmSecurityShift = (confirmedShift: SecurityShiftOption) => {
     setSelectedShift(confirmedShift)
     setIsShiftPickerOpen(false)
+    const windowStatus = checkAttendanceWindow('Security', 'masuk', confirmedShift, today, currentTime)
+    if (windowStatus === 'not_yet') {
+      // Shift is updated on the dashboard so officer sees the exact schedule and disabled button with countdown,
+      // but camera modal is not opened because check-in window is not yet active.
+      const card = document.getElementById('presensi-hari-ini-card')
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+      return
+    }
     setAttendanceTypeToTake('masuk')
     setIsTakeModalOpen(true)
   }
@@ -333,8 +344,9 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
     ...(todayRecords.pulang ? ['pulang'] : []),
   ] as ('masuk' | 'istirahat' | 'pulang')[]
 
-  const nextInfo = getNextAttendanceInfo(category, completedTypes, selectedShift, today, currentTime)
-  const buttonState = getAttendanceButtonState(category, todayRecords, selectedShift, today, currentTime)
+  const effectiveWorkDate = (todayRecords.masuk?.work_date as string) || today
+  const nextInfo = getNextAttendanceInfo(category, completedTypes, selectedShift, effectiveWorkDate, currentTime)
+  const buttonState = getAttendanceButtonState(category, todayRecords, selectedShift, effectiveWorkDate, currentTime)
 
   // Clock display
   const timeStr = currentTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })

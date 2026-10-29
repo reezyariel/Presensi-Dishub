@@ -7,7 +7,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft, Camera, MapPin, Check, AlertCircle,
+  ArrowLeft, Camera, MapPin, Check, AlertCircle, Clock,
   RefreshCw, RotateCcw, SwitchCamera,
   CheckCircle2, Image as ImageIcon
 } from 'lucide-react'
@@ -22,7 +22,7 @@ import {
 } from '../../lib/officeLocation'
 import { supabase } from '../../lib/supabase'
 import { FunctionsHttpError } from '@supabase/supabase-js'
-import { formatJakartaTime, getScheduleInfo, todayJakarta, getCSScheduleSync } from '../../lib/scheduleEngine'
+import { formatJakartaTime, getScheduleInfo, todayJakarta, getCSScheduleSync, checkAttendanceWindow } from '../../lib/scheduleEngine'
 import type { AttendanceRecord, AttendanceType, SecurityShiftOption } from '../../types/attendance'
 
 interface TakeAttendanceModalProps {
@@ -130,6 +130,12 @@ export default function TakeAttendanceModal({
     }
   }, [category, shift, today, attendanceType])
 
+  // Attendance window status check
+  const windowStatus = useMemo(() => {
+    return checkAttendanceWindow(category, attendanceType, shift ?? null, today, new Date())
+  }, [category, attendanceType, shift, today])
+  const isWindowNotYet = windowStatus === 'not_yet'
+
   // Geofence reason requirement
   const isOutsideGeofence = isInsideRadius === false
   const isGpsMissing = !coords && !isGpsLoading
@@ -137,6 +143,14 @@ export default function TakeAttendanceModal({
 
   // Open camera step and start video stream
   const handleOpenLiveCamera = async () => {
+    if (isWindowNotYet) {
+      setSubmitError(
+        `Presensi ${attendanceType} ${shift ? `${shift} ` : ''}belum dibuka. Jendela presensi dimulai pukul ${
+          scheduleDisplay[attendanceType] || 'jadwal resmi'
+        } WIB.`
+      )
+      return
+    }
     setSubmitError(null)
     setStep('camera')
     await startCamera('user')
@@ -179,6 +193,15 @@ export default function TakeAttendanceModal({
     if (!photoToUpload) {
       setSubmitError('Foto selfie wajib dilampirkan sebelum mengirim presensi.')
       setStep('camera')
+      return
+    }
+
+    if (isWindowNotYet) {
+      setSubmitError(
+        `Presensi ${attendanceType} ${shift ? `${shift} ` : ''}belum dibuka. Jendela presensi dimulai pukul ${
+          scheduleDisplay[attendanceType] || 'jadwal resmi'
+        } WIB.`
+      )
       return
     }
 
@@ -339,6 +362,23 @@ export default function TakeAttendanceModal({
               </div>
             </div>
 
+            {/* Early Attendance Window Warning Banner */}
+            {isWindowNotYet && (
+              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5 animate-fade-in">
+                <Clock size={16} className="text-amber-700 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-bold text-amber-900">
+                    Jendela Presensi {attendanceType === 'masuk' ? 'Masuk' : attendanceType === 'pulang' ? 'Pulang' : 'Istirahat'} Belum Dibuka
+                  </p>
+                  <p className="text-amber-800 mt-0.5 leading-relaxed">
+                    {category === 'Security'
+                      ? `Waktu presensi untuk ${shift || 'shift ini'} belum dimulai. Presensi ${attendanceType} dapat dilakukan mulai pukul ${scheduleDisplay[attendanceType]} WIB.`
+                      : `Waktu presensi ${attendanceType} Cleaning Service belum dimulai. Tombol akan aktif otomatis saat jadwal dibuka.`}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Location Unconfigured Alert */}
             {locationLoadError && (
               <div className="p-3.5 rounded-xl bg-neutral-100 border border-neutral-300 text-neutral-800 text-xs flex items-start gap-2.5">
@@ -390,23 +430,45 @@ export default function TakeAttendanceModal({
 
             {/* Central Camera Circular Trigger */}
             <div className="flex flex-col items-center text-center py-6 space-y-4">
-              <button
-                type="button"
-                onClick={handleOpenLiveCamera}
-                className="w-24 h-24 rounded-full bg-neutral-900 hover:bg-black text-white flex items-center justify-center shadow-lg transition-transform hover:scale-105 active:scale-95 group"
-                aria-label="Ambil Foto Selfie & Absen"
-              >
-                <Camera size={38} strokeWidth={2} />
-              </button>
+              {isWindowNotYet ? (
+                <>
+                  <div
+                    className="w-24 h-24 rounded-full bg-neutral-100 border border-neutral-300 text-neutral-400 flex items-center justify-center shadow-inner cursor-not-allowed"
+                    title="Jendela Presensi Belum Dibuka"
+                  >
+                    <Clock size={38} strokeWidth={1.8} />
+                  </div>
 
-              <div className="space-y-1">
-                <p className="text-base font-bold text-neutral-900">
-                  Buka Kamera & Ambil Foto
-                </p>
-                <p className="text-xs text-neutral-500">
-                  Posisikan wajah Anda tegak lurus di dalam bingkai
-                </p>
-              </div>
+                  <div className="space-y-1">
+                    <p className="text-base font-bold text-neutral-700">
+                      Presensi Belum Dibuka
+                    </p>
+                    <p className="text-xs text-neutral-500 max-w-xs mx-auto">
+                      Tombol kamera dinonaktifkan di luar jadwal resmi. Presensi dapat dilakukan mulai pukul {scheduleDisplay[attendanceType]} WIB.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleOpenLiveCamera}
+                    className="w-24 h-24 rounded-full bg-neutral-900 hover:bg-black text-white flex items-center justify-center shadow-lg transition-transform hover:scale-105 active:scale-95 group"
+                    aria-label="Ambil Foto Selfie & Absen"
+                  >
+                    <Camera size={38} strokeWidth={2} />
+                  </button>
+
+                  <div className="space-y-1">
+                    <p className="text-base font-bold text-neutral-900">
+                      Buka Kamera & Ambil Foto
+                    </p>
+                    <p className="text-xs text-neutral-500">
+                      Posisikan wajah Anda tegak lurus di dalam bingkai
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Bottom notice */}

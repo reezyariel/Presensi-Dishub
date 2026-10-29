@@ -340,19 +340,20 @@ serve(async (req: Request) => {
       )
     }
 
-    // 4c. Determine Work Date (Shift III Crossover Linked to Masuk Record without Hardcoded 12:00)
+    // 4c. Determine Work Date (Shift III and Sesi Malam Crossover Linked to Masuk Record)
     let workDate = jakartaDateToday
-    if (category === 'Security' && shift === 'Shift III' && attendance_type === 'pulang') {
+    const isOvernightShift = shift === 'Shift III' || shift === 'Shift 3' || shift === 'Sesi Malam'
+    if (category === 'Security' && isOvernightShift && attendance_type === 'pulang') {
       const yesterday = new Date(serverNow.getTime() - 24 * 60 * 60 * 1000)
       const yesterdayDateStr = getJakartaDateString(yesterday)
 
-      // Query database for open Shift III masuk record from yesterday or today
+      // Query database for open masuk record from yesterday or today
       const { data: openMasuk } = await supabase
         .from('attendance_records')
         .select('work_date, recorded_at')
         .eq('normalized_name', normalizedName)
         .eq('category', 'Security')
-        .eq('shift', 'Shift III')
+        .eq('shift', shift)
         .eq('attendance_type', 'masuk')
         .in('work_date', [yesterdayDateStr, jakartaDateToday])
         .order('recorded_at', { ascending: false })
@@ -510,16 +511,6 @@ serve(async (req: Request) => {
         }
       }
     } else if (category === 'Security') {
-      // Jadwal Security resmi sesuai aturan:
-      // Senin–Jumat:
-      // - Shift I: 07.00–07.30
-      // - Shift II: 16.00–16.30
-      // - Shift III: 20.00–20.30
-      // Sabtu–Minggu:
-      // - Sesi pagi: 08.00–08.30
-      // - Sesi malam: 20.00–20.30
-      // Waktu di atas adalah jendela presensi masuk.
-
       const isWeekendDay = workDayOfWeek === 0 || workDayOfWeek === 6
 
       if (isWeekendDay || shift === 'Sesi Pagi' || shift === 'Sesi Malam') {
@@ -528,8 +519,13 @@ serve(async (req: Request) => {
         const rawPagi = secWeekendData?.sesi_pagi || secWeekendData?.sesiPagi
         const sessionConfig = isMalam ? rawWknd : rawPagi
 
-        scheduledStart = sessionConfig?.open || (isMalam ? '20:00' : '08:00')
-        scheduledEnd = sessionConfig?.close || (isMalam ? '20:30' : '08:30')
+        const openTime = sessionConfig?.open || (isMalam ? '20:00' : '08:00')
+        const closeTime = sessionConfig?.close || (isMalam ? '20:30' : '08:30')
+        const endTime = isMalam ? '08:00' : '20:00'
+        const isNextDay = isMalam
+
+        scheduledStart = openTime
+        scheduledEnd = closeTime
         const openMins = hhmm(scheduledStart)
         const closeMins = hhmm(scheduledEnd)
 
@@ -552,32 +548,87 @@ serve(async (req: Request) => {
             attendanceStatus = 'tepat_waktu'
             lateMinutes = 0
           }
+        } else if (attendance_type === 'pulang') {
+          scheduledStart = openTime
+          scheduledEnd = endTime
+          const endMins = hhmm(endTime)
+
+          if (isNextDay) {
+            // Sesi Malam: shift berakhir besok pagi pukul 08:00 (H+1)
+            if (jakartaDateToday === workDate) {
+              return new Response(
+                JSON.stringify({
+                  error: `Presensi pulang ${shift} akhir pekan belum dibuka. Jendela presensi pulang dimulai besok pagi pukul ${endTime} WIB (H+1).`,
+                  requires_reason: false,
+                }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              )
+            } else if (jakartaDateToday > workDate && currentMinutesFromMidnight < endMins) {
+              return new Response(
+                JSON.stringify({
+                  error: `Presensi pulang ${shift} akhir pekan belum dibuka. Jendela presensi pulang dimulai pukul ${endTime} WIB (H+1).`,
+                  requires_reason: false,
+                }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              )
+            }
+          } else {
+            // Sesi Pagi: shift berakhir pukul 20:00 di hari yang sama
+            if (currentMinutesFromMidnight < endMins) {
+              return new Response(
+                JSON.stringify({
+                  error: `Presensi pulang ${shift} akhir pekan belum dibuka. Jendela presensi pulang dimulai pukul ${endTime} WIB.`,
+                  requires_reason: false,
+                }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              )
+            }
+          }
+
+          attendanceStatus = 'tepat_waktu'
+          lateMinutes = 0
         }
       } else {
-        // Weekday shifts
+        // Weekday shifts (Shift I, Shift II, Shift III)
+        const shiftStr = String(shift || '')
+        const canonicalShift = (shiftStr === 'Shift 1' ? 'Shift I' : shiftStr === 'Shift 2' ? 'Shift II' : shiftStr === 'Shift 3' ? 'Shift III' : shiftStr) as 'Shift I' | 'Shift II' | 'Shift III'
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const rawShift = secScheduleData?.shifts?.[shift as string] as any
+        const rawShift = (secScheduleData?.shifts?.[canonicalShift] || secScheduleData?.shifts?.[shiftStr]) as any
         let defaultStart = '07:00'
         let defaultWinEnd = '07:30'
-        if (shift === 'Shift II') {
+        let defaultEnd = '16:00'
+        let defaultEndWinEnd = '16:30'
+        let defaultEndNextDay = false
+
+        if (canonicalShift === 'Shift II') {
           defaultStart = '15:00'
           defaultWinEnd = '15:30'
-        } else if (shift === 'Shift III') {
+          defaultEnd = '19:30'
+          defaultEndWinEnd = '20:00'
+          defaultEndNextDay = false
+        } else if (canonicalShift === 'Shift III') {
           defaultStart = '19:30'
           defaultWinEnd = '20:00'
+          defaultEnd = '07:00'
+          defaultEndWinEnd = '07:30'
+          defaultEndNextDay = true
         }
 
         let baseStart = (rawShift?.start && typeof rawShift.start === 'string') ? rawShift.start : defaultStart
         let baseWinEnd = (rawShift?.window_end && typeof rawShift.window_end === 'string') ? rawShift.window_end : defaultWinEnd
+        let baseEnd = (rawShift?.end && typeof rawShift.end === 'string') ? rawShift.end : defaultEnd
+        let baseEndWinEnd = (rawShift?.end_window_end && typeof rawShift.end_window_end === 'string') ? rawShift.end_window_end : defaultEndWinEnd
+        const endNextDay = Boolean(rawShift?.end_next_day ?? defaultEndNextDay)
 
         // Pergeseran Kamis & Jumat jika ada konfigurasi thursday_friday_shift_minutes
         const shiftOffset = isShiftedDay ? (Number(secScheduleData?.thursday_friday_shift_minutes) || 0) : 0
         if (shiftOffset > 0) {
-          const sMin = hhmm(baseStart) + shiftOffset
-          const wMin = hhmm(baseWinEnd) + shiftOffset
           const formatMin = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
-          baseStart = formatMin(sMin)
-          baseWinEnd = formatMin(wMin)
+          baseStart = formatMin(hhmm(baseStart) + shiftOffset)
+          baseWinEnd = formatMin(hhmm(baseWinEnd) + shiftOffset)
+          baseEnd = formatMin(hhmm(baseEnd) + shiftOffset)
+          baseEndWinEnd = formatMin(hhmm(baseEndWinEnd) + shiftOffset)
         }
 
         scheduledStart = baseStart
@@ -587,7 +638,8 @@ serve(async (req: Request) => {
           const startMins = hhmm(scheduledStart)
           const windowEndMins = hhmm(scheduledEnd)
 
-          if (currentMinutesFromMidnight < startMins && shift !== 'Shift III') {
+          // Wajib tolak untuk SEMUA shift (Shift I, Shift II, Shift III) jika belum masuk jam buka
+          if (currentMinutesFromMidnight < startMins) {
             return new Response(
               JSON.stringify({
                 error: `Presensi masuk ${shift} belum dibuka. Jendela presensi masuk dimulai pukul ${scheduledStart} WIB.`,
@@ -597,7 +649,7 @@ serve(async (req: Request) => {
             )
           }
 
-          if (currentMinutesFromMidnight > windowEndMins && (shift !== 'Shift III' || currentMinutesFromMidnight < startMins)) {
+          if (currentMinutesFromMidnight > windowEndMins) {
             attendanceStatus = 'terlambat'
             lateMinutes = currentMinutesFromMidnight - windowEndMins
             adminNotes = `Terlambat ${lateMinutes} menit (Masuk pukul ${jakartaTimeStr} WIB, batas jendela ${scheduledEnd} WIB)`
@@ -605,6 +657,45 @@ serve(async (req: Request) => {
             attendanceStatus = 'tepat_waktu'
             lateMinutes = 0
           }
+        } else if (attendance_type === 'pulang') {
+          scheduledStart = baseStart
+          scheduledEnd = baseEnd
+          const endMins = hhmm(baseEnd)
+
+          if (endNextDay) {
+            // Shift III (lintas hari): pulang hanya boleh di hari berikutnya (H+1) pada atau setelah jam baseEnd
+            if (jakartaDateToday === workDate) {
+              return new Response(
+                JSON.stringify({
+                  error: `Presensi pulang ${shift} belum dibuka. Jendela presensi pulang dimulai besok pagi pukul ${baseEnd} WIB (H+1).`,
+                  requires_reason: false,
+                }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              )
+            } else if (jakartaDateToday > workDate && currentMinutesFromMidnight < endMins) {
+              return new Response(
+                JSON.stringify({
+                  error: `Presensi pulang ${shift} belum dibuka. Jendela presensi pulang dimulai pukul ${baseEnd} WIB (H+1).`,
+                  requires_reason: false,
+                }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              )
+            }
+          } else {
+            // Shift I & II (hari yang sama): pulang hanya boleh pada atau setelah baseEnd
+            if (currentMinutesFromMidnight < endMins) {
+              return new Response(
+                JSON.stringify({
+                  error: `Presensi pulang ${shift} belum dibuka. Jendela presensi pulang dimulai pukul ${baseEnd} WIB.`,
+                  requires_reason: false,
+                }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              )
+            }
+          }
+
+          attendanceStatus = 'tepat_waktu'
+          lateMinutes = 0
         }
       }
     }

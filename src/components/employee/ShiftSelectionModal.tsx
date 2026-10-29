@@ -275,9 +275,17 @@ export default function ShiftSelectionModal({
                 onConfirm(selected)
               }
             }}
-            className="px-6 py-3 bg-neutral-900 hover:bg-black text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-all shadow-sm active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-neutral-900"
+            className={`px-6 py-3 text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-all shadow-sm active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed ${
+              selectedInfo?.windowStatus === 'not_yet'
+                ? 'bg-neutral-800 hover:bg-neutral-900'
+                : 'bg-neutral-900 hover:bg-black'
+            }`}
           >
-            <span>Lanjutkan ke Foto Presensi</span>
+            <span>
+              {selectedInfo?.windowStatus === 'not_yet'
+                ? `Pilih Shift Ini (Presensi Dibuka ${selectedInfo.scheduledStart.replace(':', '.')} WIB)`
+                : 'Lanjutkan ke Foto Presensi'}
+            </span>
             <ArrowRight size={15} />
           </button>
         </div>
