@@ -665,35 +665,57 @@ export function SecurityWeeklyChartCard({ weekChartData, todayDateStr }: Securit
             </p>
           </div>
         ) : (
-          <div className="flex items-end justify-between gap-2 h-24 pt-4">
-            {weekChartData.map(w => {
-              const isToday = w.dateStr === todayDateStr
-              const heightPercent = w.count > 0 ? Math.max((w.count / maxCount) * 85, 18) : 8
+            <div className="flex items-end justify-between gap-2 h-24 pt-4">
+              {weekChartData.map(w => {
+                const isToday = w.dateStr === todayDateStr
+                const hasAttendance = w.count > 0
+                const heightPercent = hasAttendance
+                  ? Math.max((w.count / maxCount) * 85, 22)
+                  : 0
 
-              return (
-                <div key={w.day} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
-                  {w.count > 0 && (
-                    <span className="text-[9px] font-bold text-neutral-700 font-mono">
-                      {w.count}
-                    </span>
-                  )}
-                  <div
-                    className={`w-full max-w-[20px] rounded-t transition-all duration-500 ${
-                      w.count > 0
-                        ? 'bg-neutral-900'
-                        : isToday
-                          ? 'bg-neutral-200 border border-dashed border-neutral-400'
-                          : 'bg-neutral-100'
-                    }`}
-                    style={{ height: `${heightPercent}%` }}
-                  />
-                  <span className={`text-[9px] font-medium ${isToday ? 'text-neutral-900 font-bold' : 'text-neutral-400'}`}>
-                    {w.day}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
+                return (
+                  <div key={w.day} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
+                    {hasAttendance ? (
+                      <span className="text-[10px] font-bold text-neutral-800 font-mono">
+                        {w.count}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-transparent select-none">-</span>
+                    )}
+
+                    {hasAttendance ? (
+                      <div
+                        className="w-full max-w-[20px] rounded-t bg-neutral-900 transition-all duration-500 shadow-xs"
+                        style={{ height: `${heightPercent}%` }}
+                      />
+                    ) : isToday ? (
+                      <div
+                        className="w-full max-w-[20px] h-1.5 rounded-full bg-neutral-300 ring-2 ring-neutral-400/40"
+                        title={`${w.label} (Hari ini): Belum ada presensi`}
+                      />
+                    ) : (
+                      <div
+                        className="w-full max-w-[20px] h-1 rounded-full bg-neutral-100"
+                        title={`${w.label}: Tidak ada presensi`}
+                      />
+                    )}
+
+                    {isToday ? (
+                      <span
+                        className="text-[9px] font-bold text-neutral-900 bg-neutral-100 border border-neutral-300 rounded-md px-1.5 py-0.5 leading-none"
+                        title="Hari ini"
+                      >
+                        {w.day}
+                      </span>
+                    ) : (
+                      <span className="text-[9px] font-medium text-neutral-400">
+                        {w.day}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
         )}
       </div>
     </div>

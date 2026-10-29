@@ -1620,3 +1620,76 @@ export function buildSecurityShiftSessions(
   return sessions
 }
 
+// ─────────────────────────────────────────────────────────────
+// Jakarta Weekly Calendar & CS Attendance Calculation
+// ─────────────────────────────────────────────────────────────
+export interface WeekDayCount {
+  day: string
+  label: string
+  count: number
+  dateStr: string
+}
+
+/**
+ * Returns the 7 days of the current week (Senin to Minggu)
+ * in Asia/Jakarta timezone, strictly formatted as YYYY-MM-DD.
+ */
+export function getJakartaWeekDays(refDate: Date = new Date()): WeekDayCount[] {
+  const todayStr = refDate.toLocaleDateString('en-CA', { timeZone: TIMEZONE })
+  const [y, m, d] = todayStr.split('-').map(Number)
+
+  // Use noon UTC to prevent any DST or midnight shift
+  const jktNoon = new Date(Date.UTC(y, m - 1, d, 12, 0, 0))
+  const dayOfWeek = jktNoon.getUTCDay() // 0=Sun, 1=Mon, ..., 6=Sat
+
+  // Monday as start of week: diffToMonday = (dayOfWeek + 6) % 7
+  const diffToMonday = (dayOfWeek + 6) % 7
+  const monday = new Date(jktNoon)
+  monday.setUTCDate(jktNoon.getUTCDate() - diffToMonday)
+
+  const dayLabels = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min']
+  const weekDays: WeekDayCount[] = []
+
+  for (let i = 0; i < 7; i++) {
+    const dayDate = new Date(monday)
+    dayDate.setUTCDate(monday.getUTCDate() + i)
+    const yStr = dayDate.getUTCFullYear()
+    const mStr = String(dayDate.getUTCMonth() + 1).padStart(2, '0')
+    const dStr = String(dayDate.getUTCDate()).padStart(2, '0')
+
+    weekDays.push({
+      day: dayLabels[i],
+      label: dayLabels[i],
+      count: 0,
+      dateStr: `${yStr}-${mStr}-${dStr}`,
+    })
+  }
+
+  return weekDays
+}
+
+/**
+ * Calculates CS weekly attendance from raw attendance records.
+ * Ensures:
+ * - Only valid 'masuk' records count toward attendance.
+ * - Deduplicates by work_date (no double counting if multiple entries exist on the same date).
+ * - Preserves exact order and metadata for Monday through Sunday.
+ */
+export function calculateCSWeeklyAttendance(
+  weekDays: WeekDayCount[],
+  records: { work_date: string; attendance_type?: string }[],
+): WeekDayCount[] {
+  const attendedDates = new Set<string>()
+
+  for (const r of records) {
+    if (r.work_date && (!r.attendance_type || r.attendance_type.toLowerCase().trim() === 'masuk')) {
+      attendedDates.add(r.work_date)
+    }
+  }
+
+  return weekDays.map(w => ({
+    ...w,
+    count: attendedDates.has(w.dateStr) ? 1 : 0,
+  }))
+}
+

@@ -8,7 +8,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Calendar, Check, Clock, ChevronRight, Camera,
-  MapPin, TrendingUp, AlertCircle, Sunrise, Sunset,
+  MapPin, AlertCircle, Sunrise, Sunset,
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
@@ -24,9 +24,12 @@ import {
   calculate30DayRecap,
   calculateSecurity30DayRecap,
   buildSecurityShiftSessions,
+  getJakartaWeekDays,
+  calculateCSWeeklyAttendance,
   isWeekend,
   type Security30DayRecap,
   type SecurityShiftSession,
+  type WeekDayCount,
 } from '../../lib/scheduleEngine'
 import type { AttendanceRecord, SecurityShiftOption } from '../../types/attendance'
 import TakeAttendanceModal from '../../pages/attendance/TakeAttendanceModal'
@@ -39,16 +42,13 @@ import {
   SecurityShiftHistoryCard,
   SecurityWeeklyChartCard,
 } from './SecurityDashboard'
+import {
+  CSWeeklyChartCard,
+  CS30DayRecapCard,
+} from './CSDashboard'
 
 interface EmployeeHomeViewProps {
   category: 'CS' | 'Security'
-}
-
-interface WeekDayCount {
-  day: string
-  label: string
-  count: number
-  dateStr: string
 }
 
 export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
@@ -213,27 +213,13 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
         }
       }
 
-      // 3. Weekly bar chart data
-      const now = new Date()
-      const dayOfWeek = now.getDay()
-      const diffToMonday = (dayOfWeek + 6) % 7
-      const monday = new Date(now)
-      monday.setDate(now.getDate() - diffToMonday)
-
-      const weekDays: WeekDayCount[] = []
-      const dayLabels = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min']
-      for (let i = 0; i < 7; i++) {
-        const d = new Date(monday)
-        d.setDate(monday.getDate() + i)
-        const dateStr = d.toISOString().split('T')[0]
-        weekDays.push({ day: dayLabels[i], label: dayLabels[i], count: 0, dateStr })
-      }
-
+      // 3. Weekly bar chart data (Strict Asia/Jakarta calendar)
+      const weekDays = getJakartaWeekDays(new Date())
       const mondayStr = weekDays[0].dateStr
       const sundayStr = weekDays[6].dateStr
       const { data: weekList } = await supabase
         .from('attendance_records')
-        .select('work_date, auth_uid, employee_profile_id, normalized_name, category')
+        .select('work_date, attendance_type, auth_uid, employee_profile_id, normalized_name, category, employee_name')
         .eq('category', category)
         .eq('attendance_type', 'masuk')
         .or(idFilter)
@@ -244,14 +230,22 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
         const personalWeek = weekList.filter(r => {
           if (r.auth_uid && user?.id && r.auth_uid === user.id) return true
           if (employeeProfile?.id && r.employee_profile_id === employeeProfile.id) return true
-          return r.category === category && r.normalized_name === normName
+          return r.category === category && (r.normalized_name === normName || r.employee_name === employeeName)
         })
-        personalWeek.forEach(r => {
-          const item = weekDays.find(w => w.dateStr === r.work_date)
-          if (item) item.count += 1
-        })
+
+        if (category === 'CS') {
+          const resolvedWeek = calculateCSWeeklyAttendance(weekDays, personalWeek)
+          setWeekChartData(resolvedWeek)
+        } else {
+          personalWeek.forEach(r => {
+            const item = weekDays.find(w => w.dateStr === r.work_date)
+            if (item) item.count += 1
+          })
+          setWeekChartData(weekDays)
+        }
+      } else {
+        setWeekChartData(weekDays)
       }
-      setWeekChartData(weekDays)
 
       // 4. Recent 5 records
       const { data: recent } = await supabase
@@ -1030,60 +1024,10 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
               </div>
 
               {/* D. Monthly Stats */}
-              <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-                <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-neutral-900">Rekap 30 Hari</h3>
-                  <TrendingUp size={15} className="text-neutral-400" />
-                </div>
-                <div className="px-5 py-4 grid grid-cols-2 gap-3 text-center">
-                  <div>
-                    <p className="text-xl font-bold text-neutral-900">{monthStats.hadir}</p>
-                    <p className="text-[10px] font-medium text-neutral-500 mt-0.5 flex items-center justify-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-neutral-900 inline-block" />
-                      Hadir
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xl font-bold text-neutral-900">{monthStats.terlambat}</p>
-                    <p className="text-[10px] font-medium text-neutral-500 mt-0.5 flex items-center justify-center gap-1">
-                      <AlertCircle size={10} />
-                      Terlambat
-                    </p>
-                  </div>
-                </div>
-              </div>
+              <CS30DayRecapCard stats={monthStats} />
 
               {/* E. Weekly Bar Chart */}
-              <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
-                <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-neutral-900">Minggu Ini</h3>
-                  <span className="text-[10px] text-neutral-400">Kehadiran per hari</span>
-                </div>
-                <div className="px-5 py-4">
-                  <div className="flex items-end justify-between gap-2 h-20">
-                    {weekChartData.map(w => {
-                      const isToday = w.dateStr === today
-                      const heightPercent = w.count > 0 ? 80 : 12
-                      return (
-                        <div key={w.day} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
-                          <div
-                            className={`w-full max-w-[20px] rounded-t transition-all duration-500 ${w.count > 0
-                                ? 'bg-neutral-900'
-                                : isToday
-                                  ? 'bg-neutral-300 border border-dashed border-neutral-400'
-                                  : 'bg-neutral-100'
-                              }`}
-                            style={{ height: `${heightPercent}%` }}
-                          />
-                          <span className={`text-[9px] font-medium ${isToday ? 'text-neutral-900 font-bold' : 'text-neutral-400'}`}>
-                            {w.day}
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              </div>
+              <CSWeeklyChartCard weekChartData={weekChartData} todayDateStr={today} />
             </>
           )}
 
