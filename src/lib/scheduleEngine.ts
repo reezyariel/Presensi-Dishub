@@ -1266,7 +1266,16 @@ export function getAttendanceButtonState(
   }
 
   // Weekday shifts (Shift I/II/III)
-  const currentShift = (shift as ShiftType) || 'Shift I'
+  if (!shift && !completedRecords.masuk) {
+    return {
+      status: 'waiting_masuk',
+      title: 'Pilih Shift Terlebih Dahulu',
+      startTime: '--:--',
+      message: 'Silakan pilih shift tugas Anda terlebih dahulu sebelum melakukan presensi.',
+    }
+  }
+
+  const currentShift = (shift as ShiftType) || (completedRecords.masuk?.shift as ShiftType) || 'Shift I'
   const s = getSecuritySchedule(workDateStr, currentShift)
   const masukStartMins = getTimeInMinutes(s.start)
   const masukWindowEndMins = getTimeInMinutes(s.window_end)

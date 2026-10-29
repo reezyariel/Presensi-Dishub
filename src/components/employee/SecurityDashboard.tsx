@@ -9,7 +9,7 @@
 // 6. Overnight Shift III crossover support with H+1 indicators
 // ============================================================
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Shield, CheckCircle2, AlertCircle, Clock, Sunrise, Sunset,
@@ -22,6 +22,7 @@ import {
   getSecurityScheduleSync,
   getWeekendSessionSchedule,
   isWeekendSession,
+  getSecurityAvailableOptions,
   formatJakartaDate,
   type Security30DayRecap,
   type SecurityShiftSession,
@@ -34,12 +35,23 @@ export interface WeekDayCount {
   dateStr: string
 }
 
+function getShiftTimeLabel(shift: SecurityShiftOption): string {
+  switch (shift) {
+    case 'Shift I': return '07.00 - 15.00'
+    case 'Shift II': return '15.00 - 23.00'
+    case 'Shift III': return '23.00 - 07.00'
+    case 'Sesi Pagi': return '08.00 - 20.00'
+    case 'Sesi Malam': return '20.00 - 08.00'
+    default: return ''
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
 // 1. Shift Status Card
 // ─────────────────────────────────────────────────────────────
 interface SecurityShiftStatusCardProps {
   status: 'belum_masuk' | 'sedang_bertugas' | 'menunggu_pulang' | 'selesai'
-  selectedShift: SecurityShiftOption
+  selectedShift: SecurityShiftOption | null
   workDateStr: string
   masukTime: string
   pulangTime: string
@@ -52,6 +64,7 @@ interface SecurityShiftStatusCardProps {
   masukRecordId?: string
   onOpenTakeModal: (type: 'masuk' | 'pulang') => void
   onChangeShiftClick?: () => void
+  onSelectShift?: (shift: SecurityShiftOption) => void
 }
 
 export function SecurityShiftStatusCard({
@@ -68,14 +81,21 @@ export function SecurityShiftStatusCard({
   masukRecordId,
   onOpenTakeModal,
   onChangeShiftClick,
+  onSelectShift,
 }: SecurityShiftStatusCardProps) {
+  const availableOptions = getSecurityAvailableOptions(workDateStr)
+
   const statusConfig = {
     belum_masuk: {
-      badge: 'Belum Absen Masuk',
-      badgeClass: 'bg-neutral-100 text-neutral-700 border-neutral-300',
-      dotClass: 'bg-neutral-400',
-      headline: 'Siap Memulai Dinas?',
-      desc: 'Anda belum mencatat presensi masuk untuk shift ini. Pastikan Anda berada dalam radius dinas.',
+      badge: selectedShift ? 'Belum Absen Masuk' : 'Shift Belum Dipilih',
+      badgeClass: selectedShift
+        ? 'bg-neutral-100 text-neutral-700 border-neutral-300'
+        : 'bg-amber-50 text-amber-800 border-amber-300',
+      dotClass: selectedShift ? 'bg-neutral-400' : 'bg-amber-500 animate-pulse',
+      headline: selectedShift ? 'Siap Memulai Dinas?' : 'Pilih Shift Tugas Anda',
+      desc: selectedShift
+        ? 'Anda belum mencatat presensi masuk untuk shift ini. Pastikan Anda berada dalam radius dinas.'
+        : 'Silakan pilih shift tugas Anda hari ini (Shift I, Shift II, atau Shift III) sebelum melakukan presensi.',
       icon: Clock,
     },
     sedang_bertugas: {
@@ -129,15 +149,24 @@ export function SecurityShiftStatusCard({
         {/* Shift Badge & Banner */}
         <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-100 flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white border border-neutral-200 flex items-center justify-center text-neutral-700 shadow-xs">
+            <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shadow-xs ${
+              selectedShift ? 'bg-white border-neutral-200 text-neutral-700' : 'bg-amber-100/70 border-amber-200 text-amber-700'
+            }`}>
               <StatusIcon size={20} />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-bold text-neutral-900">{selectedShift}</span>
+                <span className="text-sm font-bold text-neutral-900">
+                  {selectedShift || 'Pilih Shift Tugas'}
+                </span>
                 {isOvernight && (
                   <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-neutral-200 text-neutral-800">
                     Lintas Hari (Overnight)
+                  </span>
+                )}
+                {!selectedShift && (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                    Belum Dipilih
                   </span>
                 )}
               </div>
@@ -148,12 +177,50 @@ export function SecurityShiftStatusCard({
           {status === 'belum_masuk' && onChangeShiftClick && (
             <button
               onClick={onChangeShiftClick}
-              className="text-xs font-semibold text-neutral-600 hover:text-neutral-900 bg-white hover:bg-neutral-100 px-3 py-1.5 rounded-lg border border-neutral-200 transition-colors"
+              className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${
+                selectedShift
+                  ? 'text-neutral-600 hover:text-neutral-900 bg-white hover:bg-neutral-100 border-neutral-200'
+                  : 'text-neutral-900 bg-amber-200/70 hover:bg-amber-200 border-amber-300 font-bold'
+              }`}
             >
-              Ganti Shift
+              {selectedShift ? 'Ganti Shift' : 'Pilih Shift'}
             </button>
           )}
         </div>
+
+        {/* Quick Shift Selection Tabs/Buttons on Card */}
+        {status === 'belum_masuk' && (
+          <div className="space-y-2 pt-0.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-neutral-800">Pilih Shift Hari Ini:</span>
+              <span className="text-[11px] text-neutral-400">
+                {selectedShift ? `Shift aktif: ${selectedShift}` : 'Klik untuk memilih shift'}
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {availableOptions.map(opt => {
+                const isSelected = selectedShift === opt
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => onSelectShift?.(opt)}
+                    className={`py-2 px-2.5 rounded-xl text-xs font-bold transition-all border text-center flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
+                      isSelected
+                        ? 'bg-neutral-900 text-white border-neutral-900 shadow-sm ring-2 ring-neutral-900/10'
+                        : 'bg-white hover:bg-neutral-50 text-neutral-700 border-neutral-200 hover:border-neutral-300'
+                    }`}
+                  >
+                    <span>{opt}</span>
+                    <span className={`text-[10px] font-normal ${isSelected ? 'text-neutral-300' : 'text-neutral-400'}`}>
+                      {getShiftTimeLabel(opt)}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Check-In / Check-Out Overview Cards */}
         <div className="grid grid-cols-2 gap-4">
@@ -204,13 +271,33 @@ export function SecurityShiftStatusCard({
 
         {/* Action Button Section */}
         <div>
-          {canTakeMasuk ? (
+          {!selectedShift ? (
+            <div className="p-4 bg-amber-50/70 rounded-xl border border-amber-200 space-y-2.5">
+              <div className="flex items-center gap-2 text-amber-900">
+                <AlertCircle size={16} className="text-amber-600 flex-shrink-0" />
+                <span className="text-xs font-bold">Pilih Shift Tugas Terlebih Dahulu</span>
+              </div>
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                Tentukan shift dinas Anda (Shift I, Shift II, atau Shift III) menggunakan tombol di atas sebelum melakukan presensi masuk.
+              </p>
+              {onChangeShiftClick && (
+                <button
+                  type="button"
+                  onClick={onChangeShiftClick}
+                  className="w-full py-3 bg-neutral-900 hover:bg-black text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm active:scale-[0.99]"
+                >
+                  <Shield size={15} />
+                  <span>Buka Dialog Pemilihan Shift</span>
+                </button>
+              )}
+            </div>
+          ) : canTakeMasuk ? (
             <button
               onClick={() => onOpenTakeModal('masuk')}
               className="w-full py-4 bg-neutral-900 hover:bg-black text-white font-bold text-sm rounded-xl flex items-center justify-center gap-3 transition-all shadow-sm active:scale-[0.99]"
             >
               <Camera size={19} />
-              <span>Ambil Foto &amp; Absen Masuk</span>
+              <span>Ambil Foto &amp; Absen Masuk ({selectedShift})</span>
             </button>
           ) : canTakePulang ? (
             <button
@@ -218,7 +305,7 @@ export function SecurityShiftStatusCard({
               className="w-full py-4 bg-neutral-900 hover:bg-black text-white font-bold text-sm rounded-xl flex items-center justify-center gap-3 transition-all shadow-sm active:scale-[0.99]"
             >
               <Camera size={19} />
-              <span>Ambil Foto &amp; Absen Pulang</span>
+              <span>Ambil Foto &amp; Absen Pulang ({selectedShift})</span>
             </button>
           ) : status === 'selesai' ? (
             <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-200 flex items-center justify-between">
@@ -265,20 +352,29 @@ export function SecurityShiftStatusCard({
 // 2. Schedule Card (Live from Admin Backend)
 // ─────────────────────────────────────────────────────────────
 interface SecurityScheduleCardProps {
-  currentShift: SecurityShiftOption
+  currentShift: SecurityShiftOption | null
   workDateStr: string
+  onSelectShift?: (shift: SecurityShiftOption) => void
+  canChangeShift?: boolean
 }
 
-export function SecurityScheduleCard({ currentShift, workDateStr }: SecurityScheduleCardProps) {
-  const isWeekend = isWeekendSession(currentShift)
-  const [activeTab, setActiveTab] = useState<SecurityShiftOption>(currentShift)
+export function SecurityScheduleCard({
+  currentShift,
+  workDateStr,
+  onSelectShift,
+  canChangeShift = true,
+}: SecurityScheduleCardProps) {
+  const shiftList = getSecurityAvailableOptions(workDateStr)
+  const [activeTab, setActiveTab] = useState<SecurityShiftOption>(currentShift || shiftList[0])
+
+  useEffect(() => {
+    if (currentShift) {
+      setActiveTab(currentShift)
+    }
+  }, [currentShift])
 
   const secSettings = getSecurityScheduleSync()
   const offsetMin = secSettings.thursday_friday_shift_minutes || 0
-
-  const weekdayShifts: SecurityShiftOption[] = ['Shift I', 'Shift II', 'Shift III']
-  const weekendSessions: SecurityShiftOption[] = ['Sesi Pagi', 'Sesi Malam']
-  const shiftList = isWeekend ? weekendSessions : weekdayShifts
 
   // Get details for active tab
   const getTabDetails = (tab: SecurityShiftOption) => {
@@ -335,7 +431,12 @@ export function SecurityScheduleCard({ currentShift, workDateStr }: SecuritySche
             return (
               <button
                 key={s}
-                onClick={() => setActiveTab(s)}
+                onClick={() => {
+                  setActiveTab(s)
+                  if (canChangeShift && onSelectShift) {
+                    onSelectShift(s)
+                  }
+                }}
                 className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all text-center flex items-center justify-center gap-1 ${
                   isSelected
                     ? 'bg-white text-neutral-900 shadow-xs'
@@ -344,12 +445,15 @@ export function SecurityScheduleCard({ currentShift, workDateStr }: SecuritySche
               >
                 <span>{s}</span>
                 {isCurrent && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-neutral-900 inline-block" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-neutral-900 inline-block" title="Shift Terpilih" />
                 )}
               </button>
             )
           })}
         </div>
+        {!currentShift && canChangeShift && (
+          <p className="text-[10px] text-neutral-400 text-center">Klik tab shift untuk memilih shift dinas Anda</p>
+        )}
 
         {/* Selected Shift Timings Box */}
         <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-100 space-y-3">

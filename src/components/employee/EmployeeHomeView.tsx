@@ -27,7 +27,6 @@ import {
   buildSecurityShiftSessions,
   getJakartaWeekDays,
   calculateCSWeeklyAttendance,
-  isWeekend,
   type Security30DayRecap,
   type SecurityShiftSession,
   type WeekDayCount,
@@ -80,11 +79,7 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
   const [attendanceTypeToTake, setAttendanceTypeToTake] = useState<'masuk' | 'istirahat' | 'pulang'>('masuk')
   const [isLoading, setIsLoading] = useState(true)
 
-  const isTodayWeekend = isWeekend(new Date())
-  const [selectedShift, setSelectedShift] = useState<SecurityShiftOption>(() => {
-    if (isTodayWeekend) return 'Sesi Pagi'
-    return (employeeProfile?.default_shift as SecurityShiftOption) || 'Shift I'
-  })
+  const [selectedShift, setSelectedShift] = useState<SecurityShiftOption | null>(null)
   // Shift selection modal state (Security masuk only)
   const [isShiftPickerOpen, setIsShiftPickerOpen] = useState(false)
 
@@ -283,18 +278,22 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
         pulang: fmt(cs.pulang.start, cs.pulang.end),
       }
     } else {
-      const sched = getScheduleInfo('Security', 'masuk', selectedShift, today)
-      const schedEnd = getScheduleInfo('Security', 'pulang', selectedShift, today)
+      const sched = selectedShift ? getScheduleInfo('Security', 'masuk', selectedShift, today) : null
+      const schedEnd = selectedShift ? getScheduleInfo('Security', 'pulang', selectedShift, today) : null
       return {
-        masuk: sched ? `${sched.scheduledStart.replace(':', '.')} – ${sched.scheduledEnd.replace(':', '.')} WIB` : '07.30 – 08.00 WIB',
+        masuk: sched ? `${sched.scheduledStart.replace(':', '.')} – ${sched.scheduledEnd.replace(':', '.')} WIB` : 'Pilih Shift',
         istirahat: 'Shift Kerja Berlanjut',
-        pulang: schedEnd ? `${schedEnd.scheduledStart.replace(':', '.')}${schedEnd.isNextDay ? ' (H+1)' : ''} WIB` : '16.00 WIB',
+        pulang: schedEnd ? `${schedEnd.scheduledStart.replace(':', '.')}${schedEnd.isNextDay ? ' (H+1)' : ''} WIB` : 'Pilih Shift',
       }
     }
   }, [category, selectedShift, today])
 
   const handleOpenTakeModal = (type: 'masuk' | 'istirahat' | 'pulang') => {
     if (category === 'Security' && type === 'masuk') {
+      setIsShiftPickerOpen(true)
+      return
+    }
+    if (category === 'Security' && !selectedShift && !todayRecords.masuk) {
       setIsShiftPickerOpen(true)
       return
     }
@@ -320,6 +319,10 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
   }
 
   const handlePresensiMenuClick = () => {
+    if (category === 'Security' && !selectedShift && !todayRecords.masuk) {
+      setIsShiftPickerOpen(true)
+      return
+    }
     if (buttonState.status === 'can_masuk') {
       handleOpenTakeModal('masuk')
     } else if (buttonState.status === 'can_istirahat') {
@@ -512,6 +515,19 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
         </div>
       </>
     )
+  } else if (category === 'Security' && !selectedShift && !todayRecords.masuk) {
+    nextAttendanceBanner = (
+      <>
+        <div className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center flex-shrink-0 mt-0.5 text-neutral-700">
+          <Clock size={13} />
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold text-neutral-500">Shift Belum Ditentukan</p>
+          <p className="text-xs font-bold text-neutral-900 mt-0.5">Pilih shift tugas Anda hari ini</p>
+          <p className="text-[10px] text-neutral-400 mt-0.5">Tentukan Shift I, Shift II, atau Shift III sebelum absen.</p>
+        </div>
+      </>
+    )
   } else if (nextInfo) {
     nextAttendanceBanner = (
       <>
@@ -563,9 +579,13 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
                 {category === 'CS' ? '🎧' : '🛡️'} {roleLabel}
               </span>
               {category === 'Security' && (
-                <span className="inline-flex items-center gap-1 text-xs font-semibold text-neutral-500 bg-white border border-neutral-200 rounded-full px-2.5 py-1">
+                <span className={`inline-flex items-center gap-1 text-xs font-semibold rounded-full px-2.5 py-1 ${
+                  selectedShift
+                    ? 'bg-white border border-neutral-200 text-neutral-700'
+                    : 'bg-amber-50 border border-amber-200 text-amber-800'
+                }`}>
                   <Clock size={11} />
-                  {selectedShift}
+                  {selectedShift ? selectedShift : 'Pilih Shift'}
                 </span>
               )}
               <span className={`inline-flex items-center gap-1 text-xs font-semibold rounded-full px-2.5 py-1 ${todayRecords.pulang
@@ -618,14 +638,15 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
                   : '--:--'
               }
               isLate={todayRecords.masuk?.attendance_status === 'terlambat'}
-              isOvernight={selectedShift === 'Shift III' || selectedShift === 'Shift 3' || selectedShift === 'Sesi Malam'}
+              isOvernight={Boolean(selectedShift && (selectedShift === 'Shift III' || selectedShift === 'Shift 3' || selectedShift === 'Sesi Malam'))}
               buttonStateTitle={buttonState.title}
-              canTakeMasuk={buttonState.status === 'can_masuk'}
-              canTakePulang={buttonState.status === 'can_pulang'}
+              canTakeMasuk={Boolean(selectedShift && buttonState.status === 'can_masuk')}
+              canTakePulang={Boolean(buttonState.status === 'can_pulang')}
               waitingMessage={'message' in buttonState ? (buttonState as { message?: string }).message : buttonState.title}
               masukRecordId={todayRecords.masuk?.id}
               onOpenTakeModal={handleOpenTakeModal}
               onChangeShiftClick={() => setIsShiftPickerOpen(true)}
+              onSelectShift={(shift) => setSelectedShift(shift)}
             />
           ) : (
             <div id="presensi-hari-ini-card" className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden scroll-mt-20">
@@ -978,7 +999,12 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
         <div className="space-y-5">
           {category === 'Security' ? (
             <>
-              <SecurityScheduleCard currentShift={selectedShift} workDateStr={today} />
+              <SecurityScheduleCard
+                currentShift={selectedShift}
+                workDateStr={today}
+                onSelectShift={(shift) => setSelectedShift(shift)}
+                canChangeShift={!todayRecords.masuk}
+              />
               <Security30DayRecapCard recap={securityRecap} />
               <SecurityWeeklyChartCard weekChartData={weekChartData} todayDateStr={today} />
             </>
@@ -1070,7 +1096,7 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
         <TakeAttendanceModal
           category={category}
           attendanceType={attendanceTypeToTake}
-          shift={selectedShift}
+          shift={selectedShift || undefined}
           onClose={() => setIsTakeModalOpen(false)}
           onSuccess={() => {
             setIsTakeModalOpen(false)

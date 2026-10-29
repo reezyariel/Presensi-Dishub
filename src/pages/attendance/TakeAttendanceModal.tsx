@@ -130,11 +130,15 @@ export default function TakeAttendanceModal({
     }
   }, [category, shift, today, attendanceType])
 
+  // Security shift check
+  const isNoShift = category === 'Security' && !shift
+
   // Attendance window status check
   const windowStatus = useMemo(() => {
+    if (isNoShift) return 'not_yet'
     return checkAttendanceWindow(category, attendanceType, shift ?? null, today, new Date())
-  }, [category, attendanceType, shift, today])
-  const isWindowNotYet = windowStatus === 'not_yet'
+  }, [category, attendanceType, shift, today, isNoShift])
+  const isWindowNotYet = !isNoShift && windowStatus === 'not_yet'
 
   // Geofence reason requirement
   const isOutsideGeofence = isInsideRadius === false
@@ -143,6 +147,11 @@ export default function TakeAttendanceModal({
 
   // Open camera step and start video stream
   const handleOpenLiveCamera = async () => {
+    if (isNoShift) {
+      setSubmitError('Pilih shift dinas terlebih dahulu sebelum membuka kamera.')
+      return
+    }
+
     if (isWindowNotYet) {
       setSubmitError(
         `Presensi ${attendanceType} ${shift ? `${shift} ` : ''}belum dibuka. Jendela presensi dimulai pukul ${
@@ -193,6 +202,11 @@ export default function TakeAttendanceModal({
     if (!photoToUpload) {
       setSubmitError('Foto selfie wajib dilampirkan sebelum mengirim presensi.')
       setStep('camera')
+      return
+    }
+
+    if (category === 'Security' && !shift) {
+      setSubmitError('Pilih shift dinas terlebih dahulu sebelum melakukan presensi.')
       return
     }
 
@@ -362,6 +376,19 @@ export default function TakeAttendanceModal({
               </div>
             </div>
 
+            {/* No Shift Warning Banner for Security */}
+            {isNoShift && (
+              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5 animate-fade-in">
+                <AlertCircle size={16} className="text-amber-700 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-bold text-amber-900">Shift Belum Dipilih</p>
+                  <p className="text-amber-800 mt-0.5 leading-relaxed">
+                    Anda belum menentukan shift tugas. Silakan kembali ke beranda dan pilih salah satu shift (Shift I, Shift II, atau Shift III) sebelum mengambil foto presensi.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Early Attendance Window Warning Banner */}
             {isWindowNotYet && (
               <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5 animate-fade-in">
@@ -430,7 +457,25 @@ export default function TakeAttendanceModal({
 
             {/* Central Camera Circular Trigger */}
             <div className="flex flex-col items-center text-center py-6 space-y-4">
-              {isWindowNotYet ? (
+              {isNoShift ? (
+                <>
+                  <div
+                    className="w-24 h-24 rounded-full bg-neutral-100 border border-neutral-300 text-neutral-400 flex items-center justify-center shadow-inner cursor-not-allowed"
+                    title="Shift Belum Dipilih"
+                  >
+                    <AlertCircle size={38} strokeWidth={1.8} />
+                  </div>
+
+                  <div className="space-y-1">
+                    <p className="text-base font-bold text-neutral-700">
+                      Pilih Shift Terlebih Dahulu
+                    </p>
+                    <p className="text-xs text-neutral-500 max-w-xs mx-auto">
+                      Presensi dinas Security memerlukan penetapan shift kerja sebelum membuka kamera.
+                    </p>
+                  </div>
+                </>
+              ) : isWindowNotYet ? (
                 <>
                   <div
                     className="w-24 h-24 rounded-full bg-neutral-100 border border-neutral-300 text-neutral-400 flex items-center justify-center shadow-inner cursor-not-allowed"

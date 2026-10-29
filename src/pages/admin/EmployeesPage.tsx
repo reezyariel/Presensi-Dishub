@@ -50,7 +50,7 @@ export default function EmployeesPage() {
   const [formPassword, setFormPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [formRole, setFormRole] = useState<EmployeeRole>('CS')
-  const [formDefaultShift, setFormDefaultShift] = useState<ShiftType | ''>('Shift I')
+  const [formDefaultShift, setFormDefaultShift] = useState<ShiftType | ''>('')
   const [formIsActive, setFormIsActive] = useState(true)
   const [formNotes, setFormNotes] = useState('')
 
@@ -134,9 +134,6 @@ export default function EmployeesPage() {
       const suggestedCode = generateSuggestedCode(newRole)
       setFormEmployeeCode(suggestedCode)
       setFormEmail(`${suggestedCode.toLowerCase()}@SIPATEN.app`)
-      if (newRole === 'Security' && !formDefaultShift) {
-        setFormDefaultShift('Shift I')
-      }
     }
   }
 
@@ -234,7 +231,7 @@ export default function EmployeesPage() {
           p_email: formEmail.trim().toLowerCase(),
           p_password: formPassword,
           p_role: formRole,
-          p_default_shift: formRole === 'Security' ? (formDefaultShift || 'Shift I') : null,
+          p_default_shift: formRole === 'Security' ? (formDefaultShift || null) : null,
           p_is_active: formIsActive,
           p_notes: formNotes.trim() || null,
         })
@@ -253,7 +250,7 @@ export default function EmployeesPage() {
           email: formEmail.trim().toLowerCase(),
           password: formPassword,
           role: formRole,
-          defaultShift: formRole === 'Security' ? (formDefaultShift || 'Shift I') : null,
+          defaultShift: formRole === 'Security' ? (formDefaultShift || null) : null,
         })
 
         setIsModalOpen(false)
@@ -913,6 +910,7 @@ export default function EmployeesPage() {
                     onChange={e => setFormDefaultShift(e.target.value as ShiftType)}
                     className="form-input text-xs py-2.5"
                   >
+                    <option value="">Pilih shift</option>
                     <option value="Shift I">Shift I (Pagi: 07.00 - 15.00)</option>
                     <option value="Shift II">Shift II (Siang: 15.00 - 23.00)</option>
                     <option value="Shift III">Shift III (Malam: 23.00 - 07.00)</option>

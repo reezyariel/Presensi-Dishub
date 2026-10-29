@@ -43,27 +43,19 @@ export default function ShiftSelectionModal({
   const isWeekendDay = isWeekend(parsedDate)
   const availableOptions = getSecurityAvailableOptions(workDateStr)
 
-  // Auto-suggest or pre-select if current window is active
+  // Initialize selection: only select if currentShift is explicitly provided, otherwise keep null
   useEffect(() => {
     if (!isOpen) {
       setSelected(null)
       return
     }
 
-    // Check if any option's window is currently active right now
-    const activeOpt = availableOptions.find(opt => {
-      const info = getSecurityOptionInfo(opt, workDateStr, new Date())
-      return info.isOpenNow
-    })
-
-    if (activeOpt) {
-      setSelected(activeOpt)
-    } else if (currentShift && availableOptions.includes(currentShift)) {
+    if (currentShift && availableOptions.includes(currentShift)) {
       setSelected(currentShift)
     } else {
       setSelected(null)
     }
-  }, [isOpen, workDateStr])
+  }, [isOpen, workDateStr, currentShift])
 
   if (!isOpen) return null
 
