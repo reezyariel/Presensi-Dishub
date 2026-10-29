@@ -11,7 +11,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
-import { User, Lock, Eye, EyeOff, AlertCircle, ArrowRight } from 'lucide-react'
+import { User, Lock, Clock, Eye, EyeOff, AlertCircle, ArrowRight } from 'lucide-react'
 
 export default function LoginPage() {
   const { signIn, isAuthenticated, isAdmin, role, isLoading: authLoading } = useAuth()
@@ -37,6 +37,7 @@ export default function LoginPage() {
 
   const determineDestination = (userRole: string | null | undefined, isUserAdmin: boolean, fromPath?: string): string => {
     const verifiedRole = isUserAdmin || userRole === 'admin' ? 'admin' : userRole
+
 
     if (verifiedRole === 'admin') {
       if (fromPath && fromPath.startsWith('/admin') && fromPath !== '/admin/login') return fromPath
