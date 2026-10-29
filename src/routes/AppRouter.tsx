@@ -10,6 +10,8 @@ import AttendanceHistoryPage from '../pages/employee/AttendanceHistoryPage'
 import SchedulePage from '../pages/employee/SchedulePage'
 import ReportsPage from '../pages/employee/ReportsPage'
 import ProfilePage from '../pages/employee/ProfilePage'
+import EditProfilePage from '../pages/employee/EditProfilePage'
+import ChangePasswordPage from '../pages/employee/ChangePasswordPage'
 
 // Admin pages
 import AdminLayout from '../components/admin/AdminLayout'
@@ -44,6 +46,7 @@ function UniversalRouteRedirect({ target }: { target: string }) {
     if (target === 'schedule') return <Navigate to="/cs/schedule" replace />
     if (target === 'history') return <Navigate to="/admin/attendance" replace />
     if (target === 'reports') return <Navigate to="/admin/reports" replace />
+    if (target.startsWith('profile')) return <Navigate to={`/cs/${target}`} replace />
     return <Navigate to="/admin" replace />
   }
   const prefix = role === 'Security' ? '/security' : '/cs'
@@ -74,6 +77,8 @@ export default function AppRouter() {
         <Route path="schedule" element={<SchedulePage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="profile" element={<ProfilePage />} />
+        <Route path="profile/edit" element={<EditProfilePage />} />
+        <Route path="profile/security" element={<ChangePasswordPage />} />
       </Route>
 
       {/* 4. Security Officers Employee Portal (Reference Panel 4 & sub-pages) */}
@@ -90,6 +95,8 @@ export default function AppRouter() {
         <Route path="schedule" element={<SchedulePage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="profile" element={<ProfilePage />} />
+        <Route path="profile/edit" element={<EditProfilePage />} />
+        <Route path="profile/security" element={<ChangePasswordPage />} />
       </Route>
 
       {/* 5. Direct attendance flow (Reference Panel 5) */}
@@ -140,6 +147,22 @@ export default function AppRouter() {
         element={
           <ProtectedRoute allowedRoles={['CS', 'Security', 'admin']}>
             <UniversalRouteRedirect target="profile" />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profile/edit"
+        element={
+          <ProtectedRoute allowedRoles={['CS', 'Security', 'admin']}>
+            <UniversalRouteRedirect target="profile/edit" />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profile/security"
+        element={
+          <ProtectedRoute allowedRoles={['CS', 'Security', 'admin']}>
+            <UniversalRouteRedirect target="profile/security" />
           </ProtectedRoute>
         }
       />

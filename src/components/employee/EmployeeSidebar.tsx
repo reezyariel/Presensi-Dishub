@@ -9,6 +9,7 @@ import { Home, History, Calendar, User, LogOut, Shield, Headphones, X } from 'lu
 import { useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { cn } from '../../lib/utils'
+import AvatarImage from '../common/AvatarImage'
 
 interface EmployeeSidebarProps {
   category: 'CS' | 'Security'
@@ -85,9 +86,13 @@ export default function EmployeeSidebar({ category, isMobileOpen = false, onClos
         {/* User Profile Strip */}
         <div className="px-4 py-4 border-b border-neutral-100 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-neutral-900 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">
-              {displayName.charAt(0).toUpperCase()}
-            </div>
+            <AvatarImage
+              storagePath={employeeProfile?.avatar_url}
+              name={displayName}
+              sizeClass="w-10 h-10"
+              roundedClass="rounded-full"
+              initialsTextClass="text-sm"
+            />
             <div className="min-w-0">
               <p className="text-xs font-bold text-neutral-900 truncate">{displayName}</p>
               <div className="flex items-center gap-1 mt-0.5">

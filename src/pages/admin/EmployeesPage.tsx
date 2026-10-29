@@ -14,6 +14,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import type { EmployeeProfile, EmployeeRole, ShiftType } from '../../types/attendance'
 import { cn, normalizeName } from '../../lib/utils'
+import AvatarImage from '../../components/common/AvatarImage'
 
 interface CreatedCredentials {
   fullName: string
@@ -587,6 +588,7 @@ export default function EmployeesPage() {
           <table className="w-full text-xs text-left">
             <thead>
               <tr className="bg-neutral-50 border-b border-neutral-200 text-neutral-500 text-[11px] uppercase tracking-wider font-semibold">
+                <th className="px-4 py-3.5 font-semibold">Foto</th>
                 <th className="px-5 py-3.5 font-semibold">Pegawai & ID</th>
                 <th className="px-4 py-3.5 font-semibold">Email Login</th>
                 <th className="px-4 py-3.5 font-semibold">Divisi</th>
@@ -600,7 +602,7 @@ export default function EmployeesPage() {
             <tbody className="divide-y divide-neutral-100 text-neutral-800">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-16 text-neutral-400">
+                  <td colSpan={9} className="text-center py-16 text-neutral-400">
                     <div className="flex flex-col items-center gap-2">
                       <div className="w-6 h-6 border-2 border-neutral-900 border-t-transparent rounded-full animate-spin" />
                       <span className="text-xs">Memuat daftar pegawai...</span>
@@ -609,7 +611,7 @@ export default function EmployeesPage() {
                 </tr>
               ) : filteredEmployees.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-16 text-neutral-400">
+                  <td colSpan={9} className="text-center py-16 text-neutral-400">
                     <div className="w-12 h-12 rounded-full bg-neutral-100 text-neutral-400 flex items-center justify-center mx-auto mb-2">
                       <Users size={24} />
                     </div>
@@ -624,12 +626,21 @@ export default function EmployeesPage() {
               ) : (
                 filteredEmployees.map(emp => (
                   <tr key={emp.id} className="hover:bg-neutral-50/80 transition-colors">
+                    {/* Foto Profil */}
+                    <td className="px-4 py-3.5">
+                      <AvatarImage
+                        storagePath={emp.avatar_url}
+                        name={emp.full_name}
+                        sizeClass="w-9 h-9"
+                        roundedClass="rounded-full"
+                        initialsTextClass="text-xs"
+                        className="border border-neutral-200"
+                      />
+                    </td>
+
                     {/* Pegawai & ID */}
                     <td className="px-5 py-3.5 font-semibold text-neutral-900">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-neutral-100 border border-neutral-200 text-neutral-900 flex items-center justify-center font-bold text-xs flex-shrink-0">
-                          {emp.full_name.charAt(0).toUpperCase()}
-                        </div>
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-semibold text-neutral-900 leading-snug">

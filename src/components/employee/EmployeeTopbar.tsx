@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react'
 import { useLocation, NavLink } from 'react-router-dom'
 import { Menu, Clock } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
+import AvatarImage from '../common/AvatarImage'
 
 interface EmployeeTopbarProps {
   category: 'CS' | 'Security'
@@ -19,6 +20,8 @@ const pageTitles: Record<string, string> = {
   'history': 'Riwayat Absensi',
   'schedule': 'Jadwal Kerja',
   'profile': 'Profil Saya',
+  'profile/edit': 'Kelola Profil',
+  'profile/security': 'Kata Sandi & Keamanan',
   'reports': 'Laporan',
 }
 
@@ -75,9 +78,13 @@ export default function EmployeeTopbar({ category, onMenuToggle }: EmployeeTopba
         to={`${basePath}/profile`}
         className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-neutral-100 transition-colors flex-shrink-0"
       >
-        <div className="w-8 h-8 rounded-full bg-neutral-900 text-white flex items-center justify-center text-xs font-bold flex-shrink-0">
-          {displayName.charAt(0).toUpperCase()}
-        </div>
+        <AvatarImage
+          storagePath={employeeProfile?.avatar_url}
+          name={displayName}
+          sizeClass="w-8 h-8"
+          roundedClass="rounded-full"
+          initialsTextClass="text-xs"
+        />
         <div className="hidden sm:block">
           <p className="text-xs font-semibold text-neutral-900 leading-none">{shortName}</p>
           <p className="text-[10px] text-neutral-400 leading-none mt-0.5">{category}</p>

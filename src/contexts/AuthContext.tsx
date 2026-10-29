@@ -87,7 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // 3. Fallback: Check active_employees_directory
       const { data: employees } = await supabase
         .from('active_employees_directory')
-        .select('id, full_name, normalized_name, employee_role, default_shift, auth_uid, email, employee_code')
+        .select('id, full_name, normalized_name, employee_role, default_shift, auth_uid, email, employee_code, avatar_url')
 
       if (employees && employees.length > 0) {
         const email = authUser.email?.toLowerCase() || ''
@@ -97,7 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const emailPrefix = email.split('@')[0].replace(/[._-]/g, ' ')
         const normEmailPrefix = normalizeName(emailPrefix)
 
-        const empList = employees as unknown as (EmployeeProfile & { auth_uid?: string; email?: string; employee_code?: string })[]
+        const empList = employees as unknown as (EmployeeProfile & { auth_uid?: string; email?: string; employee_code?: string; avatar_url?: string | null })[]
 
         // Match by auth_uid, exact id, metadata employee_id, or email
         let matched = empList.find(

@@ -49,6 +49,7 @@ export interface EmployeeProfile {
   employee_code?: string | null
   email?: string | null
   auth_uid?: string | null
+  avatar_url?: string | null
   employee_role: EmployeeRole
   default_shift: SecurityShiftOption | null
   is_active: boolean
