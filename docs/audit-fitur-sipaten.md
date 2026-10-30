@@ -436,9 +436,9 @@ Selama audit kode sumber mendalam, ditemukan beberapa diskrepansi antara tampila
   ```typescript
   function getShiftTimeLabel(shift: SecurityShiftOption): string {
     switch (shift) {
-      case 'Shift I': return '07.00 - 15.00'
-      case 'Shift II': return '15.00 - 20.00'
-      case 'Shift III': return '20.00 - 07.00'
+      case 'Shift I': return '07.00 - 16.00'
+      case 'Shift II': return '16.00 - 19.30'
+      case 'Shift III': return '19.30 - 07.00'
       case 'Sesi Pagi': return '08.00 - 20.00'
       case 'Sesi Malam': return '20.00 - 08.00'
       default: return ''
@@ -448,7 +448,7 @@ Selama audit kode sumber mendalam, ditemukan beberapa diskrepansi antara tampila
 - **Ketidaksesuaian dengan Konfigurasi Database & Schedule Engine**:
   Pada `DEFAULT_SECURITY_SCHEDULE` di [`scheduleEngine.ts`](file:///d:/Users/ADVAN/AppData/Local/Programs/Antigravity%20IDE/ShiftTrack/src/lib/scheduleEngine.ts#L86-L100) dan form admin di `SettingsSchedulePage.tsx`:
   - *Shift I*: Start `07:00`, Pulang `16:00` (Durasi dinas: 9 jam = 07.00 – 16.00 WIB). Namun label di dashboard tertulis `07.00 - 15.00`.
-  - *Shift II*: Start `15:00`, Pulang `19:30` (Durasi dinas: 4.5 jam = 15.00 – 19.30 WIB). Namun label di dashboard tertulis `15.00 - 20.00`.
+  - *Shift II*: Start `15:00`, Pulang `19:30` (Durasi dinas: 4.5 jam = 16.00 – 19.30 WIB). Namun label di dashboard tertulis `15.00 - 20.00`.
   - *Shift III*: Start `19:30`, Pulang `07:00 H+1`. Namun label di dashboard tertulis `20.00 - 07.00`.
 - **Dampak pada Buku Panduan**: Buku panduan pengguna tidak boleh mencantumkan jam operasional yang bertentangan. Perlu konfirmasi resmi apakah jam kerja resmi Dishub adalah yang ada di database settings (07:00–16:00, 15:00–19:30, 19:30–07:00) atau label di dashboard (07:00–15:00, 15:00–20:00, 20:00–07:00).
 

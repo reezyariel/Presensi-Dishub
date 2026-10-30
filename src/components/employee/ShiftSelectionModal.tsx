@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import {
   isWeekend,
+  getJakartaDayOfWeek,
   getSecurityAvailableOptions,
   getSecurityShiftCheckInStatus,
   getAutoSelectSecurityShift,
@@ -74,13 +75,16 @@ export default function ShiftSelectionModal({
 
   if (!isOpen) return null
 
+  const dayOfWeek = getJakartaDayOfWeek(workDateStr)
+  const isFriday = dayOfWeek === 5
+
   const getOptionIcon = (opt: SecurityShiftOption) => {
     switch (opt) {
       case 'Shift I':
       case 'Sesi Pagi':
         return Sunrise
       case 'Shift II':
-        return Sun
+        return (isWeekendDay || isFriday) ? Moon : Sun
       case 'Shift III':
       case 'Sesi Malam':
         return Moon
@@ -116,7 +120,7 @@ export default function ShiftSelectionModal({
               </h3>
               <p className="text-xs text-neutral-500 mt-0.5">
                 {isWeekendDay
-                  ? 'Sabtu & Minggu menggunakan format Sesi Pagi dan Sesi Malam'
+                  ? 'Sabtu & Minggu menggunakan format Shift I (Pagi) dan Shift II (Malam)'
                   : 'Pilih shift kerja resmi Security untuk hari ini'}
               </p>
             </div>

@@ -23,6 +23,8 @@ import {
   getWeekendSessionSchedule,
   isWeekendSession,
   getSecurityAvailableOptions,
+  getSecurityShiftItem,
+  getJakartaDayOfWeek,
   formatJakartaDate,
   type Security30DayRecap,
   type SecurityShiftSession,
@@ -35,14 +37,27 @@ export interface WeekDayCount {
   dateStr: string
 }
 
-function getShiftTimeLabel(shift: SecurityShiftOption): string {
-  switch (shift) {
-    case 'Shift I': return '07.00 - 15.00'
-    case 'Shift II': return '15.00 - 20.00'
-    case 'Shift III': return '20.00 - 07.00'
-    case 'Sesi Pagi': return '08.00 - 20.00'
-    case 'Sesi Malam': return '20.00 - 08.00'
-    default: return ''
+/**
+ * Returns the work-hours time label for a shift on a given workDateStr.
+ * Uses getSecurityShiftItem (day-based) for accurate hours per day group.
+ * Falls back to generic label if workDateStr is unavailable.
+ */
+function getShiftTimeLabel(shift: SecurityShiftOption, workDateStr?: string): string {
+  if (!workDateStr) {
+    // Generic fallback (no date context)
+    switch (shift) {
+      case 'Shift I':   return '07.00 – 16.00'
+      case 'Shift II':  return '16.00 – 19.30'
+      case 'Shift III': return '19.30 – 07.00'
+      default: return ''
+    }
+  }
+  try {
+    const item = getSecurityShiftItem(workDateStr, shift)
+    const end = item.out_next_day ? `${item.out_start} (H+1)` : item.out_start
+    return `${item.in_start.replace(':', '.')} – ${end.replace(':', '.')}`
+  } catch {
+    return ''
   }
 }
 
@@ -210,7 +225,7 @@ export function SecurityShiftStatusCard({
                   >
                     <span>{opt}</span>
                     <span className={`text-[10px] font-normal ${isSelected ? 'text-neutral-300' : 'text-neutral-400'}`}>
-                      {getShiftTimeLabel(opt)}
+                      {getShiftTimeLabel(opt, workDateStr)}
                     </span>
                   </button>
                 )
@@ -379,33 +394,78 @@ export function SecurityScheduleCard({
 
   // Get details for active tab
   const getTabDetails = (tab: SecurityShiftOption) => {
-    if (isWeekendSession(tab)) {
-      const ws = getWeekendSessionSchedule(tab)
+    // Use day-based getSecurityShiftItem so Jumat & weekend show correct hours
+    try {
+      const item = getSecurityShiftItem(workDateStr, tab)
+      const day = getJakartaDayOfWeek(workDateStr)
+      const isWeekendDay = day === 0 || day === 6
+      const isFri = day === 5
+
+      let name = tab as string
+      let sub = ''
+
+      if (isWeekendDay) {
+        if (item.shift_number === 1) {
+          name = 'Shift I — Pagi'
+          sub  = 'Sesi Akhir Pekan Pagi'
+        } else {
+          name = 'Shift II — Malam'
+          sub  = 'Sesi Akhir Pekan Malam (Lintas Hari)'
+        }
+      } else if (isFri) {
+        sub = tab === 'Shift I' ? 'Shift Siang Jumat' : 'Shift Malam Jumat (Lintas Hari)'
+      } else {
+        sub = tab === 'Shift I' ? 'Pagi – Sore'
+            : tab === 'Shift II' ? 'Sore – Malam'
+            : 'Malam – Pagi (Lintas Hari)'
+      }
+
+      const endStr = item.out_next_day
+        ? `${item.out_end.replace(':', '.')} (H+1)`
+        : item.out_end.replace(':', '.')
+
+      // Duration in hours
+      const inMins  = parseInt(item.in_start.split(':')[0]) * 60 + parseInt(item.in_start.split(':')[1])
+      const outMins = parseInt(item.out_start.split(':')[0]) * 60 + parseInt(item.out_start.split(':')[1])
+      const durationMins = item.out_next_day ? (outMins + 1440 - inMins) : (outMins - inMins)
+      const durationHours = durationMins / 60
+      const durLabel = Number.isInteger(durationHours)
+        ? `${durationHours} Jam`
+        : `${Math.floor(durationHours)} Jam ${durationMins % 60} Menit`
+
+      return {
+        name,
+        sub,
+        masuk:  `${item.in_start.replace(':', '.')} – ${item.in_end.replace(':', '.')} WIB`,
+        pulang: `${item.out_start.replace(':', '.')} – ${endStr} WIB`,
+        duration: durLabel,
+        isOvernight: item.out_next_day,
+      }
+    } catch {
+      // Fallback to legacy for Shift I/II/III (Mon–Thu only)
+      if (isWeekendSession(tab)) {
+        const ws = getWeekendSessionSchedule(tab)
+        return {
+          name: tab,
+          sub: tab === 'Sesi Pagi' ? 'Sesi Akhir Pekan Pagi' : 'Sesi Akhir Pekan Malam',
+          masuk: `${ws.open.replace(':', '.')} – ${ws.close.replace(':', '.')} WIB`,
+          pulang: tab === 'Sesi Pagi' ? '20.00 WIB' : '08.00 WIB (H+1)',
+          duration: '12 Jam Dinas Operasional',
+          isOvernight: tab === 'Sesi Malam',
+        }
+      }
+      const s = getSecuritySchedule(workDateStr, tab as 'Shift I' | 'Shift II' | 'Shift III')
+      const sub = tab === 'Shift I' ? 'Pagi – Sore'
+                : tab === 'Shift II' ? 'Sore – Malam'
+                : 'Malam – Pagi (Lintas Hari)'
       return {
         name: tab,
-        sub: tab === 'Sesi Pagi' ? 'Sesi Akhir Pekan Pagi' : 'Sesi Akhir Pekan Malam',
-        masuk: `${ws.open.replace(':', '.')} – ${ws.close.replace(':', '.')} WIB`,
-        pulang: tab === 'Sesi Pagi' ? '20.00 WIB' : '08.00 WIB (H+1)',
-        duration: '12 Jam Dinas Operasional',
-        isOvernight: tab === 'Sesi Malam',
+        sub,
+        masuk:  `${s.start.replace(':', '.')} – ${s.window_end.replace(':', '.')} WIB`,
+        pulang: `${s.end.replace(':', '.')} – ${s.end_window_end.replace(':', '.')}${s.end_next_day ? ' (H+1)' : ''} WIB`,
+        duration: tab === 'Shift I' ? '9 Jam' : tab === 'Shift II' ? '3.5 Jam' : '11.5 Jam',
+        isOvernight: s.end_next_day,
       }
-    }
-
-    const s = getSecuritySchedule(workDateStr, tab as 'Shift I' | 'Shift II' | 'Shift III')
-    const sub =
-      tab === 'Shift I'
-        ? 'Pagi – Sore'
-        : tab === 'Shift II'
-          ? 'Sore – Malam'
-          : 'Malam – Pagi (Lintas Hari)'
-
-    return {
-      name: tab,
-      sub,
-      masuk: `${s.start.replace(':', '.')} – ${s.window_end.replace(':', '.')} WIB`,
-      pulang: `${s.end.replace(':', '.')} – ${s.end_window_end.replace(':', '.')}${s.end_next_day ? ' (H+1)' : ''} WIB`,
-      duration: tab === 'Shift I' ? '9 Jam' : tab === 'Shift II' ? '4.5 Jam' : '11.5 Jam',
-      isOvernight: s.end_next_day,
     }
   }
 

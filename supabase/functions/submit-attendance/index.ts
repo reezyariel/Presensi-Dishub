@@ -340,11 +340,34 @@ serve(async (req: Request) => {
       )
     }
 
-    // 4c. Determine Work Date (Shift III and Sesi Malam Crossover Linked to Masuk Record)
+    // 4c. Determine Work Date (overnight shifts cross midnight — linked to masuk record)
+    // Overnight shifts by day group:
+    //   Senin–Kamis: Shift III (19:30 – 07:00 H+1), Shift 3
+    //   Jumat:       Shift II  (19:30 – 07:30 H+1)
+    //   Sabtu–Minggu: Shift II (20:00 – 08:00 H+1), Sesi Malam
     let workDate = jakartaDateToday
-    const isOvernightShift = shift === 'Shift III' || shift === 'Shift 3' || shift === 'Sesi Malam'
     const yesterday = new Date(serverNow.getTime() - 24 * 60 * 60 * 1000)
     const yesterdayDateStr = getJakartaDateString(yesterday)
+
+    // Detect overnight shift based on day of week + shift name
+    // workDayOfWeek is not yet defined here — use server today's day
+    const todayDayOfWeek = serverNow.toLocaleDateString('en-US', { timeZone: 'Asia/Jakarta', weekday: 'short' })
+    const todayDayNum = new Date(jakartaDateToday + 'T12:00:00+07:00').getDay() // 0=Sun,1=Mon,...,6=Sat
+
+    function isOvernightByDayAndShift(dayOfWeek: number, shiftName: string | null): boolean {
+      if (!shiftName) return false
+      const s = shiftName.trim()
+      const canon = s === 'Shift 1' ? 'Shift I' : s === 'Shift 2' ? 'Shift II' : s === 'Shift 3' ? 'Shift III' : s
+      // Senin–Kamis (1–4): Shift III overnight
+      if (dayOfWeek >= 1 && dayOfWeek <= 4) return canon === 'Shift III'
+      // Jumat (5): Shift II overnight
+      if (dayOfWeek === 5) return canon === 'Shift II'
+      // Sabtu–Minggu (6,0): Shift II / Sesi Malam overnight
+      if (dayOfWeek === 0 || dayOfWeek === 6) return canon === 'Shift II' || s === 'Sesi Malam'
+      return false
+    }
+
+    const isOvernightShift = isOvernightByDayAndShift(todayDayNum, shift)
 
     if (category === 'Security' && isOvernightShift) {
       if (attendance_type === 'pulang') {
@@ -365,15 +388,14 @@ serve(async (req: Request) => {
           // Linked authoritatively to the exact work_date when the shift started
           workDate = openMasuk.work_date
         } else {
-          // Fallback: If no previous masuk record exists (e.g. forgot to check in),
-          // any checkout before evening shift start (< 18:00 WIB) belongs to yesterday
+          // Fallback: any checkout before 18:00 WIB belongs to yesterday's overnight shift
           if (currentHour < 18) {
             workDate = yesterdayDateStr
           }
         }
       } else if (attendance_type === 'masuk') {
-        // For overnight check-in during post-midnight / early morning hours (< 12:00 WIB),
-        // the duty belongs to yesterday's evening shift (H+1 check-in).
+        // Post-midnight / early morning check-in (< 12:00 WIB) for overnight shift
+        // belongs to yesterday's shift start date.
         if (currentHour < 12) {
           workDate = yesterdayDateStr
         }
@@ -522,203 +544,189 @@ serve(async (req: Request) => {
         }
       }
     } else if (category === 'Security') {
+      // ─────────────────────────────────────────────────────────
+      // Day-based schedule: determine group & shift schedule from
+      // attendance_settings (day_groups) or authoritative defaults.
+      //
+      // Day groups (Asia/Jakarta day-of-week from workDate):
+      //   Mon–Thu (1–4): Shift I 07:00–16:00, II 16:00–19:30, III 19:30–07:00 H+1
+      //   Fri    (5)  : Shift I 07:30–19:30, II 19:30–07:30 H+1
+      //   Sat–Sun(6,0): Shift I 08:00–20:00, II 20:00–08:00 H+1
+      // ─────────────────────────────────────────────────────────
+
+      // Canonical shift name (normalize Shift 1/2/3 and Sesi Pagi/Malam)
+      const shiftStr = String(shift || '')
+      function canonicalize(s: string): string {
+        const t = s.trim()
+        if (t === 'Shift 1' || t === 'Shift I' || t === 'Sesi Pagi') return 'Shift I'
+        if (t === 'Shift 2' || t === 'Shift II' || t === 'Sesi Malam') return 'Shift II'
+        if (t === 'Shift 3' || t === 'Shift III') return 'Shift III'
+        return t
+      }
+      const canonicalShift = canonicalize(shiftStr)
+
       const isWeekendDay = workDayOfWeek === 0 || workDayOfWeek === 6
+      const isFridayDay = workDayOfWeek === 5
 
-      if (isWeekendDay || shift === 'Sesi Pagi' || shift === 'Sesi Malam') {
-        const isMalam = shift === 'Sesi Malam'
-        const rawWknd = secWeekendData?.sesi_malam || secWeekendData?.sesiMalam
-        const rawPagi = secWeekendData?.sesi_pagi || secWeekendData?.sesiPagi
-        const sessionConfig = isMalam ? rawWknd : rawPagi
+      // ── Helper: parse HH:mm from day_groups shift item ──────
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      function getDayGroupShift(dayGroups: any, groupKey: string, shiftCanon: string): any | null {
+        const group = dayGroups?.[groupKey]
+        if (!group?.shifts || !Array.isArray(group.shifts)) return null
+        return group.shifts.find((s: any) => {
+          const sn = String(s.shift_name || '')
+          return canonicalize(sn) === shiftCanon
+        }) || null
+      }
 
-        const openTime = sessionConfig?.open || (isMalam ? '20:00' : '08:00')
-        const closeTime = sessionConfig?.close || (isMalam ? '20:30' : '08:30')
-        const endTime = isMalam ? '08:00' : '20:00'
-        const isNextDay = isMalam
+      // ── Authoritative defaults per day group & shift ─────────
+      // These mirror DEFAULT_DAY_GROUPS in scheduleEngine.ts
+      interface ShiftTimings {
+        in_start: string; in_end: string
+        out_start: string; out_end: string
+        out_next_day: boolean
+      }
 
-        scheduledStart = openTime
-        scheduledEnd = closeTime
-        const openMins = hhmm(scheduledStart)
-        const closeMins = hhmm(scheduledEnd)
-
-        if (attendance_type === 'masuk') {
-          // If workDate is yesterday, shift started yesterday evening; elapsed time is 1440 + currentMinutesFromMidnight
-          const effectiveCurrentMins = (workDate < jakartaDateToday) ? 1440 + currentMinutesFromMidnight : currentMinutesFromMidnight
-
-          if (effectiveCurrentMins < openMins) {
-            return new Response(
-              JSON.stringify({
-                error: `Presensi masuk ${shift} akhir pekan belum dibuka. Jendela presensi masuk dimulai pukul ${scheduledStart} WIB.`,
-                error_code: 'WINDOW_NOT_OPEN',
-                requires_reason: false,
-              }),
-              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            )
-          }
-
-          if (effectiveCurrentMins > closeMins) {
-            attendanceStatus = 'terlambat'
-            lateMinutes = effectiveCurrentMins - closeMins
-            adminNotes = `Terlambat ${lateMinutes} menit (Masuk pukul ${jakartaTimeStr} WIB${workDate < jakartaDateToday ? ' (H+1)' : ''}, batas jendela ${scheduledEnd} WIB)`
-          } else {
-            attendanceStatus = 'tepat_waktu'
-            lateMinutes = 0
-          }
-        } else if (attendance_type === 'pulang') {
-          scheduledStart = openTime
-          scheduledEnd = endTime
-          const endMins = hhmm(endTime)
-
-          if (isNextDay) {
-            // Sesi Malam: shift berakhir besok pagi pukul 08:00 (H+1)
-            if (jakartaDateToday === workDate) {
-              return new Response(
-                JSON.stringify({
-                  error: `Presensi pulang ${shift} akhir pekan belum dibuka. Jendela presensi pulang dimulai besok pagi pukul ${endTime} WIB (H+1).`,
-                  requires_reason: false,
-                }),
-                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-              )
-            } else if (jakartaDateToday > workDate && currentMinutesFromMidnight < endMins) {
-              return new Response(
-                JSON.stringify({
-                  error: `Presensi pulang ${shift} akhir pekan belum dibuka. Jendela presensi pulang dimulai pukul ${endTime} WIB (H+1).`,
-                  requires_reason: false,
-                }),
-                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-              )
-            }
-          } else {
-            // Sesi Pagi: shift berakhir pukul 20:00 di hari yang sama
-            if (currentMinutesFromMidnight < endMins) {
-              return new Response(
-                JSON.stringify({
-                  error: `Presensi pulang ${shift} akhir pekan belum dibuka. Jendela presensi pulang dimulai pukul ${endTime} WIB.`,
-                  requires_reason: false,
-                }),
-                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-              )
-            }
-          }
-
-          attendanceStatus = 'tepat_waktu'
-          lateMinutes = 0
+      function getDefaultShiftTimings(dayOfWeek: number, shiftCanon: string): ShiftTimings {
+        // Senin–Kamis
+        if (dayOfWeek >= 1 && dayOfWeek <= 4) {
+          if (shiftCanon === 'Shift I')   return { in_start:'07:00', in_end:'07:30', out_start:'16:00', out_end:'16:30', out_next_day:false }
+          if (shiftCanon === 'Shift II')  return { in_start:'16:00', in_end:'16:30', out_start:'19:30', out_end:'20:00', out_next_day:false }
+          if (shiftCanon === 'Shift III') return { in_start:'19:30', in_end:'20:00', out_start:'07:00', out_end:'07:30', out_next_day:true  }
         }
-      } else {
-        // Weekday shifts (Shift I, Shift II, Shift III)
-        const shiftStr = String(shift || '')
-        const canonicalShift = (shiftStr === 'Shift 1' ? 'Shift I' : shiftStr === 'Shift 2' ? 'Shift II' : shiftStr === 'Shift 3' ? 'Shift III' : shiftStr) as 'Shift I' | 'Shift II' | 'Shift III'
+        // Jumat
+        if (dayOfWeek === 5) {
+          if (shiftCanon === 'Shift I')   return { in_start:'07:30', in_end:'08:00', out_start:'19:30', out_end:'20:00', out_next_day:false }
+          if (shiftCanon === 'Shift II')  return { in_start:'19:30', in_end:'20:00', out_start:'07:30', out_end:'08:00', out_next_day:true  }
+        }
+        // Sabtu–Minggu
+        if (dayOfWeek === 0 || dayOfWeek === 6) {
+          if (shiftCanon === 'Shift I')   return { in_start:'08:00', in_end:'08:30', out_start:'20:00', out_end:'20:30', out_next_day:false }
+          if (shiftCanon === 'Shift II')  return { in_start:'20:00', in_end:'20:30', out_start:'08:00', out_end:'08:30', out_next_day:true  }
+        }
+        // Fallback Shift I Mon–Thu
+        return { in_start:'07:00', in_end:'07:30', out_start:'16:00', out_end:'16:30', out_next_day:false }
+      }
 
+      // ── Resolve shift timings: DB day_groups → DB shifts legacy → defaults ──
+      const dayGroups = secScheduleData?.day_groups
+      const groupKey = isWeekendDay ? 'weekend' : isFridayDay ? 'friday' : 'mon_thu'
+      const dbGroupShift = getDayGroupShift(dayGroups, groupKey, canonicalShift)
+
+      let timings: ShiftTimings
+      if (dbGroupShift &&
+          typeof dbGroupShift.in_start === 'string' &&
+          typeof dbGroupShift.in_end === 'string' &&
+          typeof dbGroupShift.out_start === 'string' &&
+          typeof dbGroupShift.out_end === 'string') {
+        // Primary: from day_groups in attendance_settings DB
+        timings = {
+          in_start:    dbGroupShift.in_start,
+          in_end:      dbGroupShift.in_end,
+          out_start:   dbGroupShift.out_start,
+          out_end:     dbGroupShift.out_end,
+          out_next_day: Boolean(dbGroupShift.out_next_day),
+        }
+      } else if (!isWeekendDay && !isFridayDay) {
+        // Secondary: legacy shifts object (only valid for Mon–Thu Shift I/II/III)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const rawShift = (secScheduleData?.shifts?.[canonicalShift] || secScheduleData?.shifts?.[shiftStr]) as any
-        let defaultStart = '07:00'
-        let defaultWinEnd = '07:30'
-        let defaultEnd = '16:00'
-        let defaultEndWinEnd = '16:30'
-        let defaultEndNextDay = false
+        const def = getDefaultShiftTimings(workDayOfWeek, canonicalShift)
+        timings = {
+          in_start:    (rawShift?.start        && typeof rawShift.start === 'string')        ? rawShift.start        : def.in_start,
+          in_end:      (rawShift?.window_end   && typeof rawShift.window_end === 'string')   ? rawShift.window_end   : def.in_end,
+          out_start:   (rawShift?.end          && typeof rawShift.end === 'string')          ? rawShift.end          : def.out_start,
+          out_end:     (rawShift?.end_window_end && typeof rawShift.end_window_end === 'string') ? rawShift.end_window_end : def.out_end,
+          out_next_day: typeof rawShift?.end_next_day === 'boolean' ? rawShift.end_next_day : def.out_next_day,
+        }
+      } else {
+        // Fallback to authoritative defaults
+        timings = getDefaultShiftTimings(workDayOfWeek, canonicalShift)
+      }
 
-        if (canonicalShift === 'Shift II') {
-          defaultStart = '15:00'
-          defaultWinEnd = '15:30'
-          defaultEnd = '19:30'
-          defaultEndWinEnd = '20:00'
-          defaultEndNextDay = false
-        } else if (canonicalShift === 'Shift III') {
-          defaultStart = '19:30'
-          defaultWinEnd = '20:00'
-          defaultEnd = '07:00'
-          defaultEndWinEnd = '07:30'
-          defaultEndNextDay = true
+      // Thu/Fri offset (only for Mon–Fri, never weekend)
+      const shiftOffset = (!isWeekendDay && isShiftedDay) ? (Number(secScheduleData?.thursday_friday_shift_minutes) || 0) : 0
+      if (shiftOffset > 0) {
+        const fmtMin = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2,'0')}:${String(m % 60).padStart(2,'0')}`
+        timings = {
+          in_start:    fmtMin(hhmm(timings.in_start)  + shiftOffset),
+          in_end:      fmtMin(hhmm(timings.in_end)    + shiftOffset),
+          out_start:   fmtMin(hhmm(timings.out_start) + shiftOffset),
+          out_end:     fmtMin(hhmm(timings.out_end)   + shiftOffset),
+          out_next_day: timings.out_next_day,
+        }
+      }
+
+      scheduledStart = timings.in_start
+      scheduledEnd   = timings.in_end
+
+      if (attendance_type === 'masuk') {
+        const startMins = hhmm(timings.in_start)
+        const windowEndMins = hhmm(timings.in_end)
+        // Overnight masuk post-midnight: add 1440 to treat as next-calendar-day minutes
+        const effectiveCurrentMins = (workDate < jakartaDateToday) ? 1440 + currentMinutesFromMidnight : currentMinutesFromMidnight
+
+        if (effectiveCurrentMins < startMins) {
+          return new Response(
+            JSON.stringify({
+              error: `Presensi masuk ${shift} belum dibuka. Jendela presensi masuk dimulai pukul ${timings.in_start} WIB.`,
+              error_code: 'WINDOW_NOT_OPEN',
+              requires_reason: false,
+            }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
         }
 
-        let baseStart = (rawShift?.start && typeof rawShift.start === 'string') ? rawShift.start : defaultStart
-        let baseWinEnd = (rawShift?.window_end && typeof rawShift.window_end === 'string') ? rawShift.window_end : defaultWinEnd
-        let baseEnd = (rawShift?.end && typeof rawShift.end === 'string') ? rawShift.end : defaultEnd
-        let baseEndWinEnd = (rawShift?.end_window_end && typeof rawShift.end_window_end === 'string') ? rawShift.end_window_end : defaultEndWinEnd
-        const endNextDay = Boolean(rawShift?.end_next_day ?? defaultEndNextDay)
-
-        // Pergeseran Kamis & Jumat jika ada konfigurasi thursday_friday_shift_minutes
-        const shiftOffset = isShiftedDay ? (Number(secScheduleData?.thursday_friday_shift_minutes) || 0) : 0
-        if (shiftOffset > 0) {
-          const formatMin = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
-          baseStart = formatMin(hhmm(baseStart) + shiftOffset)
-          baseWinEnd = formatMin(hhmm(baseWinEnd) + shiftOffset)
-          baseEnd = formatMin(hhmm(baseEnd) + shiftOffset)
-          baseEndWinEnd = formatMin(hhmm(baseEndWinEnd) + shiftOffset)
+        if (effectiveCurrentMins > windowEndMins) {
+          attendanceStatus = 'terlambat'
+          lateMinutes = effectiveCurrentMins - windowEndMins
+          adminNotes = `Terlambat ${lateMinutes} menit (Masuk pukul ${jakartaTimeStr} WIB${workDate < jakartaDateToday ? ' (H+1)' : ''}, batas jendela ${timings.in_end} WIB)`
+        } else {
+          attendanceStatus = 'tepat_waktu'
+          lateMinutes = 0
         }
+      } else if (attendance_type === 'pulang') {
+        scheduledStart = timings.in_start
+        scheduledEnd   = timings.out_start
+        const endMins = hhmm(timings.out_start)
 
-        scheduledStart = baseStart
-        scheduledEnd = baseWinEnd
-
-        if (attendance_type === 'masuk') {
-          const startMins = hhmm(scheduledStart)
-          const windowEndMins = hhmm(scheduledEnd)
-
-          // If workDate is yesterday (overnight shift post-midnight), elapsed time is 1440 + currentMinutesFromMidnight
-          const effectiveCurrentMins = (workDate < jakartaDateToday) ? 1440 + currentMinutesFromMidnight : currentMinutesFromMidnight
-
-          // Wajib tolak untuk SEMUA shift (Shift I, Shift II, Shift III) jika belum masuk jam buka
-          if (effectiveCurrentMins < startMins) {
+        if (timings.out_next_day) {
+          // Overnight shift: checkout only allowed on H+1 at or after out_start
+          if (jakartaDateToday === workDate) {
             return new Response(
               JSON.stringify({
-                error: `Presensi masuk ${shift} belum dibuka. Jendela presensi masuk dimulai pukul ${scheduledStart} WIB.`,
+                error: `Presensi pulang ${shift} belum dibuka. Jendela presensi pulang dimulai besok pagi pukul ${timings.out_start} WIB (H+1).`,
+                error_code: 'WINDOW_NOT_OPEN',
+                requires_reason: false,
+              }),
+              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+          } else if (jakartaDateToday > workDate && currentMinutesFromMidnight < endMins) {
+            return new Response(
+              JSON.stringify({
+                error: `Presensi pulang ${shift} belum dibuka. Jendela presensi pulang dimulai pukul ${timings.out_start} WIB (H+1).`,
                 error_code: 'WINDOW_NOT_OPEN',
                 requires_reason: false,
               }),
               { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
           }
-
-          if (effectiveCurrentMins > windowEndMins) {
-            attendanceStatus = 'terlambat'
-            lateMinutes = effectiveCurrentMins - windowEndMins
-            adminNotes = `Terlambat ${lateMinutes} menit (Masuk pukul ${jakartaTimeStr} WIB${workDate < jakartaDateToday ? ' (H+1)' : ''}, batas jendela ${scheduledEnd} WIB)`
-          } else {
-            attendanceStatus = 'tepat_waktu'
-            lateMinutes = 0
+        } else {
+          // Same-day checkout: allowed at or after out_start
+          if (currentMinutesFromMidnight < endMins) {
+            return new Response(
+              JSON.stringify({
+                error: `Presensi pulang ${shift} belum dibuka. Jendela presensi pulang dimulai pukul ${timings.out_start} WIB.`,
+                error_code: 'WINDOW_NOT_OPEN',
+                requires_reason: false,
+              }),
+              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
           }
-        } else if (attendance_type === 'pulang') {
-          scheduledStart = baseStart
-          scheduledEnd = baseEnd
-          const endMins = hhmm(baseEnd)
-
-          if (endNextDay) {
-            // Shift III (lintas hari): pulang hanya boleh di hari berikutnya (H+1) pada atau setelah jam baseEnd
-            if (jakartaDateToday === workDate) {
-              return new Response(
-                JSON.stringify({
-                  error: `Presensi pulang ${shift} belum dibuka. Jendela presensi pulang dimulai besok pagi pukul ${baseEnd} WIB (H+1).`,
-                  error_code: 'WINDOW_NOT_OPEN',
-                  requires_reason: false,
-                }),
-                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-              )
-            } else if (jakartaDateToday > workDate && currentMinutesFromMidnight < endMins) {
-              return new Response(
-                JSON.stringify({
-                  error: `Presensi pulang ${shift} belum dibuka. Jendela presensi pulang dimulai pukul ${baseEnd} WIB (H+1).`,
-                  error_code: 'WINDOW_NOT_OPEN',
-                  requires_reason: false,
-                }),
-                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-              )
-            }
-          } else {
-            // Shift I & II (hari yang sama): pulang hanya boleh pada atau setelah baseEnd
-            if (currentMinutesFromMidnight < endMins) {
-              return new Response(
-                JSON.stringify({
-                  error: `Presensi pulang ${shift} belum dibuka. Jendela presensi pulang dimulai pukul ${baseEnd} WIB.`,
-                  error_code: 'WINDOW_NOT_OPEN',
-                  requires_reason: false,
-                }),
-                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-              )
-            }
-          }
-
-          attendanceStatus = 'tepat_waktu'
-          lateMinutes = 0
         }
+
+        attendanceStatus = 'tepat_waktu'
+        lateMinutes = 0
       }
     }
 
