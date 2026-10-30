@@ -524,7 +524,7 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
         <div>
           <p className="text-[11px] font-semibold text-neutral-500">Shift Belum Ditentukan</p>
           <p className="text-xs font-bold text-neutral-900 mt-0.5">Pilih shift tugas Anda hari ini</p>
-          <p className="text-[10px] text-neutral-400 mt-0.5">Tentukan Shift I, Shift II, atau Shift III sebelum absen.</p>
+          <p className="text-[10px] text-neutral-400 mt-0.5">Tentukan shift dinas Anda sebelum absen.</p>
         </div>
       </>
     )

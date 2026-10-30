@@ -383,7 +383,7 @@ export default function TakeAttendanceModal({
                 <div className="flex-1">
                   <p className="font-bold text-amber-900">Shift Belum Dipilih</p>
                   <p className="text-amber-800 mt-0.5 leading-relaxed">
-                    Anda belum menentukan shift tugas. Silakan kembali ke beranda dan pilih salah satu shift (Shift I, Shift II, atau Shift III) sebelum mengambil foto presensi.
+                    Anda belum menentukan shift tugas. Silakan kembali ke beranda dan pilih shift dinas Anda yang aktif sebelum mengambil foto presensi.
                   </p>
                 </div>
               </div>

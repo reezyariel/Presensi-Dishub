@@ -23,22 +23,14 @@ import {
   getSecurityScheduleFromDB,
   getCSScheduleSync,
   getSecurityScheduleSync,
+  getSecurityShiftItem,
+  getJakartaDayOfWeek,
+  todayJakarta,
+  DEFAULT_DAY_GROUPS,
   type CSSchedule,
   type SecuritySchedule,
-  type ShiftSchedule
 } from '../../lib/scheduleEngine'
-import type { ShiftType } from '../../types/attendance'
 
-interface ShiftDisplayInfo {
-  name: ShiftType
-  period: string
-  masuk: string
-  masukClose: string
-  pulang: string
-  pulangClose: string
-  isMidnight: boolean
-  note: string
-}
 
 export default function SchedulePage() {
   const { employeeProfile, role, isAdmin, isLoading: isAuthLoading } = useAuth()
@@ -78,6 +70,7 @@ export default function SchedulePage() {
   const [csScheduleData, setCsScheduleData] = useState<CSSchedule>(getCSScheduleSync())
   const [secScheduleData, setSecScheduleData] = useState<SecuritySchedule>(getSecurityScheduleSync())
   const [isScheduleLoading, setIsScheduleLoading] = useState(true)
+  const [selectedDayGroupTab, setSelectedDayGroupTab] = useState<'all' | 'mon_thu' | 'friday' | 'weekend'>('all')
 
   useEffect(() => {
     let isMounted = true
@@ -102,8 +95,6 @@ export default function SchedulePage() {
   }, [])
 
   const now = new Date()
-  const dayOfWeek = now.getDay()
-  const isThursdayFriday = dayOfWeek === 4 || dayOfWeek === 5
   const todayStr = formatJakartaDate(now)
 
   const effectiveCategory = isAdmin ? activeTab : resolvedCategory
@@ -175,47 +166,78 @@ export default function SchedulePage() {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Security Schedule Computation (with Thursday/Friday shift offset)
+  // Security Schedule Computation (Authoritative Day-Based Groups)
   // ─────────────────────────────────────────────────────────────
-  const offsetMin = isThursdayFriday ? secScheduleData.thursday_friday_shift_minutes : 0
+  const dayGroups = secScheduleData.day_groups || DEFAULT_DAY_GROUPS
 
-  const addMin = (timeStr: string, min: number): string => {
-    if (!timeStr) return '--.--'
-    const [h, m] = timeStr.split(':').map(Number)
-    const total = (h * 60 + m + min + 1440) % 1440
-    const hh = String(Math.floor(total / 60)).padStart(2, '0')
-    const mm = String(total % 60).padStart(2, '0')
-    return `${hh}.${mm}`
+  const todayIso = todayJakarta()
+  const todayDayOfWeek = getJakartaDayOfWeek(todayIso)
+  const currentDayGroupKey: 'mon_thu' | 'friday' | 'weekend' =
+    todayDayOfWeek === 5 ? 'friday' : (todayDayOfWeek === 0 || todayDayOfWeek === 6) ? 'weekend' : 'mon_thu'
+
+  const formatDuration = (inStart: string, outStart: string, outNextDay: boolean): string => {
+    const [inH, inM] = inStart.split(':').map(Number)
+    const [outH, outM] = outStart.split(':').map(Number)
+    const inMins = inH * 60 + inM
+    const outMins = outH * 60 + outM
+    const totalMins = outNextDay ? (outMins + 1440 - inMins) : (outMins - inMins)
+    const hours = totalMins / 60
+    return Number.isInteger(hours) ? `${hours} Jam` : `${Math.floor(hours)} Jam ${totalMins % 60} Menit`
   }
 
-  const formatShift = (name: ShiftType, period: string, note: string): ShiftDisplayInfo => {
-    const rawShift: ShiftSchedule = secScheduleData.shifts[name]
-    const masuk = `${addMin(rawShift.start, offsetMin)} WIB`
-    const masukClose = `${addMin(rawShift.window_end, offsetMin)} WIB`
-    const pulang = `${addMin(rawShift.end, offsetMin)} WIB${rawShift.end_next_day ? ' (H+1)' : ''}`
-    const pulangClose = `${addMin(rawShift.end_window_end, offsetMin)} WIB${rawShift.end_window_end_next_day ? ' (H+1)' : ''}`
+  // Personal shift for logged-in Security officer based on today's day group
+  const userAssignedShiftName = employeeProfile?.default_shift || null
+  const myTodayShiftItem = userAssignedShiftName ? getSecurityShiftItem(todayIso, userAssignedShiftName) : null
+  const myShiftInfo = myTodayShiftItem ? {
+    name: myTodayShiftItem.label || myTodayShiftItem.shift_name,
+    shift_name: myTodayShiftItem.shift_name,
+    period: myTodayShiftItem.shift_number === 1
+      ? 'Pagi'
+      : myTodayShiftItem.shift_number === 2
+        ? (todayDayOfWeek === 5 || todayDayOfWeek === 0 || todayDayOfWeek === 6 ? 'Malam' : 'Sore')
+        : 'Malam',
+    masuk: `${myTodayShiftItem.in_start.replace(':', '.')} WIB`,
+    masukClose: `${myTodayShiftItem.in_end.replace(':', '.')} WIB`,
+    pulang: `${myTodayShiftItem.out_start.replace(':', '.')} WIB${myTodayShiftItem.out_next_day ? ' (H+1)' : ''}`,
+    pulangClose: `${myTodayShiftItem.out_end.replace(':', '.')} WIB${myTodayShiftItem.out_next_day ? ' (H+1)' : ''}`,
+    workHours: `${myTodayShiftItem.in_start.replace(':', '.')} – ${myTodayShiftItem.out_start.replace(':', '.')} WIB${myTodayShiftItem.out_next_day ? ' (H+1)' : ''}`,
+    duration: formatDuration(myTodayShiftItem.in_start, myTodayShiftItem.out_start, myTodayShiftItem.out_next_day),
+    isMidnight: myTodayShiftItem.out_next_day,
+    dayGroupName: todayDayOfWeek === 5 ? 'Jumat' : (todayDayOfWeek === 0 || todayDayOfWeek === 6) ? 'Sabtu & Minggu' : 'Senin – Kamis',
+  } : null
 
-    return {
-      name,
-      period,
-      masuk,
-      masukClose,
-      pulang,
-      pulangClose,
-      isMidnight: rawShift.end_next_day,
-      note,
-    }
-  }
-
-  const securityShifts: ShiftDisplayInfo[] = [
-    formatShift('Shift I', 'Pagi', 'Shift pagi reguler'),
-    formatShift('Shift II', 'Sore', 'Shift sore reguler'),
-    formatShift('Shift III', 'Malam', 'Shift malam, berakhir keesokan hari'),
+  // All 3 Day Groups to display
+  const allGroups = [
+    {
+      key: 'mon_thu' as const,
+      name: 'Senin – Kamis',
+      subtitle: '3 Shift Bergantian (24 Jam)',
+      badge: '3 Shift',
+      desc: 'Rotasi dinas operasional 24 jam untuk hari kerja reguler Senin sampai Kamis.',
+      shifts: dayGroups.mon_thu?.shifts || DEFAULT_DAY_GROUPS.mon_thu.shifts,
+      isToday: currentDayGroupKey === 'mon_thu',
+    },
+    {
+      key: 'friday' as const,
+      name: 'Jumat',
+      subtitle: '2 Shift Operasional Khusus',
+      badge: '2 Shift Khusus',
+      desc: 'Jadwal operasional khusus hari Jumat: Shift I 12 jam (siang) dan Shift II 12 jam (malam lintas hari).',
+      shifts: dayGroups.friday?.shifts || DEFAULT_DAY_GROUPS.friday.shifts,
+      isToday: currentDayGroupKey === 'friday',
+    },
+    {
+      key: 'weekend' as const,
+      name: 'Sabtu – Minggu',
+      subtitle: '2 Shift Akhir Pekan (Pagi & Malam)',
+      badge: '2 Shift Weekend',
+      desc: 'Jadwal penjagaan 12 jam akhir pekan: Shift I (Pagi) dan Shift II (Malam lintas hari).',
+      shifts: dayGroups.weekend?.shifts || DEFAULT_DAY_GROUPS.weekend.shifts,
+      isToday: currentDayGroupKey === 'weekend',
+    },
   ]
 
-  // User's assigned shift from verified database profile
-  const userAssignedShiftName = employeeProfile?.default_shift || null
-  const myShiftInfo = securityShifts.find(s => s.name === userAssignedShiftName) || null
+  const visibleGroups = allGroups.filter(g => selectedDayGroupTab === 'all' || selectedDayGroupTab === g.key)
 
   return (
     <div className="space-y-5">
@@ -228,11 +250,11 @@ export default function SchedulePage() {
           <p className="text-xs text-neutral-500 mt-0.5">{todayStr}</p>
         </div>
 
-        {/* Thursday/Friday Badge for Security */}
-        {effectiveCategory === 'Security' && isThursdayFriday && (
-          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-700 bg-neutral-100 border border-neutral-200 rounded-full px-3 py-1.5 self-start">
-            <Clock size={12} />
-            Hari Khusus (+{secScheduleData.thursday_friday_shift_minutes} mnt)
+        {/* Current Day Group Badge for Security */}
+        {effectiveCategory === 'Security' && (
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-800 bg-neutral-100 border border-neutral-200 rounded-full px-3 py-1.5 self-start">
+            <Calendar size={13} className="text-neutral-500" />
+            <span>Hari Ini: <strong>{todayDayOfWeek === 5 ? 'Jumat (2 Shift)' : (todayDayOfWeek === 0 || todayDayOfWeek === 6) ? 'Sabtu & Minggu (2 Shift)' : 'Senin–Kamis (3 Shift)'}</strong></span>
           </span>
         )}
       </div>
@@ -262,23 +284,28 @@ export default function SchedulePage() {
       )}
 
       {/* ─────────────────────────────────────────────────────────
-          SECURITY VIEW: 24h Rotation & Personal Shift
+          SECURITY VIEW: Day-Based Shift Schedules
       ────────────────────────────────────────────────────────── */}
       {effectiveCategory === 'Security' && (
-        <div className="space-y-5">
+        <div className="space-y-6">
           {/* ── 1. Hero Card "Shift Saya Hari Ini" (for employees) ── */}
           {!isAdmin && myShiftInfo && (
             <div className="bg-neutral-900 rounded-2xl overflow-hidden shadow-sm">
               <div className="px-5 pt-5 pb-5">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                   <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
                       <Sparkles size={16} className="text-white" />
                     </div>
                     <div>
-                      <p className="text-[10px] font-semibold text-white/50 uppercase tracking-wider">
-                        Shift Saya Hari Ini
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-[10px] font-semibold text-white/50 uppercase tracking-wider">
+                          Shift Saya Hari Ini
+                        </p>
+                        <span className="text-[10px] text-amber-300 font-semibold">
+                          • {myShiftInfo.dayGroupName}
+                        </span>
+                      </div>
                       <h3 className="text-base font-bold text-white">
                         {myShiftInfo.name} — {myShiftInfo.period}
                       </h3>
@@ -286,36 +313,40 @@ export default function SchedulePage() {
                   </div>
 
                   <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-neutral-200 bg-white/10 px-2.5 py-1 rounded-full border border-white/10">
+                      Durasi: {myShiftInfo.duration}
+                    </span>
                     {myShiftInfo.isMidnight && (
-                      <span className="text-[10px] font-bold text-neutral-300 bg-white/10 px-2.5 py-1 rounded-full border border-white/10">
+                      <span className="text-[10px] font-bold text-amber-300 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-400/20">
                         Lintas Hari (H+1)
-                      </span>
-                    )}
-                    {isThursdayFriday && (
-                      <span className="text-[10px] font-bold text-white/70 bg-white/10 px-2.5 py-1 rounded-full border border-white/10">
-                        +{secScheduleData.thursday_friday_shift_minutes} mnt
                       </span>
                     )}
                   </div>
                 </div>
 
-                {/* Grid details: Masuk, Batas Masuk, Pulang, Batas Pulang */}
+                {/* Jam Kerja Utama */}
+                <div className="mb-3 px-4 py-2.5 bg-white/5 rounded-xl border border-white/5 flex items-center justify-between">
+                  <span className="text-xs text-white/60">Jam Kerja Operasional</span>
+                  <span className="text-sm font-bold font-mono text-white">{myShiftInfo.workHours}</span>
+                </div>
+
+                {/* Grid details: Masuk & Pulang */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {/* Presensi Masuk Card */}
                   <div className="bg-white/[0.07] border border-white/10 rounded-xl p-4">
                     <div className="flex items-center gap-1.5 mb-2">
                       <Sunrise size={13} className="text-white/60" />
                       <span className="text-[11px] font-semibold text-white/60 uppercase tracking-wide">
-                        Presensi Masuk
+                        Presensi Masuk (Check-In)
                       </span>
                     </div>
                     <div className="flex items-baseline justify-between">
-                      <span className="text-xs text-white/50">Jam Masuk</span>
-                      <span className="text-xl font-black text-white font-mono">{myShiftInfo.masuk}</span>
+                      <span className="text-xs text-white/50">Mulai Check-In</span>
+                      <span className="text-lg font-black text-white font-mono">{myShiftInfo.masuk}</span>
                     </div>
                     <div className="flex items-baseline justify-between mt-1 pt-1 border-t border-white/5">
                       <span className="text-[11px] text-white/40">Batas Tepat Waktu</span>
-                      <span className="text-xs font-semibold text-white/70 font-mono">{myShiftInfo.masukClose}</span>
+                      <span className="text-xs font-semibold text-emerald-400 font-mono">{myShiftInfo.masukClose}</span>
                     </div>
                   </div>
 
@@ -324,15 +355,15 @@ export default function SchedulePage() {
                     <div className="flex items-center gap-1.5 mb-2">
                       <Sunset size={13} className="text-white/60" />
                       <span className="text-[11px] font-semibold text-white/60 uppercase tracking-wide">
-                        Presensi Pulang
+                        Presensi Pulang (Check-Out)
                       </span>
                     </div>
                     <div className="flex items-baseline justify-between">
-                      <span className="text-xs text-white/50">Jam Pulang</span>
-                      <span className="text-xl font-black text-white font-mono">{myShiftInfo.pulang}</span>
+                      <span className="text-xs text-white/50">Mulai Check-Out</span>
+                      <span className="text-lg font-black text-white font-mono">{myShiftInfo.pulang}</span>
                     </div>
                     <div className="flex items-baseline justify-between mt-1 pt-1 border-t border-white/5">
-                      <span className="text-[11px] text-white/40">Batas Check-out</span>
+                      <span className="text-[11px] text-white/40">Batas Check-Out</span>
                       <span className="text-xs font-semibold text-white/70 font-mono">{myShiftInfo.pulangClose}</span>
                     </div>
                   </div>
@@ -341,9 +372,9 @@ export default function SchedulePage() {
 
               {myShiftInfo.isMidnight && (
                 <div className="px-5 py-3 bg-white/5 border-t border-white/10 flex items-center gap-2">
-                  <Moon size={13} className="text-white/40 flex-shrink-0" />
-                  <p className="text-[11px] text-white/60 leading-relaxed">
-                    Shift III melintasi tengah malam — jam pulang dan batas akhir check-out jatuh pada keesokan harinya (H+1).
+                  <Moon size={13} className="text-amber-400 flex-shrink-0" />
+                  <p className="text-[11px] text-white/70 leading-relaxed">
+                    Shift malam melintasi tengah malam — jam pulang dan batas akhir check-out jatuh pada keesokan harinya (H+1).
                   </p>
                 </div>
               )}
@@ -360,128 +391,216 @@ export default function SchedulePage() {
                 <div>
                   <h3 className="text-sm font-bold">Shift Belum Ditugaskan</h3>
                   <p className="text-xs text-neutral-400 mt-1 leading-relaxed">
-                    Shift default akun Anda belum ditetapkan oleh administrator. Silakan hubungi admin HR atau atasan Security Anda untuk penetapan rotasi shift.
+                    Shift default akun Anda belum ditetapkan oleh administrator. Silakan pilih shift dinas yang berlaku saat melakukan presensi masuk di Beranda.
                   </p>
                 </div>
               </div>
             </div>
           )}
 
-          {/* ── Thursday/Friday Note Banner ── */}
-          {isThursdayFriday && (
-            <div className="bg-neutral-100 border border-neutral-200 text-neutral-800 rounded-2xl p-4 flex items-start gap-3">
-              <Calendar size={16} className="flex-shrink-0 mt-0.5 text-neutral-600" />
+          {/* ── 2. Reference Sections: Day-Based Shift Schedule Groups ── */}
+          <div className="space-y-4">
+            {/* Header and Filter Pills */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-bold text-neutral-900">
-                  Penyesuaian Hari Kamis & Jumat (+{secScheduleData.thursday_friday_shift_minutes} Menit)
+                <p className="text-xs font-bold text-neutral-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <Shield size={13} className="text-neutral-700" />
+                  Jadwal Resmi Shift Security Berdasarkan Hari
                 </p>
-                <p className="text-[11px] text-neutral-600 mt-0.5 leading-relaxed">
-                  Semua waktu shift Security (Shift I, II, dan III) dimajukan +{secScheduleData.thursday_friday_shift_minutes} menit sesuai Surat Keputusan Operasional Dishub. Waktu yang tertera di atas dan di bawah sudah disesuaikan otomatis.
+                <p className="text-[11px] text-neutral-500 mt-0.5">
+                  Tersinkronisasi otomatis dengan konfigurasi server Supabase
                 </p>
               </div>
-            </div>
-          )}
 
-          {/* ── 2. Reference Cards: 3-Shift 24-Hour Rotation ── */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-bold text-neutral-800 uppercase tracking-wider flex items-center gap-1.5">
-                <Shield size={12} className="text-neutral-500" />
-                Referensi Rotasi 24 Jam Security
-              </p>
-              <span className="text-[11px] text-neutral-500">3 Shift Bergantian</span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {securityShifts.map(shift => {
-                const isMyShift = shift.name === userAssignedShiftName
-                const Icon = shift.name === 'Shift I' ? Sunrise : shift.name === 'Shift II' ? Sunset : Moon
-
-                return (
-                  <div
-                    key={shift.name}
-                    className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${isMyShift && !isAdmin
-                        ? 'border-neutral-900 ring-2 ring-neutral-900/10'
-                        : shift.isMidnight
-                          ? 'border-neutral-300'
-                          : 'border-neutral-200'
+              {/* Group Filter Tabs */}
+              <div className="flex items-center p-1 bg-neutral-100 rounded-xl border border-neutral-200 gap-1 overflow-x-auto self-start sm:self-auto">
+                {[
+                  { id: 'all', label: 'Semua Hari' },
+                  { id: 'mon_thu', label: 'Senin–Kamis', badge: '3 Shift' },
+                  { id: 'friday', label: 'Jumat', badge: '2 Shift' },
+                  { id: 'weekend', label: 'Sabtu–Minggu', badge: '2 Shift' },
+                ].map(tab => {
+                  const isSelected = selectedDayGroupTab === tab.id
+                  const isTodayGroup = tab.id === currentDayGroupKey
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setSelectedDayGroupTab(tab.id as any)}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                        isSelected
+                          ? 'bg-neutral-900 text-white shadow-xs'
+                          : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200/50'
                       }`}
-                  >
-                    <div className="px-5 pt-5 pb-4">
-                      {/* Card Header */}
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2.5">
-                          <div
-                            className={`w-8 h-8 rounded-lg flex items-center justify-center ${isMyShift && !isAdmin
-                                ? 'bg-neutral-900 text-white'
-                                : shift.isMidnight
-                                  ? 'bg-neutral-800 text-white'
-                                  : 'bg-neutral-100 text-neutral-700'
-                              }`}
-                          >
-                            <Icon size={16} />
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold text-neutral-900">{shift.name}</p>
-                            <p className="text-[10px] text-neutral-500">{shift.note}</p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                          {isMyShift && !isAdmin && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-neutral-900 text-white">
-                              Shift Anda
-                            </span>
-                          )}
-                          {shift.isMidnight && (
-                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-neutral-100 text-neutral-700 border border-neutral-200">
-                              H+1
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Shift Hours Grid */}
-                      <div className="space-y-2 text-xs">
-                        <div className="flex justify-between items-center">
-                          <span className="text-[11px] text-neutral-500 flex items-center gap-1">
-                            <Sunrise size={11} className="text-neutral-400" /> Jam Masuk
-                          </span>
-                          <span className="font-bold text-neutral-900 font-mono">{shift.masuk}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-[11px] text-neutral-500 flex items-center gap-1">
-                            <Clock size={11} className="text-neutral-400" /> Batas Masuk
-                          </span>
-                          <span className="font-semibold text-neutral-600 font-mono">{shift.masukClose}</span>
-                        </div>
-                        <div className="flex justify-between items-center pt-1 border-t border-neutral-100">
-                          <span className="text-[11px] text-neutral-500 flex items-center gap-1">
-                            <Sunset size={11} className="text-neutral-400" /> Jam Pulang
-                          </span>
-                          <span className="font-bold text-neutral-900 font-mono">{shift.pulang}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-[11px] text-neutral-500 flex items-center gap-1">
-                            <Clock size={11} className="text-neutral-400" /> Batas Pulang
-                          </span>
-                          <span className="font-semibold text-neutral-600 font-mono">{shift.pulangClose}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div
-                      className={`px-5 py-2.5 border-t text-[10px] font-semibold flex items-center justify-between ${shift.isMidnight
-                          ? 'bg-neutral-900 text-white border-neutral-800'
-                          : 'bg-neutral-50 text-neutral-600 border-neutral-100'
-                        }`}
                     >
-                      <span>Periode: {shift.period}</span>
-                      {shift.isMidnight && <span>Selesai di hari berikutnya</span>}
+                      <span>{tab.label}</span>
+                      {isTodayGroup && (
+                        <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-emerald-400' : 'bg-emerald-500'}`} title="Hari Ini" />
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Rendered Groups */}
+            <div className="space-y-6">
+              {visibleGroups.map(group => (
+                <div
+                  key={group.key}
+                  className={`rounded-2xl border transition-all ${
+                    group.isToday
+                      ? 'border-neutral-900/30 bg-neutral-50/30 shadow-xs'
+                      : 'border-neutral-200 bg-white'
+                  } p-5 space-y-4`}
+                >
+                  {/* Group Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-neutral-200/60">
+                    <div className="flex items-center gap-2.5">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                        group.isToday ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-700'
+                      }`}>
+                        <Calendar size={15} />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm font-bold text-neutral-900">{group.name}</h3>
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-700 border border-neutral-200">
+                            {group.badge}
+                          </span>
+                          {group.isToday && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                              Hari Ini
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-neutral-500 mt-0.5">{group.desc}</p>
+                      </div>
                     </div>
                   </div>
-                )
-              })}
+
+                  {/* Shift Cards Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {group.shifts.map(shift => {
+                      const isMyShiftOnToday = group.isToday && userAssignedShiftName === shift.shift_name
+                      const isOvernight = shift.out_next_day
+                      const Icon = isOvernight ? Moon : shift.shift_number === 1 ? Sunrise : Sunset
+                      const duration = formatDuration(shift.in_start, shift.out_start, shift.out_next_day)
+
+                      return (
+                        <div
+                          key={shift.id || shift.shift_name}
+                          className={`bg-white rounded-xl border shadow-xs overflow-hidden flex flex-col justify-between transition-all ${
+                            isMyShiftOnToday
+                              ? 'border-neutral-900 ring-2 ring-neutral-900/10'
+                              : isOvernight
+                                ? 'border-neutral-300'
+                                : 'border-neutral-200'
+                          }`}
+                        >
+                          <div className="p-4 space-y-3.5">
+                            {/* Card Top: Name & Badges */}
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                                  isOvernight ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-700'
+                                }`}>
+                                  <Icon size={14} />
+                                </div>
+                                <div>
+                                  <p className="text-xs font-bold text-neutral-900">
+                                    {shift.label || shift.shift_name}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1">
+                                {isMyShiftOnToday && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-neutral-900 text-white">
+                                    Shift Anda
+                                  </span>
+                                )}
+                                {isOvernight && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-neutral-100 text-neutral-700 border border-neutral-200">
+                                    Lintas Hari (H+1)
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Jam Kerja Banner */}
+                            <div className="p-3 bg-neutral-50 rounded-lg border border-neutral-100 flex items-center justify-between">
+                              <div>
+                                <span className="text-[10px] font-semibold text-neutral-500 block uppercase tracking-wider">
+                                  Jam Kerja
+                                </span>
+                                <span className="text-sm font-bold font-mono text-neutral-900">
+                                  {shift.in_start.replace(':', '.')} – {shift.out_start.replace(':', '.')} WIB{isOvernight ? ' (H+1)' : ''}
+                                </span>
+                              </div>
+                              <span className="text-[11px] font-medium text-neutral-600 bg-white px-2 py-0.5 rounded border border-neutral-200">
+                                {duration}
+                              </span>
+                            </div>
+
+                            {/* Check-In and Check-Out Details */}
+                            <div className="space-y-2 text-xs">
+                              {/* Check-In */}
+                              <div className="p-2.5 rounded-lg bg-neutral-50/50 border border-neutral-100">
+                                <div className="flex items-center justify-between text-[11px] font-semibold text-neutral-700 mb-1">
+                                  <span className="flex items-center gap-1">
+                                    <Sunrise size={12} className="text-neutral-500" />
+                                    Presensi Masuk (Check-In)
+                                  </span>
+                                </div>
+                                <div className="flex justify-between items-center text-[11px]">
+                                  <span className="text-neutral-500">Mulai Check-In</span>
+                                  <span className="font-mono font-bold text-neutral-900">{shift.in_start.replace(':', '.')} WIB</span>
+                                </div>
+                                <div className="flex justify-between items-center text-[11px] pt-0.5">
+                                  <span className="text-neutral-500">Batas Tepat Waktu</span>
+                                  <span className="font-mono font-semibold text-emerald-700">{shift.in_end.replace(':', '.')} WIB</span>
+                                </div>
+                              </div>
+
+                              {/* Check-Out */}
+                              <div className="p-2.5 rounded-lg bg-neutral-50/50 border border-neutral-100">
+                                <div className="flex items-center justify-between text-[11px] font-semibold text-neutral-700 mb-1">
+                                  <span className="flex items-center gap-1">
+                                    <Sunset size={12} className="text-neutral-500" />
+                                    Presensi Pulang (Check-Out)
+                                  </span>
+                                </div>
+                                <div className="flex justify-between items-center text-[11px]">
+                                  <span className="text-neutral-500">Mulai Check-Out</span>
+                                  <span className="font-mono font-bold text-neutral-900">
+                                    {shift.out_start.replace(':', '.')} WIB{isOvernight ? ' (H+1)' : ''}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between items-center text-[11px] pt-0.5">
+                                  <span className="text-neutral-500">Batas Check-Out</span>
+                                  <span className="font-mono font-semibold text-neutral-700">
+                                    {shift.out_end.replace(':', '.')} WIB{isOvernight ? ' (H+1)' : ''}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Card Footer */}
+                          <div className={`px-4 py-2 border-t text-[10px] font-medium flex items-center justify-between ${
+                            isOvernight ? 'bg-neutral-900 text-white border-neutral-800' : 'bg-neutral-50 text-neutral-500 border-neutral-100'
+                          }`}>
+                            <span>{isOvernight ? 'Selesai di hari berikutnya (H+1)' : 'Selesai di hari yang sama'}</span>
+                            <span className="font-mono font-bold">{duration}</span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -489,12 +608,13 @@ export default function SchedulePage() {
           <div className="bg-neutral-50 rounded-2xl border border-neutral-200 p-4 flex items-start gap-3">
             <Info size={16} className="text-neutral-600 flex-shrink-0 mt-0.5" />
             <div className="space-y-1 text-xs text-neutral-600">
-              <p className="font-semibold text-neutral-800">Ketentuan Jadwal Security (24 Jam)</p>
+              <p className="font-semibold text-neutral-800">Ketentuan Jadwal Security SIPATEN Berbasis Hari</p>
               <ul className="space-y-1 text-[11px] list-disc ml-3">
-                <li>Security beroperasi 24 jam dengan rotasi 3 shift: Shift I (Pagi), Shift II (Sore), dan Shift III (Malam).</li>
-                <li>Shift III melewati tengah malam, sehingga jam pulang dan batas akhir presensi pulang jatuh pada hari berikutnya (H+1).</li>
-                <li>Khusus hari Kamis dan Jumat, seluruh shift dimajukan +{secScheduleData.thursday_friday_shift_minutes} menit sesuai jadwal operasional.</li>
-                <li>Shift aktif setiap petugas ditentukan oleh Administrator dan divalidasi langsung saat pengambilan presensi.</li>
+                <li><strong>Senin–Kamis (3 Shift)</strong>: Shift I (07:00–16:00), Shift II (16:00–19:30), dan Shift III (19:30–07:00 H+1).</li>
+                <li><strong>Jumat (2 Shift Khusus)</strong>: Shift I (07:30–19:30, 12 Jam) dan Shift II (19:30–07:30 H+1, 12 Jam).</li>
+                <li><strong>Sabtu–Minggu (2 Shift Akhir Pekan)</strong>: Shift I — Pagi (08:00–20:00, 12 Jam) dan Shift II — Malam (20:00–08:00 H+1, 12 Jam).</li>
+                <li><strong>Shift Lintas Hari</strong>: Shift III (Senin–Kamis), Shift II (Jumat), dan Shift II (Weekend) berakhir pada pagi keesokan harinya (H+1) dan check-out terhubung secara otomatis ke catatan presensi masuk yang valid.</li>
+                <li>Seluruh jam jadwal, toleransi keterlambatan, dan jendela presensi divalidasi secara otoritatif oleh sistem server dalam zona waktu <strong>Asia/Jakarta (WIB)</strong>.</li>
               </ul>
             </div>
           </div>

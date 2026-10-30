@@ -356,6 +356,14 @@ export function getSecurityShiftItem(
   return group.shifts[0]
 }
 
+/**
+ * Returns the authoritative day_groups configuration from DB cache or DEFAULT_DAY_GROUPS.
+ */
+export function getSecurityDayGroups(): NonNullable<SecurityScheduleConfig['day_groups']> {
+  const sec = getSecurityScheduleSync()
+  return (sec.day_groups || DEFAULT_DAY_GROUPS) as NonNullable<SecurityScheduleConfig['day_groups']>
+}
+
 export type SecurityShiftWindowStatus = 'belum_dibuka' | 'tepat_waktu' | 'jendela_selesai'
 
 export interface SecurityShiftCheckInStatus {

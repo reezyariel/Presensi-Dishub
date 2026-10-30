@@ -110,7 +110,7 @@ export function SecurityShiftStatusCard({
       headline: selectedShift ? 'Siap Memulai Dinas?' : 'Pilih Shift Tugas Anda',
       desc: selectedShift
         ? 'Anda belum mencatat presensi masuk untuk shift ini. Pastikan Anda berada dalam radius dinas.'
-        : 'Silakan pilih shift tugas Anda hari ini (Shift I, Shift II, atau Shift III) sebelum melakukan presensi.',
+        : 'Silakan pilih shift tugas Anda hari ini sebelum melakukan presensi.',
       icon: Clock,
     },
     sedang_bertugas: {
@@ -289,7 +289,7 @@ export function SecurityShiftStatusCard({
                 <span className="text-xs font-bold">Pilih Shift Tugas Terlebih Dahulu</span>
               </div>
               <p className="text-[11px] text-amber-800 leading-relaxed">
-                Tentukan shift dinas Anda (Shift I, Shift II, atau Shift III) menggunakan tombol di atas sebelum melakukan presensi masuk.
+                Tentukan shift dinas Anda menggunakan tombol di atas sebelum melakukan presensi masuk.
               </p>
               {onChangeShiftClick && (
                 <button
