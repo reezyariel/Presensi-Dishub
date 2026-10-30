@@ -9,7 +9,7 @@
 // Reads authoritative schedule from attendance_settings
 // ============================================================
 
-import type { ShiftType, SecurityShiftOption, WeekendSession, AttendanceType, AttendanceStatus, ScheduleInfo, AttendanceRecord } from '../types/attendance'
+import type { ShiftType, SecurityShiftOption, WeekendSession, AttendanceType, AttendanceStatus, ScheduleInfo, AttendanceRecord, SecurityShiftItem, SecurityDayGroup, SecurityScheduleConfig } from '../types/attendance'
 import { formatInTimeZone, toZonedTime } from 'date-fns-tz'
 import { getDay, parseISO, subDays } from 'date-fns'
 import { supabase } from './supabase'
@@ -17,15 +17,30 @@ import { supabase } from './supabase'
 export const TIMEZONE = 'Asia/Jakarta'
 
 // Day of week helpers (0=Sun, 1=Mon, ... 4=Thu, 5=Fri, 6=Sat)
-const isThursdayOrFriday = (date: Date): boolean => {
-  const day = getDay(date)
+export function getJakartaDayOfWeek(date: Date | string): number {
+  const d = typeof date === 'string' ? parseISO(date) : date
+  const zoned = toZonedTime(d, TIMEZONE)
+  return getDay(zoned)
+}
+
+export const isThursdayOrFriday = (date: Date | string): boolean => {
+  const day = getJakartaDayOfWeek(date)
   return day === 4 || day === 5
 }
 
 // Saturday = 6, Sunday = 0
-export function isWeekend(date: Date): boolean {
-  const day = getDay(date)
+export function isWeekend(date: Date | string): boolean {
+  const day = getJakartaDayOfWeek(date)
   return day === 0 || day === 6
+}
+
+export function isFriday(date: Date | string): boolean {
+  return getJakartaDayOfWeek(date) === 5
+}
+
+export function isMonToThu(date: Date | string): boolean {
+  const day = getJakartaDayOfWeek(date)
+  return day >= 1 && day <= 4
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -75,9 +90,108 @@ export interface ShiftSchedule {
   end_window_end_next_day: boolean
 }
 
+export const DEFAULT_DAY_GROUPS: SecurityScheduleConfig['day_groups'] = {
+  mon_thu: {
+    name: 'Senin – Kamis',
+    days: [1, 2, 3, 4],
+    shifts: [
+      {
+        id: 'shift_1',
+        shift_name: 'Shift I',
+        label: 'Shift I',
+        shift_number: 1,
+        in_start: '07:00',
+        in_end: '07:30',
+        out_start: '16:00',
+        out_end: '16:30',
+        out_next_day: false,
+      },
+      {
+        id: 'shift_2',
+        shift_name: 'Shift II',
+        label: 'Shift II',
+        shift_number: 2,
+        in_start: '16:00',
+        in_end: '16:30',
+        out_start: '19:30',
+        out_end: '20:00',
+        out_next_day: false,
+      },
+      {
+        id: 'shift_3',
+        shift_name: 'Shift III',
+        label: 'Shift III',
+        shift_number: 3,
+        in_start: '19:30',
+        in_end: '20:00',
+        out_start: '07:00',
+        out_end: '07:30',
+        out_next_day: true,
+      },
+    ],
+  },
+  friday: {
+    name: 'Jumat',
+    days: [5],
+    shifts: [
+      {
+        id: 'shift_1',
+        shift_name: 'Shift I',
+        label: 'Shift I',
+        shift_number: 1,
+        in_start: '07:30',
+        in_end: '08:00',
+        out_start: '19:30',
+        out_end: '20:00',
+        out_next_day: false,
+      },
+      {
+        id: 'shift_2',
+        shift_name: 'Shift II',
+        label: 'Shift II',
+        shift_number: 2,
+        in_start: '19:30',
+        in_end: '20:00',
+        out_start: '07:30',
+        out_end: '08:00',
+        out_next_day: true,
+      },
+    ],
+  },
+  weekend: {
+    name: 'Sabtu – Minggu',
+    days: [6, 0],
+    shifts: [
+      {
+        id: 'shift_1',
+        shift_name: 'Shift I',
+        label: 'Shift I — Pagi',
+        shift_number: 1,
+        in_start: '08:00',
+        in_end: '08:30',
+        out_start: '20:00',
+        out_end: '20:30',
+        out_next_day: false,
+      },
+      {
+        id: 'shift_2',
+        shift_name: 'Shift II',
+        label: 'Shift II — Malam',
+        shift_number: 2,
+        in_start: '20:00',
+        in_end: '20:30',
+        out_start: '08:00',
+        out_end: '08:30',
+        out_next_day: true,
+      },
+    ],
+  },
+}
+
 export interface SecuritySchedule {
   thursday_friday_shift_minutes: number
   shifts: Record<ShiftType, ShiftSchedule>
+  day_groups?: SecurityScheduleConfig['day_groups']
 }
 
 export const DEFAULT_SECURITY_SCHEDULE: SecuritySchedule = {
@@ -89,7 +203,7 @@ export const DEFAULT_SECURITY_SCHEDULE: SecuritySchedule = {
       end_next_day: false, end_window_end_next_day: false,
     },
     'Shift II': {
-      start: '15:00', window_end: '15:30',
+      start: '16:00', window_end: '16:30',
       end: '19:30', end_window_end: '20:00',
       end_next_day: false, end_window_end_next_day: false,
     },
@@ -105,7 +219,7 @@ export const DEFAULT_SECURITY_SCHEDULE: SecuritySchedule = {
       end_next_day: false, end_window_end_next_day: false,
     },
     'Shift 2': {
-      start: '15:00', window_end: '15:30',
+      start: '16:00', window_end: '16:30',
       end: '19:30', end_window_end: '20:00',
       end_next_day: false, end_window_end_next_day: false,
     },
@@ -115,16 +229,18 @@ export const DEFAULT_SECURITY_SCHEDULE: SecuritySchedule = {
       end_next_day: true, end_window_end_next_day: true,
     },
   },
+  day_groups: DEFAULT_DAY_GROUPS,
 }
 
 // ─────────────────────────────────────────────────────────────
 // Weekend Security Schedule (Sabtu & Minggu)
 // Jendela masuk: Sesi Pagi 08:00–08:30, Sesi Malam 20:00–20:30
-// Tidak menggunakan label Shift I/II/III pada akhir pekan.
 // ─────────────────────────────────────────────────────────────
 export interface WeekendSessionSchedule {
   open: string        // HH:mm — mulai jendela masuk
   close: string       // HH:mm — tutup jendela masuk (inklusif)
+  out_start?: string  // HH:mm — mulai jendela pulang
+  out_end?: string    // HH:mm — tutup jendela pulang
 }
 
 export interface SecurityWeekendSchedule {
@@ -133,25 +249,46 @@ export interface SecurityWeekendSchedule {
 }
 
 export const DEFAULT_SECURITY_WEEKEND_SCHEDULE: SecurityWeekendSchedule = {
-  sesiPagi:  { open: '08:00', close: '08:30' },
-  sesiMalam: { open: '20:00', close: '20:30' },
+  sesiPagi:  { open: '08:00', close: '08:30', out_start: '20:00', out_end: '20:30' },
+  sesiMalam: { open: '20:00', close: '20:30', out_start: '08:00', out_end: '08:30' },
 }
 
 /**
- * Returns available SecurityShiftOptions for the given work date.
- * - Weekday (Mon–Fri): returns ['Shift I', 'Shift II', 'Shift III']
- * - Weekend (Sat–Sun): returns ['Sesi Pagi', 'Sesi Malam']
+ * Normalizes any shift representation to standard canonical form:
+ * 'Shift 1' -> 'Shift I'
+ * 'Shift 2' -> 'Shift II'
+ * 'Shift 3' -> 'Shift III'
+ * 'Sesi Pagi' -> 'Shift I'
+ * 'Sesi Malam' -> 'Shift II'
+ */
+export function canonicalShiftName(shift: string | null | undefined): string {
+  if (!shift) return ''
+  const s = shift.trim()
+  if (s === 'Shift 1' || s === 'Shift I' || s === 'Sesi Pagi') return 'Shift I'
+  if (s === 'Shift 2' || s === 'Shift II' || s === 'Sesi Malam') return 'Shift II'
+  if (s === 'Shift 3' || s === 'Shift III') return 'Shift III'
+  return s
+}
+
+/**
+ * Returns available SecurityShiftOptions for the given work date in Asia/Jakarta.
+ * - Senin–Kamis: returns ['Shift I', 'Shift II', 'Shift III']
+ * - Jumat: returns ['Shift I', 'Shift II']
+ * - Sabtu–Minggu: returns ['Shift I', 'Shift II'] (dengan label Pagi dan Malam)
  */
 export function getSecurityAvailableOptions(workDateStr: string): SecurityShiftOption[] {
-  const date = parseISO(workDateStr)
-  if (isWeekend(date)) {
-    return ['Sesi Pagi', 'Sesi Malam']
+  const day = getJakartaDayOfWeek(workDateStr)
+  if (day === 0 || day === 6) {
+    return ['Shift I', 'Shift II']
+  }
+  if (day === 5) {
+    return ['Shift I', 'Shift II']
   }
   return ['Shift I', 'Shift II', 'Shift III']
 }
 
 /**
- * Returns true if the given SecurityShiftOption is a weekend session.
+ * Returns true if the given SecurityShiftOption is a weekend session label.
  */
 export function isWeekendSession(shift: SecurityShiftOption | null): shift is WeekendSession {
   return shift === 'Sesi Pagi' || shift === 'Sesi Malam'
@@ -163,6 +300,60 @@ export function isWeekendSession(shift: SecurityShiftOption | null): shift is We
 export function getWeekendSessionSchedule(session: WeekendSession): WeekendSessionSchedule {
   const ws = getSecurityWeekendScheduleSync()
   return session === 'Sesi Pagi' ? ws.sesiPagi : ws.sesiMalam
+}
+
+/**
+ * Determines whether a specific shift on a given work date is an overnight (cross-midnight) shift.
+ * - Senin–Kamis: Shift III (19:30 – 07:00 H+1)
+ * - Jumat: Shift II (19:30 – 07:30 H+1)
+ * - Sabtu–Minggu: Shift II / Sesi Malam (20:00 – 08:00 H+1)
+ */
+export function isOvernightSecurityShift(
+  workDateStr: string,
+  shift: SecurityShiftOption | null,
+): boolean {
+  if (!shift) return false
+  const day = getJakartaDayOfWeek(workDateStr)
+  const canon = canonicalShiftName(shift)
+  if (day >= 1 && day <= 4) {
+    return canon === 'Shift III'
+  }
+  if (day === 5) {
+    return canon === 'Shift II'
+  }
+  if (day === 0 || day === 6) {
+    return canon === 'Shift II' || shift === 'Sesi Malam'
+  }
+  return false
+}
+
+/**
+ * Returns the exact SecurityShiftItem for the specified work date and shift.
+ */
+export function getSecurityShiftItem(
+  workDateStr: string,
+  shift: SecurityShiftOption | null,
+): SecurityShiftItem {
+  const day = getJakartaDayOfWeek(workDateStr)
+  const sec = getSecurityScheduleSync()
+  const dayGroups = sec.day_groups || DEFAULT_DAY_GROUPS
+
+  let group: SecurityDayGroup = dayGroups.mon_thu
+  if (day === 5) {
+    group = dayGroups.friday
+  } else if (day === 0 || day === 6) {
+    group = dayGroups.weekend
+  }
+
+  const canon = canonicalShiftName(shift)
+  const found = group.shifts.find(s =>
+    canonicalShiftName(s.shift_name) === canon ||
+    s.id === shift ||
+    (s.label && s.label.toLowerCase().includes((shift || '').toLowerCase()))
+  )
+
+  if (found) return found
+  return group.shifts[0]
 }
 
 export type SecurityShiftWindowStatus = 'belum_dibuka' | 'tepat_waktu' | 'jendela_selesai'
@@ -183,7 +374,7 @@ export interface SecurityShiftCheckInStatus {
 /**
  * Pure evaluation function for Security shift check-in window.
  * Calculates exact status ('belum_dibuka' | 'tepat_waktu' | 'jendela_selesai')
- * based on Asia/Jakarta timezone, handling overnight crossovers and schedule configs.
+ * based on Asia/Jakarta timezone, day-based shift schedule, and overnight crossovers.
  */
 export function getSecurityShiftCheckInStatus(
   option: SecurityShiftOption,
@@ -195,55 +386,75 @@ export function getSecurityShiftCheckInStatus(
   const currentHour = jakartaNow.getHours()
   const currentMinutes = currentHour * 60 + jakartaNow.getMinutes()
 
-  const isOvernight = option === 'Shift III' || option === 'Shift 3' || option === 'Sesi Malam'
+  const isOvernight = isOvernightSecurityShift(workDateStr, option)
 
   // Determine effective work date: for overnight shift post-midnight (hour < 12),
-  // the shift that is active or recently started belongs to yesterday.
+  // the shift that started yesterday evening belongs to yesterday.
   let effectiveWorkDate = workDateStr
   if (isOvernight && workDateStr === todayJakartaStr && currentHour < 12) {
     effectiveWorkDate = determineShiftIIIWorkDate(now)
   }
 
-  let label: string = option
-  let sublabel: string = ''
-  let scheduledStart: string = '07:00'
-  let scheduledEnd: string = '07:30'
-  let timeRangeDisplay: string = ''
-  let workHoursDisplay: string = ''
-
-  if (isWeekendSession(option)) {
-    const ws = getWeekendSessionSchedule(option)
-    scheduledStart = ws.open
-    scheduledEnd = ws.close
-    sublabel = option === 'Sesi Pagi' ? 'Sesi Akhir Pekan Pagi' : 'Sesi Akhir Pekan Malam'
-    timeRangeDisplay = `${ws.open.replace(':', '.')} – ${ws.close.replace(':', '.')} WIB`
-    workHoursDisplay = option === 'Sesi Pagi' ? '08.00 – 20.00 WIB' : '20.00 – 08.00 WIB (H+1)'
-  } else {
-    const shiftKey = (option === 'Shift 1' ? 'Shift I' : option === 'Shift 2' ? 'Shift II' : option === 'Shift 3' ? 'Shift III' : option) as ShiftType
-    const s = getSecuritySchedule(effectiveWorkDate, shiftKey)
-    scheduledStart = s.start
-    scheduledEnd = s.window_end
-    sublabel =
-      shiftKey === 'Shift I'
-        ? 'Shift Pagi – Sore'
-        : shiftKey === 'Shift II'
-          ? 'Shift Sore – Malam'
-          : 'Shift Malam – Pagi'
-    timeRangeDisplay = `${s.start.replace(':', '.')} – ${s.window_end.replace(':', '.')} WIB`
-    workHoursDisplay = `${s.start.replace(':', '.')} – ${s.end.replace(':', '.')}${s.end_next_day ? ' (H+1)' : ''} WIB`
+  const shiftItem = getSecurityShiftItem(effectiveWorkDate, option)
+  const sched: ShiftSchedule = {
+    start: shiftItem.in_start,
+    window_end: shiftItem.in_end,
+    end: shiftItem.out_start,
+    end_window_end: shiftItem.out_end,
+    end_next_day: shiftItem.out_next_day,
+    end_window_end_next_day: shiftItem.out_next_day,
   }
+  const day = getJakartaDayOfWeek(effectiveWorkDate)
+  const isWeekendDay = day === 0 || day === 6
+  const isFri = day === 5
+
+  const canon = canonicalShiftName(option)
+  let label = option
+  let sublabel = ''
+
+  if (isWeekendDay) {
+    if (canon === 'Shift I' || option === 'Sesi Pagi') {
+      label = 'Shift I — Pagi'
+      sublabel = 'Sesi Akhir Pekan Pagi (08:00 – 20:00 WIB)'
+    } else {
+      label = 'Shift II — Malam'
+      sublabel = 'Sesi Akhir Pekan Malam (20:00 – 08:00 WIB H+1)'
+    }
+  } else if (isFri) {
+    if (canon === 'Shift I') {
+      label = 'Shift I'
+      sublabel = 'Shift Siang Jumat (07:30 – 19:30 WIB)'
+    } else {
+      label = 'Shift II'
+      sublabel = 'Shift Malam Jumat (19:30 – 07:30 WIB H+1)'
+    }
+  } else {
+    // Senin – Kamis
+    if (canon === 'Shift I') {
+      label = 'Shift I'
+      sublabel = 'Shift Pagi – Sore (07:00 – 16:00 WIB)'
+    } else if (canon === 'Shift II') {
+      label = 'Shift II'
+      sublabel = 'Shift Sore – Malam (16:00 – 19:30 WIB)'
+    } else {
+      label = 'Shift III'
+      sublabel = 'Shift Malam – Pagi (19:30 – 07:00 WIB H+1)'
+    }
+  }
+
+  const scheduledStart = sched.start
+  const scheduledEnd = sched.window_end
+  const timeRangeDisplay = `${sched.start.replace(':', '.')} – ${sched.window_end.replace(':', '.')} WIB`
+  const workHoursDisplay = `${sched.start.replace(':', '.')} – ${sched.end.replace(':', '.')}${sched.end_next_day ? ' (H+1)' : ''} WIB`
 
   // Calculate status:
   let windowStatus: SecurityShiftWindowStatus = 'belum_dibuka'
 
   if (effectiveWorkDate < todayJakartaStr) {
-    // If effective work date is in the past, all check-in windows have ended
     windowStatus = 'jendela_selesai'
   } else if (effectiveWorkDate > todayJakartaStr) {
-    // Future date
     windowStatus = 'belum_dibuka'
   } else {
-    // effectiveWorkDate === todayJakartaStr
     const startMins = getTimeInMinutes(scheduledStart)
     const endMins = getTimeInMinutes(scheduledEnd)
 

@@ -23,6 +23,7 @@ export interface SecurityShiftItem {
   out_start: string  // HH:mm
   out_end: string    // HH:mm
   out_next_day: boolean
+  label?: string
 }
 
 export interface SecurityDayGroup {
