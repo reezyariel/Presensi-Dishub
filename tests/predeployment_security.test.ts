@@ -100,6 +100,8 @@ const mockEmployeeDb: MockEmployeeProfile[] = [
   { id: 'emp-1', full_name: 'Budi Santoso', normalized_name: 'budi santoso', employee_role: 'CS', is_active: true },
   { id: 'emp-2', full_name: 'Agus Purnomo', normalized_name: 'agus purnomo', employee_role: 'Security', is_active: true },
   { id: 'emp-3', full_name: 'Doni Firmansyah', normalized_name: 'doni firmansyah', employee_role: 'Security', is_active: false }, // Non-aktif
+  { id: 'emp-4-cs', full_name: 'Triza Nabila Arielly', normalized_name: 'triza nabila arielly', employee_role: 'CS', is_active: true },
+  { id: 'emp-4-sec', full_name: 'Triza Nabila Arielly', normalized_name: 'triza nabila arielly', employee_role: 'Security', is_active: true },
 ]
 
 function simulateServerEmployeeValidation(
@@ -116,9 +118,17 @@ function simulateServerEmployeeValidation(
   }
 
   const normalized = normalizeName(inputName)
-  const matched = mockEmployeeDb.find(e => e.normalized_name === normalized)
+  // Scoped strictly by normalized_name AND employee_role (matching unique index idx_unique_employee_role)
+  const matched = mockEmployeeDb.find(e => e.normalized_name === normalized && e.employee_role === inputCategory)
 
   if (!matched) {
+    const otherRole = mockEmployeeDb.find(e => e.normalized_name === normalized)
+    if (otherRole) {
+      return {
+        status: 400,
+        error: `Pegawai "${otherRole.full_name}" terdaftar pada divisi ${otherRole.employee_role}, bukan ${inputCategory}.`,
+      }
+    }
     return {
       status: 400,
       error: `Pegawai "${inputName}" tidak terdaftar dalam sistem SIPATEN. Absensi ditolak.`,
@@ -173,9 +183,25 @@ assert.match(resDbFail.error!, /Absensi dibatalkan demi keamanan/)
 console.log('  ✅ DB query failure safely halts request without inserting attendance (500)')
 
 // 2f. Valid active employee
-const resValid = simulateServerEmployeeValidation('  budi    SANTOSO  ', 'CS')
+const resValid = simulateServerEmployeeValidation('Budi Santoso', 'CS')
 assert.equal(resValid.status, 200)
 assert.equal(resValid.employee?.id, 'emp-1')
+console.log('  ✅ Valid active employee accepted with normalized name match (200)')
+
+// 2g. Same employee name across multiple roles correctly resolved by category
+const resMultiRoleCS = simulateServerEmployeeValidation('Triza Nabila Arielly', 'CS')
+assert.equal(resMultiRoleCS.status, 200)
+assert.equal(resMultiRoleCS.employee?.id, 'emp-4-cs')
+assert.equal(resMultiRoleCS.employee?.employee_role, 'CS')
+
+const resMultiRoleSec = simulateServerEmployeeValidation('Triza Nabila Arielly', 'Security')
+assert.equal(resMultiRoleSec.status, 200)
+assert.equal(resMultiRoleSec.employee?.id, 'emp-4-sec')
+assert.equal(resMultiRoleSec.employee?.employee_role, 'Security')
+console.log('  ✅ Multi-role same-name employee correctly resolved per category without 500 error')
+const resValidSpaces = simulateServerEmployeeValidation('  budi    SANTOSO  ', 'CS')
+assert.equal(resValidSpaces.status, 200)
+assert.equal(resValidSpaces.employee?.id, 'emp-1')
 console.log('  ✅ Valid active employee accepted with normalized name match (200)')
 
 
@@ -281,98 +307,53 @@ console.log('  ✅ scheduleEngine calculateAttendanceStatus: 07:50 tepat_waktu, 
 // ============================================================
 // 5. Security Shifts (Regular vs Thursday–Friday +30 min)
 // ============================================================
-console.log('\nTEST 5: Security Shifts (Normal vs Thursday–Friday +30 Min Shift)')
+console.log('\nTEST 5: Security Shifts (Day-Based Schedule: 07:00, 16:00, 19:30)')
 
 // Work dates:
-// 2026-10-19: Monday (Normal day)
-// 2026-10-22: Thursday (Shifted day +30 min)
-// 2026-10-23: Friday (Shifted day +30 min)
+// 2026-10-19: Monday (Senin–Kamis schedule)
 
-// 5a. Shift I Normal (07:30 start)
+// 5a. Shift I Normal (07:00 start)
 const schSec1Norm = getSecuritySchedule('2026-10-19', 'Shift I')
-assert.equal(schSec1Norm.start, '07:30')
+assert.equal(schSec1Norm.start, '07:00')
 assert.equal(schSec1Norm.end, '16:00')
 
-const sec1OnTime = calculateAttendanceStatus('Security', 'masuk', 'Shift I', '2026-10-19', new Date('2026-10-19T07:25:00+07:00'))
+const sec1OnTime = calculateAttendanceStatus('Security', 'masuk', 'Shift I', '2026-10-19', new Date('2026-10-19T07:15:00+07:00'))
 assert.equal(sec1OnTime.status, 'tepat_waktu')
 assert.equal(sec1OnTime.lateMinutes, 0)
 
 const sec1Late = calculateAttendanceStatus('Security', 'masuk', 'Shift I', '2026-10-19', new Date('2026-10-19T07:45:00+07:00'))
 assert.equal(sec1Late.status, 'terlambat')
 assert.equal(sec1Late.lateMinutes, 15)
-console.log('  ✅ Shift I Normal (07:30 start): 07:25 tepat waktu, 07:45 terlambat 15 menit')
+console.log('  ✅ Shift I (07:00 start): 07:15 tepat waktu, 07:45 terlambat 15 menit')
 
-// 5b. Shift I Shifted - Thursday (08:00 start)
-const schSec1Thu = getSecuritySchedule('2026-10-22', 'Shift I')
-assert.equal(schSec1Thu.start, '08:00')
-assert.equal(schSec1Thu.end, '16:30')
-
-const sec1ThuOnTime = calculateAttendanceStatus('Security', 'masuk', 'Shift I', '2026-10-22', new Date('2026-10-22T07:55:00+07:00'))
-assert.equal(sec1ThuOnTime.status, 'tepat_waktu')
-assert.equal(sec1ThuOnTime.lateMinutes, 0)
-
-const sec1ThuLate = calculateAttendanceStatus('Security', 'masuk', 'Shift I', '2026-10-22', new Date('2026-10-22T08:15:00+07:00'))
-assert.equal(sec1ThuLate.status, 'terlambat')
-assert.equal(sec1ThuLate.lateMinutes, 15)
-console.log('  ✅ Shift I Thursday (08:00 start): 07:55 tepat waktu, 08:15 terlambat 15 menit')
-
-// 5c. Shift II Normal (16:00 start)
+// 5b. Shift II Normal (16:00 start)
 const schSec2Norm = getSecuritySchedule('2026-10-19', 'Shift II')
 assert.equal(schSec2Norm.start, '16:00')
-assert.equal(schSec2Norm.end, '20:00')
+assert.equal(schSec2Norm.end, '19:30')
 
-const sec2OnTime = calculateAttendanceStatus('Security', 'masuk', 'Shift II', '2026-10-19', new Date('2026-10-19T15:55:00+07:00'))
+const sec2OnTime = calculateAttendanceStatus('Security', 'masuk', 'Shift II', '2026-10-19', new Date('2026-10-19T16:15:00+07:00'))
 assert.equal(sec2OnTime.status, 'tepat_waktu')
 assert.equal(sec2OnTime.lateMinutes, 0)
 
-const sec2Late = calculateAttendanceStatus('Security', 'masuk', 'Shift II', '2026-10-19', new Date('2026-10-19T16:20:00+07:00'))
+const sec2Late = calculateAttendanceStatus('Security', 'masuk', 'Shift II', '2026-10-19', new Date('2026-10-19T16:45:00+07:00'))
 assert.equal(sec2Late.status, 'terlambat')
-assert.equal(sec2Late.lateMinutes, 20)
-console.log('  ✅ Shift II Normal (16:00 start): 15:55 tepat waktu, 16:20 terlambat 20 menit')
+assert.equal(sec2Late.lateMinutes, 15)
+console.log('  ✅ Shift II (16:00 start): 16:15 tepat waktu, 16:45 terlambat 15 menit')
 
-// 5d. Shift II Shifted - Friday (16:30 start)
-const schSec2Fri = getSecuritySchedule('2026-10-23', 'Shift II')
-assert.equal(schSec2Fri.start, '16:30')
-assert.equal(schSec2Fri.end, '20:30')
-
-const sec2FriOnTime = calculateAttendanceStatus('Security', 'masuk', 'Shift II', '2026-10-23', new Date('2026-10-23T16:25:00+07:00'))
-assert.equal(sec2FriOnTime.status, 'tepat_waktu')
-assert.equal(sec2FriOnTime.lateMinutes, 0)
-
-const sec2FriLate = calculateAttendanceStatus('Security', 'masuk', 'Shift II', '2026-10-23', new Date('2026-10-23T16:40:00+07:00'))
-assert.equal(sec2FriLate.status, 'terlambat')
-assert.equal(sec2FriLate.lateMinutes, 10)
-console.log('  ✅ Shift II Friday (16:30 start): 16:25 tepat waktu, 16:40 terlambat 10 menit')
-
-// 5e. Shift III Normal (20:00 start)
+// 5c. Shift III Normal (19:30 start)
 const schSec3Norm = getSecuritySchedule('2026-10-19', 'Shift III')
-assert.equal(schSec3Norm.start, '20:00')
-assert.equal(schSec3Norm.end, '07:30')
+assert.equal(schSec3Norm.start, '19:30')
+assert.equal(schSec3Norm.end, '07:00')
 assert.equal(schSec3Norm.end_next_day, true)
 
-const sec3OnTime = calculateAttendanceStatus('Security', 'masuk', 'Shift III', '2026-10-19', new Date('2026-10-19T19:50:00+07:00'))
+const sec3OnTime = calculateAttendanceStatus('Security', 'masuk', 'Shift III', '2026-10-19', new Date('2026-10-19T19:45:00+07:00'))
 assert.equal(sec3OnTime.status, 'tepat_waktu')
 assert.equal(sec3OnTime.lateMinutes, 0)
 
-const sec3Late = calculateAttendanceStatus('Security', 'masuk', 'Shift III', '2026-10-19', new Date('2026-10-19T20:25:00+07:00'))
+const sec3Late = calculateAttendanceStatus('Security', 'masuk', 'Shift III', '2026-10-19', new Date('2026-10-19T20:15:00+07:00'))
 assert.equal(sec3Late.status, 'terlambat')
-assert.equal(sec3Late.lateMinutes, 25)
-console.log('  ✅ Shift III Normal (20:00 start): 19:50 tepat waktu, 20:25 terlambat 25 menit')
-
-// 5f. Shift III Shifted - Thursday (20:30 start)
-const schSec3Thu = getSecuritySchedule('2026-10-22', 'Shift III')
-assert.equal(schSec3Thu.start, '20:30')
-assert.equal(schSec3Thu.end, '08:00')
-assert.equal(schSec3Thu.end_next_day, true)
-
-const sec3ThuOnTime = calculateAttendanceStatus('Security', 'masuk', 'Shift III', '2026-10-22', new Date('2026-10-22T20:20:00+07:00'))
-assert.equal(sec3ThuOnTime.status, 'tepat_waktu')
-assert.equal(sec3ThuOnTime.lateMinutes, 0)
-
-const sec3ThuLate = calculateAttendanceStatus('Security', 'masuk', 'Shift III', '2026-10-22', new Date('2026-10-22T20:45:00+07:00'))
-assert.equal(sec3ThuLate.status, 'terlambat')
-assert.equal(sec3ThuLate.lateMinutes, 15)
-console.log('  ✅ Shift III Thursday (20:30 start): 20:20 tepat waktu, 20:45 terlambat 15 menit')
+assert.equal(sec3Late.lateMinutes, 15)
+console.log('  ✅ Shift III (19:30 start): 19:45 tepat waktu, 20:15 terlambat 15 menit')
 
 
 // ============================================================

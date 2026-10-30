@@ -1,4 +1,4 @@
-﻿/**
+/**
  * SIPATEN — Shift Selection Auto-Select & Check-In Window Tests
  * Run with: npx tsx tests/shift_selection_autoselect.test.ts
  */
@@ -50,9 +50,9 @@ console.log('TEST 1: getSecurityAvailableOptions — Weekday')
 console.log('\nTEST 2: getSecurityAvailableOptions — Weekend')
 {
   const opts = getSecurityAvailableOptions(WEEKEND)
-  assert('Includes Sesi Pagi', opts.includes('Sesi Pagi'))
-  assert('Includes Sesi Malam', opts.includes('Sesi Malam'))
-  assert('No Shift I', !opts.includes('Shift I'))
+  assert('Includes Shift I', opts.includes('Shift I'))
+  assert('Includes Shift II', opts.includes('Shift II'))
+  assert('No Sesi Pagi', !opts.includes('Sesi Pagi'))
   assert('Length is 2', opts.length === 2)
 }
 
@@ -80,9 +80,9 @@ console.log('\nTEST 6: Shift II — belum_dibuka at 12:00 WIB')
   assert('windowStatus = belum_dibuka', s.windowStatus === 'belum_dibuka', `got ${s.windowStatus}`)
 }
 
-console.log('\nTEST 7: Shift II — tepat_waktu at 15:20 WIB')
+console.log('\nTEST 7: Shift II — tepat_waktu at 16:15 WIB')
 {
-  const s = getSecurityShiftCheckInStatus('Shift II', WEEKDAY, jktDateTime(WEEKDAY, 15, 20))
+  const s = getSecurityShiftCheckInStatus('Shift II', WEEKDAY, jktDateTime(WEEKDAY, 16, 15))
   assert('windowStatus = tepat_waktu', s.windowStatus === 'tepat_waktu', `got ${s.windowStatus}`)
 }
 
@@ -110,9 +110,9 @@ console.log('\nTEST 11: Auto-select Shift I at 07:10 WIB')
   assert('auto = Shift I', r === 'Shift I', `got ${r}`)
 }
 
-console.log('\nTEST 12: Auto-select Shift II at 15:10 WIB')
+console.log('\nTEST 12: Auto-select Shift II at 16:10 WIB')
 {
-  const r = getAutoSelectSecurityShift(WEEKDAY, jktDateTime(WEEKDAY, 15, 10))
+  const r = getAutoSelectSecurityShift(WEEKDAY, jktDateTime(WEEKDAY, 16, 10))
   assert('auto = Shift II', r === 'Shift II', `got ${r}`)
 }
 

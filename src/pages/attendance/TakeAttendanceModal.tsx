@@ -228,6 +228,14 @@ export default function TakeAttendanceModal({
     setStep('submitting')
 
     try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+      const session = sessionData?.session
+      if (sessionError || !session || !session.access_token) {
+        setSubmitError('Sesi login Anda tidak ditemukan atau telah kedaluwarsa. Silakan masuk kembali.')
+        setStep('form')
+        return
+      }
+
       const payload = {
         employee_name: employeeName,
         category,
@@ -244,6 +252,9 @@ export default function TakeAttendanceModal({
 
       const { data, error: fnError } = await supabase.functions.invoke('submit-attendance', {
         body: payload,
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
       })
 
       // In Supabase JS v2, non-2xx responses throw FunctionsHttpError and data is null.

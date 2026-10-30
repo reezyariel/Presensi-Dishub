@@ -146,7 +146,38 @@ serve(async (req: Request) => {
       throw new Error('Konfigurasi server bermasalah: kredensial Supabase tidak ditemukan.')
     }
 
-    const supabase = createClient(supabaseUrl, serviceRoleKey)
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    })
+
+    // 0. Verify Caller Authentication from Authorization Bearer Header
+    const authHeader = req.headers.get('Authorization') || req.headers.get('authorization')
+    let callerUser: { id: string; email?: string } | null = null
+
+    if (authHeader && authHeader.toLowerCase().startsWith('bearer ')) {
+      const token = authHeader.replace(/^Bearer\s+/i, '').trim()
+      if (token) {
+        if (token === serviceRoleKey) {
+          // Internal service call / admin test runner
+          callerUser = { id: 'service-role-admin', email: 'service-role@sipaten.internal' }
+        } else {
+          const { data: userData, error: userError } = await supabase.auth.getUser(token)
+          if (!userError && userData?.user) {
+            callerUser = userData.user
+          }
+        }
+      }
+    }
+
+    if (!callerUser) {
+      return new Response(
+        JSON.stringify({ error: 'Akses ditolak: Sesi login pengguna tidak ditemukan atau telah kedaluwarsa. Silakan masuk kembali.' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
 
     // Parse payload
     let body: Record<string, unknown>
@@ -301,25 +332,131 @@ serve(async (req: Request) => {
     const [currentHour, currentMinute] = jakartaTimeStr.split(':').map(Number)
     const currentMinutesFromMidnight = currentHour * 60 + currentMinute
 
-    // 4b. Strict Whitelist Validation against employee_profiles (Fail-Safe)
-    const normalizedName = normalizeName(employee_name)
-    const { data: matchedEmployee, error: empErr } = await supabase
-      .from('employee_profiles')
-      .select('id, full_name, employee_role, is_active, auth_uid')
-      .eq('normalized_name', normalizedName)
-      .maybeSingle()
+    // 4b. Strict Whitelist & Identity Verification against employee_profiles (Fail-Safe)
+    const normalizedInputName = normalizeName(employee_name)
+    let matchedEmployee: {
+      id: string
+      full_name: string
+      normalized_name: string
+      employee_role: string
+      is_active: boolean
+      auth_uid: string | null
+    } | null = null
 
-    if (empErr) {
-      console.error('Database query error checking employee_profiles:', empErr)
-      return new Response(
-        JSON.stringify({ error: 'Gagal memverifikasi data pegawai di server database. Absensi dibatalkan demi keamanan.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+    // Check if caller is an Administrator
+    let isCallerAdmin = callerUser?.id === 'service-role-admin'
+    if (!isCallerAdmin && callerUser) {
+      const { data: adminRecord } = await supabase
+        .from('admin_profiles')
+        .select('id, full_name, is_active')
+        .eq('id', callerUser.id)
+        .eq('is_active', true)
+        .maybeSingle()
+      if (adminRecord) {
+        isCallerAdmin = true
+      }
+    }
+
+    if (isCallerAdmin) {
+      // Administrator recording on behalf of an employee
+      const { data: empRecord, error: empErr } = await supabase
+        .from('employee_profiles')
+        .select('id, full_name, normalized_name, employee_role, is_active, auth_uid')
+        .eq('normalized_name', normalizedInputName)
+        .eq('employee_role', category)
+        .maybeSingle()
+
+      if (empErr) {
+        console.error('Database query error checking employee_profiles (admin):', empErr)
+        return new Response(
+          JSON.stringify({ error: 'Gagal memverifikasi data pegawai di server database. Absensi dibatalkan demi keamanan.' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      matchedEmployee = empRecord
+    } else if (callerUser) {
+      // Authenticated employee: verify relationship with callerUser.id
+      // 1. Primary check: by caller's auth_uid AND category
+      const { data: empByAuth, error: errAuth } = await supabase
+        .from('employee_profiles')
+        .select('id, full_name, normalized_name, employee_role, is_active, auth_uid')
+        .or(`auth_uid.eq.${callerUser.id},id.eq.${callerUser.id}`)
+        .eq('employee_role', category)
+        .maybeSingle()
+
+      if (errAuth) {
+        console.error('Database query error checking employee_profiles by auth_uid:', errAuth)
+        return new Response(
+          JSON.stringify({ error: 'Gagal memverifikasi data pegawai di server database. Absensi dibatalkan demi keamanan.' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      if (empByAuth) {
+        matchedEmployee = empByAuth
+      } else {
+        // 2. Secondary check: by normalized_name AND category
+        const { data: empByName, error: errName } = await supabase
+          .from('employee_profiles')
+          .select('id, full_name, normalized_name, employee_role, is_active, auth_uid')
+          .eq('normalized_name', normalizedInputName)
+          .eq('employee_role', category)
+          .maybeSingle()
+
+        if (errName) {
+          console.error('Database query error checking employee_profiles by name:', errName)
+          return new Response(
+            JSON.stringify({ error: 'Gagal memverifikasi data pegawai di server database. Absensi dibatalkan demi keamanan.' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+
+        if (empByName) {
+          // If profile is already bound to a different auth_uid, reject spoofing
+          if (empByName.auth_uid && empByName.auth_uid !== callerUser.id) {
+            return new Response(
+              JSON.stringify({
+                error: `Akses ditolak: Akun Anda tidak berwenang untuk melakukan presensi atas nama pegawai "${empByName.full_name}".`,
+              }),
+              { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+          }
+
+          matchedEmployee = empByName
+
+          // Link auth_uid if empty
+          if (!matchedEmployee.auth_uid) {
+            await supabase
+              .from('employee_profiles')
+              .update({ auth_uid: callerUser.id })
+              .eq('id', matchedEmployee.id)
+            matchedEmployee.auth_uid = callerUser.id
+          }
+        }
+      }
     }
 
     if (!matchedEmployee) {
+      // Check if user exists in another role to provide clear division mismatch message
+      if (callerUser) {
+        const { data: otherRoleEmp } = await supabase
+          .from('employee_profiles')
+          .select('full_name, employee_role')
+          .or(`auth_uid.eq.${callerUser.id},id.eq.${callerUser.id}`)
+          .maybeSingle()
+
+        if (otherRoleEmp) {
+          return new Response(
+            JSON.stringify({
+              error: `Pegawai "${otherRoleEmp.full_name}" terdaftar pada divisi ${otherRoleEmp.employee_role}, bukan ${category}.`,
+            }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+      }
+
       return new Response(
-        JSON.stringify({ error: `Pegawai "${employee_name}" tidak terdaftar dalam sistem SIPATEN. Absensi ditolak.` }),
+        JSON.stringify({ error: `Pegawai "${employee_name}" tidak terdaftar dalam sistem SIPATEN untuk divisi ${category}. Absensi ditolak.` }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -339,6 +476,10 @@ serve(async (req: Request) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
+    // Authoritative employee name and normalized name directly from the verified database record
+    const authoritativeEmployeeName = matchedEmployee.full_name
+    const authoritativeNormalizedName = matchedEmployee.normalized_name
 
     // 4c. Determine Work Date (overnight shifts cross midnight — linked to masuk record)
     // Overnight shifts by day group:
@@ -375,7 +516,7 @@ serve(async (req: Request) => {
         const { data: openMasuk } = await supabase
           .from('attendance_records')
           .select('work_date, recorded_at')
-          .eq('normalized_name', normalizedName)
+          .eq('normalized_name', authoritativeNormalizedName)
           .eq('category', 'Security')
           .eq('shift', shift)
           .eq('attendance_type', 'masuk')
@@ -406,7 +547,8 @@ serve(async (req: Request) => {
     const duplicateQuery = supabase
       .from('attendance_records')
       .select('id, recorded_at, attendance_type, work_date')
-      .eq('normalized_name', normalizedName)
+      .eq('normalized_name', authoritativeNormalizedName)
+      .eq('category', category)
       .eq('work_date', workDate)
       .eq('attendance_type', attendance_type)
 
@@ -420,7 +562,7 @@ serve(async (req: Request) => {
     if (duplicateRecord) {
       return new Response(
         JSON.stringify({
-          error: `Pegawai ${employee_name} sudah melakukan presensi ${attendance_type.toUpperCase()} untuk tanggal kerja ${workDate}${shift ? ` (${shift})` : ''}.`,
+          error: `Pegawai ${authoritativeEmployeeName} sudah melakukan presensi ${attendance_type.toUpperCase()} untuk tanggal kerja ${workDate}${shift ? ` (${shift})` : ''}.`,
           error_code: 'DUPLICATE_ATTENDANCE',
         }),
         { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -858,10 +1000,10 @@ serve(async (req: Request) => {
 
     // 8. Database Insert with Service Role
     const baseRecordPayload: Record<string, unknown> = {
-      employee_name,
-      normalized_name: normalizedName,
+      employee_name: authoritativeEmployeeName,
+      normalized_name: authoritativeNormalizedName,
       employee_profile_id: matchedEmployee.id,
-      auth_uid: matchedEmployee.auth_uid || null,
+      auth_uid: matchedEmployee.auth_uid || (callerUser ? callerUser.id : null),
       category,
       attendance_type,
       shift: category === 'Security' ? shift : null,
