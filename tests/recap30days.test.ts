@@ -37,9 +37,9 @@ const WEDNESDAY_AFTERNOON = new Date('2026-10-21T07:00:00Z')
 // from Wednesday 2026-10-21:
 // Range: 2026-09-21 (Mon) to 2026-10-20 (Tue)
 // - Total calendar days: 30
-// - CS (Mon-Fri): exactly 22 workdays (4 weeks * 5 days = 20 + Mon Oct-19 & Tue Oct-20 = 22)
-// - Security (Mon-Sat): exactly 26 workdays (22 + 4 Saturdays: Oct-17, Oct-10, Oct-03, Sep-26 = 26)
-const CS_30DAY_WORKDAYS = 22
+// - CS (Mon-Sun, 7 days): all 30 calendar days are workdays = 30
+// - Security (Mon-Sat): exactly 26 workdays (30 - 4 Sundays: Oct-18, Oct-11, Oct-04, Sep-27 = 26)
+const CS_30DAY_WORKDAYS = 30   // CS sekarang beroperasi Senin–Minggu (7 hari penuh)
 const SEC_30DAY_WORKDAYS = 26
 
 console.log('\n============================================================')
@@ -88,7 +88,8 @@ console.log('\nTEST 5: Hari Ini — Saat Jendela Masuk Masih Terbuka (Pagi: 09:3
 {
   // Pegawai CS yang sudah bergabung sejak 2026-09-21 (30 hari lalu)
   // Belum check-in pagi ini (09:35 WIB), jendela CS masih buka sampai 11:59 WIB.
-  // Hari ini TIDAK boleh dihitung absen. Absen hanya 22 hari lampau (i=1..30).
+  // Hari ini TIDAK boleh dihitung absen. Absen hanya 30 hari lampau (i=1..30).
+  // CS beroperasi 7 hari = semua 30 hari kalender adalah hari kerja.
   const result = calculate30DayRecap('CS', [], '2026-09-21', WEDNESDAY_MORNING)
   assert(`absen = ${CS_30DAY_WORKDAYS} (hari ini belum jatuh tempo karena jendela masih buka)`, result.tidakHadir === CS_30DAY_WORKDAYS, `got ${result.tidakHadir}`)
 }
@@ -97,27 +98,29 @@ console.log('\nTEST 6: Hari Ini — Tetap Tidak Dihitung Sebagai Absen Sepanjang
 {
   // Hari ini (Rabu) adalah hari operasional berjalan.
   // Sesuai Ketentuan 4, hari ini tidak dihitung sebagai absen pada Rekap 30 Hari.
+  // CS 7 hari = 30 hari kerja lampau.
   const result = calculate30DayRecap('CS', [], '2026-09-21', WEDNESDAY_AFTERNOON)
   assert(`absen = ${CS_30DAY_WORKDAYS} (hari ini tidak dihitung absen sepanjang hari berjalan)`, result.tidakHadir === CS_30DAY_WORKDAYS, `got ${result.tidakHadir}`)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3. Hari Libur (Sabtu & Minggu untuk CS; Minggu untuk Security)
+// 3. CS 7 Hari vs Security
 // ─────────────────────────────────────────────────────────────────────────────
-console.log('\nTEST 7: Hari Libur CS — Akhir Pekan (Sabtu & Minggu) Bukan Hari Kerja')
+console.log('\nTEST 7: CS Beroperasi 7 Hari — Seluruh Hari Kalender Adalah Hari Kerja CS')
 {
-  // Periode 30 hari kalender: hanya 22 hari kerja CS, 8 hari akhir pekan diabaikan
+  // CS sekarang beroperasi Senin-Minggu: semua 30 hari kalender = hari kerja
   const result = calculate30DayRecap('CS', [], '2026-09-21', WEDNESDAY_MORNING)
-  assert(`CS absen = ${CS_30DAY_WORKDAYS} (Sabtu & Minggu tidak dihitung)`, result.tidakHadir === CS_30DAY_WORKDAYS, `got ${result.tidakHadir}`)
+  assert(`CS absen = ${CS_30DAY_WORKDAYS} (semua 30 hari kalender adalah hari kerja)`, result.tidakHadir === CS_30DAY_WORKDAYS, `got ${result.tidakHadir}`)
 }
 
-console.log('\nTEST 8: Hari Libur Security — Hanya Minggu Yang Libur (Sabtu Hari Kerja)')
+console.log('\nTEST 8: CS (30 hari) vs Security (26 hari) — CS Punya Lebih Banyak Hari Kerja')
 {
-  // Security bekerja Senin-Sabtu: 26 hari kerja dalam 30 hari
+  // CS beroperasi 7 hari (30), Security beroperasi Mon-Sat (26)
+  // CS HARUS memiliki MORE scheduled workdays daripada Security
   const csResult = calculate30DayRecap('CS', [], '2026-09-21', WEDNESDAY_MORNING)
   const secResult = calculate30DayRecap('Security', [], '2026-09-21', WEDNESDAY_MORNING, 'Shift I')
-  assert(`Security hari kerja (${secResult.tidakHadir}) > CS (${csResult.tidakHadir})`, secResult.tidakHadir > csResult.tidakHadir)
-  assert(`Security absen = ${SEC_30DAY_WORKDAYS} (Sabtu hari kerja, Minggu libur)`, secResult.tidakHadir === SEC_30DAY_WORKDAYS, `got ${secResult.tidakHadir}`)
+  assert(`CS hari kerja (${csResult.tidakHadir}) > Security (${secResult.tidakHadir})`, csResult.tidakHadir > secResult.tidakHadir)
+  assert(`Security absen = ${SEC_30DAY_WORKDAYS} (Minggu libur, Sabtu hari kerja)`, secResult.tidakHadir === SEC_30DAY_WORKDAYS, `got ${secResult.tidakHadir}`)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -198,19 +201,46 @@ console.log('\nTEST 13: Presensi Masuk Hari Ini Tidak Menghapus Absen Hari Kemar
 // ─────────────────────────────────────────────────────────────────────────────
 console.log('\nTEST 14: Seluruh Hari Kerja Terpenuhi → Absen = 0')
 {
-  // Pegawai bergabung 2026-10-13 (Mon).
-  // Hari kerja lampau CS (6 hari): 13, 14, 15, 16, 19, 20 Okt.
+  // Pegawai bergabung 2026-10-13 (Selasa).
+  // Hari kerja lampau CS (7 hari penuh) dari 2026-10-13 s.d. 2026-10-20:
+  //   13(Sel), 14(Rab), 15(Kam), 16(Jum), 17(Sab), 18(Min), 19(Sen), 20(Sel) = 8 hari
+  // Records harus cover semua 8 hari agar absen = 0.
   const records = [
     makeMasuk('2026-10-13'),
     makeMasuk('2026-10-14'),
     makeMasuk('2026-10-15'),
     makeMasuk('2026-10-16'),
+    makeMasuk('2026-10-17'), // Sabtu — sekarang hari kerja CS
+    makeMasuk('2026-10-18'), // Minggu — sekarang hari kerja CS
     makeMasuk('2026-10-19'),
     makeMasuk('2026-10-20'),
   ]
   const result = calculate30DayRecap('CS', records, '2026-10-13', WEDNESDAY_MORNING)
-  assert('hadir = 6', result.hadir === 6)
+  assert('hadir = 8', result.hadir === 8, `got ${result.hadir}`)
   assert('absen = 0', result.tidakHadir === 0, `got ${result.tidakHadir}`)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 9. Sabtu dan Minggu Dihitung Sebagai Hari Kerja CS
+// ─────────────────────────────────────────────────────────────────────────────
+console.log('\nTEST 15: CS — Sabtu dan Minggu Dihitung Absen Jika Tidak Hadir')
+{
+  // Pegawai bergabung 2026-10-17 (Sabtu), hari lampau: Sab 17, Min 18, Sen 19, Sel 20 = 4 hari
+  // Records kosong → absen = 4
+  const result = calculate30DayRecap('CS', [], '2026-10-17', WEDNESDAY_MORNING)
+  assert('absen = 4 (Sab 17, Min 18, Sen 19, Sel 20 semua terhitung)', result.tidakHadir === 4, `got ${result.tidakHadir}`)
+}
+
+console.log('\nTEST 16: CS — Hadir Sabtu dan Minggu Mengurangi Absen')
+{
+  // Bergabung 2026-10-17 (Sabtu), hadir Sab 17 & Min 18, absen Sen 19 & Sel 20
+  const records = [
+    makeMasuk('2026-10-17'), // Sabtu
+    makeMasuk('2026-10-18'), // Minggu
+  ]
+  const result = calculate30DayRecap('CS', records, '2026-10-17', WEDNESDAY_MORNING)
+  assert('hadir = 2 (Sab 17 & Min 18)', result.hadir === 2, `got ${result.hadir}`)
+  assert('absen = 2 (Sen 19 & Sel 20 tidak hadir)', result.tidakHadir === 2, `got ${result.tidakHadir}`)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

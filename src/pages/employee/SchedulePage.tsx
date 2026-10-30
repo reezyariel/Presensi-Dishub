@@ -657,7 +657,7 @@ export default function SchedulePage() {
                 </div>
               </div>
               <div className="px-5 py-2 bg-neutral-50 border-t border-neutral-100">
-                <span className="text-[10px] font-semibold text-neutral-600">Pagi • Setiap Hari Kerja</span>
+                <span className="text-[10px] font-semibold text-neutral-600">Pagi • Setiap Hari (Sen–Min)</span>
               </div>
             </div>
 
@@ -685,7 +685,7 @@ export default function SchedulePage() {
                 </div>
               </div>
               <div className="px-5 py-2 bg-neutral-50 border-t border-neutral-100">
-                <span className="text-[10px] font-semibold text-neutral-600">Siang • Setiap Hari Kerja</span>
+                <span className="text-[10px] font-semibold text-neutral-600">Siang • Setiap Hari (Sen–Min)</span>
               </div>
             </div>
 
@@ -713,7 +713,7 @@ export default function SchedulePage() {
                 </div>
               </div>
               <div className="px-5 py-2 bg-neutral-50 border-t border-neutral-100">
-                <span className="text-[10px] font-semibold text-neutral-600">Sore • Setiap Hari Kerja</span>
+                <span className="text-[10px] font-semibold text-neutral-600">Sore • Setiap Hari (Sen–Min)</span>
               </div>
             </div>
           </div>
@@ -724,7 +724,7 @@ export default function SchedulePage() {
             <div className="space-y-1 text-xs text-neutral-600">
               <p className="font-semibold text-neutral-800">Ketentuan Jadwal Cleaning Service</p>
               <ul className="space-y-1 text-[11px] list-disc ml-3">
-                <li>Jadwal berlaku tetap setiap hari kerja (Senin–Jumat).</li>
+                <li>Jadwal berlaku tetap setiap hari (Senin–Minggu).</li>
                 <li>Rentang check-in: {csSchedule.masukStart} – {csSchedule.masukEnd} WIB (tutup check-in: {csSchedule.masukClose || '11.59'} WIB).</li>
                 <li>Waktu istirahat: {csSchedule.istirahatStart} – {csSchedule.istirahatEnd} WIB.</li>
                 <li>Rentang check-out: {csSchedule.pulangStart} – {csSchedule.pulangEnd} WIB.</li>

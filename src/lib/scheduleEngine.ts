@@ -1497,7 +1497,6 @@ export function getAttendanceButtonState(
 
   const jakartaNow = toZonedTime(now, TIMEZONE)
   const currentMinutes = jakartaNow.getHours() * 60 + jakartaNow.getMinutes()
-  const dayOfWeek = getDay(jakartaNow) // 0=Sun, 1=Mon, ..., 5=Fri, 6=Sat
 
   // ─────────────────────────────────────────────────────────────
   // CS Branch
@@ -1513,15 +1512,7 @@ export function getAttendanceButtonState(
 
     // A. Before Check-In
     if (!completedRecords.masuk) {
-      // Workday check: CS operates Monday - Friday (days 1 to 5)
-      const isWorkday = dayOfWeek >= 1 && dayOfWeek <= 5
-      if (!isWorkday) {
-        return {
-          status: 'workday_holiday',
-          title: 'Hari Libur (Bukan Hari Kerja CS)',
-          message: 'Layanan Cleaning Service beroperasi hari Senin sampai Jumat. Presensi tidak aktif di akhir pekan.',
-        }
-      }
+      // CS operates Monday – Sunday (7 hari penuh); tidak ada pemblokiran hari.
 
       // Sebelum jendela dibuka
       if (currentMinutes < masukOpenMins) {
@@ -1795,7 +1786,7 @@ export function calculate30DayRecap(
 
     const dow = d.toLocaleDateString('en-US', { timeZone: TIMEZONE, weekday: 'short' })
     const isScheduledWorkday = category === 'CS'
-      ? (dow !== 'Sat' && dow !== 'Sun')
+      ? true  // CS beroperasi Senin–Minggu (7 hari penuh)
       : (dow !== 'Sun')
 
     if (isScheduledWorkday) {

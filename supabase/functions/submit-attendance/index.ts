@@ -624,12 +624,13 @@ serve(async (req: Request) => {
     let adminNotes: string | null = null
 
     if (category === 'CS') {
-      // Aturan CS Senin–Jumat (3-boundary system dari Admin settings):
+      // Aturan CS Senin–Minggu (7 hari penuh, 3-boundary system dari Admin settings):
       //   Sebelum open          → TOLAK (presensi tidak diizinkan)
       //   open – ontime_deadline  → tepat_waktu
       //   ontime_deadline+1 – close → terlambat, late_minutes dari ontime_deadline
       //   Setelah close         → TOLAK (jendela ditutup)
       // Tidak ada shift; istirahat dan pulang tidak dihitung keterlambatan.
+      // Tidak ada pembatasan hari — CS beroperasi setiap hari termasuk Sabtu dan Minggu.
 
       if (attendance_type === 'masuk') {
         scheduledStart = csOpen

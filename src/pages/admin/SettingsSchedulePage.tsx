@@ -260,7 +260,7 @@ export default function SettingsSchedulePage() {
           istirahat: { start: csIstirahatStart, end: csIstirahatEnd },
           pulang: { start: csPulangStart, end: csPulangEnd },
         },
-        description: 'Jadwal CS: open=mulai jendela, ontime_deadline=batas tepat_waktu, close=tutup jendela, plus istirahat dan pulang.',
+        description: 'Jadwal CS (Senin–Minggu, 7 hari): open=mulai jendela, ontime_deadline=batas tepat_waktu, close=tutup jendela, plus istirahat dan pulang.',
         updated_by: profile.id, updated_at: now,
       },
       {
@@ -548,6 +548,9 @@ export default function SettingsSchedulePage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 rounded-full font-bold">
+              Senin – Minggu (Setiap Hari)
+            </span>
             <Edit3 size={14} className="text-neutral-400" />
             <span className="text-[11px] font-bold text-neutral-900 bg-neutral-200/70 px-2.5 py-1 rounded">
               1 Shift Tetap
@@ -555,7 +558,13 @@ export default function SettingsSchedulePage() {
           </div>
         </div>
 
-        <div className="p-5">
+        <div className="p-5 space-y-5">
+          <div className="flex items-start sm:items-center gap-2.5 p-3 rounded-lg bg-neutral-50 border border-neutral-200 text-neutral-700 text-xs">
+            <Calendar size={15} className="text-emerald-600 shrink-0 mt-0.5 sm:mt-0" />
+            <p className="leading-relaxed">
+              <strong className="text-neutral-900 font-semibold">Operasional Setiap Hari:</strong> Jadwal presensi Cleaning Service (CS) berlaku penuh dari <strong>Senin sampai Minggu (7 hari)</strong>, termasuk hari Sabtu dan Minggu tanpa hari libur operasional.
+            </p>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Masuk — 3 batas waktu */}
             <div className="p-4 rounded-xl border border-neutral-200 bg-neutral-50/40 space-y-3">
