@@ -481,8 +481,18 @@ serve(async (req: Request) => {
     const authoritativeEmployeeName = matchedEmployee.full_name
     const authoritativeNormalizedName = matchedEmployee.normalized_name
 
-    // 4c. Determine Work Date (overnight shifts cross midnight — linked to masuk record)
-    // Overnight shifts by day group:
+    // Canonical shift name helper (normalize Shift 1/2/3 and Sesi Pagi/Malam)
+    function canonicalize(s: string | null | undefined): string {
+      if (!s) return ''
+      const t = s.trim()
+      if (t === 'Shift 1' || t === 'Shift I' || t === 'Sesi Pagi') return 'Shift I'
+      if (t === 'Shift 2' || t === 'Shift II' || t === 'Sesi Malam') return 'Shift II'
+      if (t === 'Shift 3' || t === 'Shift III') return 'Shift III'
+      return t
+    }
+
+    // 4c. Determine Work Date & Enforce Check-In Prerequisite for Checkout
+    // Overnight shifts cross midnight into next day (H+1):
     //   Senin–Kamis: Shift III (19:30 – 07:00 H+1), Shift 3
     //   Jumat:       Shift II  (19:30 – 07:30 H+1)
     //   Sabtu–Minggu: Shift II (20:00 – 08:00 H+1), Sesi Malam
@@ -490,54 +500,130 @@ serve(async (req: Request) => {
     const yesterday = new Date(serverNow.getTime() - 24 * 60 * 60 * 1000)
     const yesterdayDateStr = getJakartaDateString(yesterday)
 
-    // Detect overnight shift based on day of week + shift name
-    // workDayOfWeek is not yet defined here — use server today's day
-    const todayDayOfWeek = serverNow.toLocaleDateString('en-US', { timeZone: 'Asia/Jakarta', weekday: 'short' })
     const todayDayNum = new Date(jakartaDateToday + 'T12:00:00+07:00').getDay() // 0=Sun,1=Mon,...,6=Sat
+    const yesterdayDayNum = (todayDayNum + 6) % 7 // 0=Sun,1=Mon,...,6=Sat
 
     function isOvernightByDayAndShift(dayOfWeek: number, shiftName: string | null): boolean {
       if (!shiftName) return false
-      const s = shiftName.trim()
-      const canon = s === 'Shift 1' ? 'Shift I' : s === 'Shift 2' ? 'Shift II' : s === 'Shift 3' ? 'Shift III' : s
+      const canon = canonicalize(shiftName)
       // Senin–Kamis (1–4): Shift III overnight
       if (dayOfWeek >= 1 && dayOfWeek <= 4) return canon === 'Shift III'
       // Jumat (5): Shift II overnight
       if (dayOfWeek === 5) return canon === 'Shift II'
       // Sabtu–Minggu (6,0): Shift II / Sesi Malam overnight
-      if (dayOfWeek === 0 || dayOfWeek === 6) return canon === 'Shift II' || s === 'Sesi Malam'
+      if (dayOfWeek === 0 || dayOfWeek === 6) return canon === 'Shift II'
       return false
     }
 
-    const isOvernightShift = isOvernightByDayAndShift(todayDayNum, shift)
-
-    if (category === 'Security' && isOvernightShift) {
+    if (category === 'CS') {
       if (attendance_type === 'pulang') {
-        // Query database for open masuk record from yesterday or today
-        const { data: openMasuk } = await supabase
+        const { data: csMasuk } = await supabase
           .from('attendance_records')
-          .select('work_date, recorded_at')
+          .select('id')
           .eq('normalized_name', authoritativeNormalizedName)
-          .eq('category', 'Security')
-          .eq('shift', shift)
+          .eq('category', 'CS')
           .eq('attendance_type', 'masuk')
-          .in('work_date', [yesterdayDateStr, jakartaDateToday])
-          .order('recorded_at', { ascending: false })
-          .limit(1)
+          .eq('work_date', jakartaDateToday)
           .maybeSingle()
 
-        if (openMasuk?.work_date) {
-          // Linked authoritatively to the exact work_date when the shift started
-          workDate = openMasuk.work_date
-        } else {
-          // Fallback: any checkout before 18:00 WIB belongs to yesterday's overnight shift
-          if (currentHour < 18) {
-            workDate = yesterdayDateStr
+        if (!csMasuk) {
+          return new Response(
+            JSON.stringify({
+              error: `Presensi pulang ditolak: Pegawai ${authoritativeEmployeeName} belum melakukan presensi masuk hari ini. Pegawai wajib melakukan presensi masuk terlebih dahulu.`,
+              error_code: 'NO_CHECKIN_FOUND',
+            }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+      }
+    } else if (category === 'Security') {
+      const canonShift = canonicalize(shift)
+
+      if (attendance_type === 'pulang') {
+        let matchedMasuk: {
+          id: string
+          work_date: string
+          recorded_at: string
+          shift: string | null
+        } | null = null
+
+        // Priority 1: Check by specific check_in_record_id if supplied
+        if (check_in_record_id) {
+          const { data: byId } = await supabase
+            .from('attendance_records')
+            .select('id, work_date, recorded_at, shift')
+            .eq('id', check_in_record_id)
+            .eq('normalized_name', authoritativeNormalizedName)
+            .eq('category', 'Security')
+            .eq('attendance_type', 'masuk')
+            .maybeSingle()
+
+          if (byId && canonicalize(byId.shift) === canonShift) {
+            matchedMasuk = byId
           }
         }
+
+        // Priority 2: Look up open masuk for this employee in yesterday and today
+        if (!matchedMasuk) {
+          // If yesterday had an overnight shift matching canonShift (e.g. Sunday Shift II ending Monday morning),
+          // search yesterday first, then today.
+          const isYesterdayOvernight = isOvernightByDayAndShift(yesterdayDayNum, shift)
+          const candidateDates = (currentHour < 14 && isYesterdayOvernight)
+            ? [yesterdayDateStr, jakartaDateToday]
+            : [jakartaDateToday, yesterdayDateStr]
+
+          const { data: masukRecords } = await supabase
+            .from('attendance_records')
+            .select('id, work_date, recorded_at, shift')
+            .eq('normalized_name', authoritativeNormalizedName)
+            .eq('category', 'Security')
+            .eq('attendance_type', 'masuk')
+            .in('work_date', candidateDates)
+            .order('recorded_at', { ascending: false })
+
+          if (masukRecords && masukRecords.length > 0) {
+            const matchingShifts = masukRecords.filter(r => canonicalize(r.shift) === canonShift)
+
+            // Pick the first matching record that doesn't already have a pulang
+            for (const cand of matchingShifts) {
+              const { data: existingPulang } = await supabase
+                .from('attendance_records')
+                .select('id')
+                .eq('normalized_name', authoritativeNormalizedName)
+                .eq('category', 'Security')
+                .eq('attendance_type', 'pulang')
+                .eq('work_date', cand.work_date)
+                .eq('shift', cand.shift)
+                .maybeSingle()
+
+              if (!existingPulang) {
+                matchedMasuk = cand
+                break
+              }
+            }
+
+            // Fallback to latest matching masuk if none unclosed
+            if (!matchedMasuk && matchingShifts.length > 0) {
+              matchedMasuk = matchingShifts[0]
+            }
+          }
+        }
+
+        // Mandatory rule: Guard must have checked in before checkout
+        if (!matchedMasuk) {
+          return new Response(
+            JSON.stringify({
+              error: `Presensi pulang ditolak: Tidak ditemukan catatan presensi masuk yang valid untuk ${authoritativeEmployeeName}${shift ? ` (${shift})` : ''}. Pegawai wajib melakukan presensi masuk terlebih dahulu.`,
+              error_code: 'NO_CHECKIN_FOUND',
+            }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+
+        workDate = matchedMasuk.work_date
       } else if (attendance_type === 'masuk') {
-        // Post-midnight / early morning check-in (< 12:00 WIB) for overnight shift
-        // belongs to yesterday's shift start date.
-        if (currentHour < 12) {
+        // Post-midnight / early morning check-in (< 12:00 WIB) for overnight shift that started yesterday
+        if (currentHour < 12 && isOvernightByDayAndShift(yesterdayDayNum, shift)) {
           workDate = yesterdayDateStr
         }
       }
@@ -699,13 +785,6 @@ serve(async (req: Request) => {
 
       // Canonical shift name (normalize Shift 1/2/3 and Sesi Pagi/Malam)
       const shiftStr = String(shift || '')
-      function canonicalize(s: string): string {
-        const t = s.trim()
-        if (t === 'Shift 1' || t === 'Shift I' || t === 'Sesi Pagi') return 'Shift I'
-        if (t === 'Shift 2' || t === 'Shift II' || t === 'Sesi Malam') return 'Shift II'
-        if (t === 'Shift 3' || t === 'Shift III') return 'Shift III'
-        return t
-      }
       const canonicalShift = canonicalize(shiftStr)
 
       const isWeekendDay = workDayOfWeek === 0 || workDayOfWeek === 6
@@ -829,8 +908,8 @@ serve(async (req: Request) => {
           lateMinutes = 0
         }
       } else if (attendance_type === 'pulang') {
-        scheduledStart = timings.in_start
-        scheduledEnd   = timings.out_start
+        scheduledStart = timings.out_start
+        scheduledEnd   = timings.out_end
         const endMins = hhmm(timings.out_start)
 
         if (timings.out_next_day) {

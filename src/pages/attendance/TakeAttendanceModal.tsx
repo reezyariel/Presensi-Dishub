@@ -22,13 +22,16 @@ import {
 } from '../../lib/officeLocation'
 import { supabase } from '../../lib/supabase'
 import { FunctionsHttpError } from '@supabase/supabase-js'
-import { formatJakartaTime, getScheduleInfo, todayJakarta, getCSScheduleSync, checkAttendanceWindow } from '../../lib/scheduleEngine'
+import { formatJakartaTime, getScheduleInfo, getCSScheduleSync, checkAttendanceWindow } from '../../lib/scheduleEngine'
+import { getEffectiveNow, getEffectiveTodayJakarta } from '../../lib/mockClock'
 import type { AttendanceRecord, AttendanceType, SecurityShiftOption } from '../../types/attendance'
 
 interface TakeAttendanceModalProps {
   category: 'CS' | 'Security'
   attendanceType: AttendanceType
   shift?: SecurityShiftOption
+  workDate?: string
+  checkInRecordId?: string
   onClose: () => void
   onSuccess?: () => void
 }
@@ -39,12 +42,15 @@ export default function TakeAttendanceModal({
   category,
   attendanceType,
   shift,
+  workDate,
+  checkInRecordId,
   onClose,
   onSuccess,
 }: TakeAttendanceModalProps) {
   const navigate = useNavigate()
   const { profile, employeeProfile } = useAuth()
-  const today = todayJakarta()
+  // today reaktif terhadap mock clock (dev-only); production selalu mengembalikan tanggal sistem asli
+  const today = getEffectiveTodayJakarta()
 
   const [step, setStep] = useState<ModalStep>('initial')
   const [officeConfig, setOfficeConfig] = useState<OfficeLocationConfig>(DEFAULT_OFFICE_CONFIG)
@@ -109,6 +115,8 @@ export default function TakeAttendanceModal({
 
   const employeeName = employeeProfile?.full_name || profile?.full_name || 'Pegawai'
 
+  const effectiveWorkDate = workDate || today
+
   // Schedule Info
   const scheduleDisplay = useMemo(() => {
     if (category === 'CS') {
@@ -120,15 +128,15 @@ export default function TakeAttendanceModal({
         pulang: fmt(cs.pulang.start, cs.pulang.end),
       }
     } else {
-      const sched = getScheduleInfo('Security', attendanceType, shift ?? null, today)
-      const schedEnd = getScheduleInfo('Security', 'pulang', shift ?? null, today)
+      const sched = getScheduleInfo('Security', attendanceType, shift ?? null, effectiveWorkDate)
+      const schedEnd = getScheduleInfo('Security', 'pulang', shift ?? null, effectiveWorkDate)
       return {
         masuk: sched ? `${sched.scheduledStart.replace(':', '.')} WIB` : '07.00 WIB',
         istirahat: 'Shift Kerja Berlanjut',
         pulang: schedEnd ? `${schedEnd.scheduledStart.replace(':', '.')}${schedEnd.isNextDay ? ' (H+1)' : ''} WIB` : '16.00 WIB',
       }
     }
-  }, [category, shift, today, attendanceType])
+  }, [category, shift, effectiveWorkDate, attendanceType])
 
   // Security shift check
   const isNoShift = category === 'Security' && !shift
@@ -136,8 +144,8 @@ export default function TakeAttendanceModal({
   // Attendance window status check
   const windowStatus = useMemo(() => {
     if (isNoShift) return 'not_yet'
-    return checkAttendanceWindow(category, attendanceType, shift ?? null, today, new Date())
-  }, [category, attendanceType, shift, today, isNoShift])
+    return checkAttendanceWindow(category, attendanceType, shift ?? null, effectiveWorkDate, getEffectiveNow())
+  }, [category, attendanceType, shift, effectiveWorkDate, isNoShift])
   const isWindowNotYet = !isNoShift && windowStatus === 'not_yet'
 
   // Geofence reason requirement
@@ -241,6 +249,7 @@ export default function TakeAttendanceModal({
         category,
         attendance_type: attendanceType,
         shift: category === 'Security' ? shift : null,
+        check_in_record_id: checkInRecordId || undefined,
         selfie_base64: photoToUpload,
         idempotency_key: idempotencyKey,
         latitude: coords?.latitude ?? null,

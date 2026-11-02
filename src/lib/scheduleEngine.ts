@@ -13,6 +13,31 @@ import type { ShiftType, SecurityShiftOption, WeekendSession, AttendanceType, At
 import { formatInTimeZone, toZonedTime } from 'date-fns-tz'
 import { getDay, parseISO, subDays } from 'date-fns'
 import { supabase } from './supabase'
+import {
+  getEffectiveNow,
+  getEffectiveNowJakarta,
+  getEffectiveTodayJakarta,
+  isMockClockActive,
+  setMockClock,
+  clearMockClock,
+  DEV_CLOCK_PRESETS,
+  subscribeToMockClock,
+  type MockClockPreset,
+  type MockClockState,
+} from './mockClock'
+
+export {
+  getEffectiveNow,
+  getEffectiveNowJakarta,
+  getEffectiveTodayJakarta,
+  isMockClockActive,
+  setMockClock,
+  clearMockClock,
+  DEV_CLOCK_PRESETS,
+  subscribeToMockClock,
+  type MockClockPreset,
+  type MockClockState,
+}
 
 export const TIMEZONE = 'Asia/Jakarta'
 
@@ -328,6 +353,33 @@ export function isOvernightSecurityShift(
 }
 
 /**
+ * Determines whether a shift being checked out on checkoutDate (early morning, e.g. < 12:00 WIB)
+ * is an overnight shift that started yesterday.
+ * - Monday morning (< 12:00): Sunday's Shift II / Sesi Malam
+ * - Tuesday-Friday morning (< 12:00): Mon-Thu's Shift III
+ * - Saturday morning (< 12:00): Friday's Shift II
+ * - Sunday morning (< 12:00): Saturday's Shift II / Sesi Malam
+ */
+export function isOvernightCheckout(
+  checkoutDateStr: string,
+  shift: SecurityShiftOption | null,
+): boolean {
+  if (!shift) return false
+  const day = getJakartaDayOfWeek(checkoutDateStr)
+  const canon = canonicalShiftName(shift)
+  // If checkout is on Monday (1), the overnight shift from Sunday was Shift II (or Sesi Malam)
+  if (day === 1) return canon === 'Shift II' || shift === 'Sesi Malam'
+  // If checkout is on Tuesday-Friday (2..5), the overnight shift was Shift III
+  if (day >= 2 && day <= 5) return canon === 'Shift III'
+  // If checkout is on Saturday (6), the overnight shift from Friday was Shift II
+  if (day === 6) return canon === 'Shift II'
+  // If checkout is on Sunday (0), the overnight shift from Saturday was Shift II (or Sesi Malam)
+  if (day === 0) return canon === 'Shift II' || shift === 'Sesi Malam'
+  return false
+}
+
+
+/**
  * Returns the exact SecurityShiftItem for the specified work date and shift.
  */
 export function getSecurityShiftItem(
@@ -387,20 +439,22 @@ export interface SecurityShiftCheckInStatus {
 export function getSecurityShiftCheckInStatus(
   option: SecurityShiftOption,
   workDateStr: string,
-  now: Date = new Date(),
+  now: Date = getEffectiveNow(),
 ): SecurityShiftCheckInStatus {
   const jakartaNow = toZonedTime(now, TIMEZONE)
   const todayJakartaStr = formatInTimeZone(jakartaNow, TIMEZONE, 'yyyy-MM-dd')
   const currentHour = jakartaNow.getHours()
   const currentMinutes = currentHour * 60 + jakartaNow.getMinutes()
 
-  const isOvernight = isOvernightSecurityShift(workDateStr, option)
+  const isOvernight =
+    isOvernightSecurityShift(workDateStr, option) ||
+    (workDateStr === todayJakartaStr && isOvernightCheckout(todayJakartaStr, option))
 
   // Determine effective work date: for overnight shift post-midnight (hour < 12),
   // the shift that started yesterday evening belongs to yesterday.
   let effectiveWorkDate = workDateStr
   if (isOvernight && workDateStr === todayJakartaStr && currentHour < 12) {
-    effectiveWorkDate = determineShiftIIIWorkDate(now)
+    effectiveWorkDate = determineOvernightWorkDate(now)
   }
 
   const shiftItem = getSecurityShiftItem(effectiveWorkDate, option)
@@ -496,7 +550,7 @@ export function getSecurityShiftCheckInStatus(
  */
 export function getAutoSelectSecurityShift(
   workDateStr: string,
-  now: Date = new Date(),
+  now: Date = getEffectiveNow(),
 ): SecurityShiftOption | null {
   const options = getSecurityAvailableOptions(workDateStr)
   const inWindow = options.filter(opt => {
@@ -532,7 +586,7 @@ export interface SecurityOptionWindowInfo {
 export function getSecurityOptionInfo(
   option: SecurityShiftOption,
   workDateStr: string,
-  now: Date = new Date(),
+  now: Date = getEffectiveNow(),
 ): SecurityOptionWindowInfo {
   const check = getSecurityShiftCheckInStatus(option, workDateStr, now)
   const windowStatus: WindowStatus =
@@ -564,7 +618,7 @@ export function getSecurityOptionInfo(
 export function checkSecurityMasukWindow(
   option: SecurityShiftOption,
   workDateStr: string,
-  now: Date = new Date(),
+  now: Date = getEffectiveNow(),
 ): WindowStatus {
   return checkAttendanceWindow('Security', 'masuk', option, workDateStr, now)
 }
@@ -1042,9 +1096,9 @@ function parseTimeOnDate(timeStr: string, date: Date, nextDay = false): Date {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Determine work_date for Security Shift III pulang
+// Determine work_date for Security overnight shifts (e.g. Sunday Shift II, Mon-Thu Shift III)
 // ─────────────────────────────────────────────────────────────
-export function determineShiftIIIWorkDate(recordedAt: Date): string {
+export function determineOvernightWorkDate(recordedAt: Date): string {
   const jakartaTime = toZonedTime(recordedAt, TIMEZONE)
   const hour = jakartaTime.getHours()
   if (hour < 12) {
@@ -1053,6 +1107,10 @@ export function determineShiftIIIWorkDate(recordedAt: Date): string {
   }
   return formatInTimeZone(jakartaTime, TIMEZONE, 'yyyy-MM-dd')
 }
+
+// Backward compatibility alias
+export const determineShiftIIIWorkDate = determineOvernightWorkDate
+
 
 // ─────────────────────────────────────────────────────────────
 // Calculate attendance status (synchronous, uses cache)
@@ -1209,8 +1267,11 @@ export function checkAttendanceWindow(
 
   const todayStr = formatInTimeZone(current, TIMEZONE, 'yyyy-MM-dd')
   let effectiveWorkDateStr = workDateStr
-  if (isOvernightSecurityShift(workDateStr, shift) && current.getHours() < 12 && workDateStr === todayStr) {
-    effectiveWorkDateStr = determineShiftIIIWorkDate(now)
+  if (
+    current.getHours() < 12 &&
+    (isOvernightSecurityShift(workDateStr, shift) || (workDateStr === todayStr && isOvernightCheckout(todayStr, shift)))
+  ) {
+    effectiveWorkDateStr = determineOvernightWorkDate(now)
   }
   const effectiveDate = parseISO(effectiveWorkDateStr)
 
@@ -1283,7 +1344,7 @@ export function checkAttendanceWindow(
 // Format time helpers
 // ─────────────────────────────────────────────────────────────
 export function nowJakarta(): Date {
-  return toZonedTime(new Date(), TIMEZONE)
+  return getEffectiveNowJakarta()
 }
 
 export function formatJakartaTime(date: Date | string, fmt = 'HH:mm'): string {
@@ -1302,7 +1363,7 @@ export function formatJakartaDateTime(date: Date | string): string {
 }
 
 export function todayJakarta(): string {
-  return formatInTimeZone(new Date(), TIMEZONE, 'yyyy-MM-dd')
+  return getEffectiveTodayJakarta()
 }
 
 export function getDayName(dateStr: string): string {
@@ -1338,7 +1399,7 @@ export function getNextAttendanceInfo(
   completedTypes: AttendanceType[],
   shift: SecurityShiftOption | null,
   workDateStr: string,
-  now: Date = new Date(),
+  now: Date = getEffectiveNow(),
 ): NextAttendanceInfo | null {
   const hasMasuk = completedTypes.includes('masuk')
   const hasIstirahat = completedTypes.includes('istirahat')
@@ -1484,7 +1545,7 @@ export function getAttendanceButtonState(
   },
   shift: SecurityShiftOption | null,
   workDateStr: string,
-  now: Date = new Date(),
+  now: Date = getEffectiveNow(),
 ): AttendanceButtonState {
   // 1. If already checked out (pulang is done)
   if (completedRecords.pulang) {
@@ -1739,7 +1800,7 @@ export function calculate30DayRecap(
   category: 'CS' | 'Security',
   masukRecords: RecapMasukRecord[],
   joinDateStr?: string | null,
-  now: Date = new Date(),
+  now: Date = getEffectiveNow(),
   _shift?: SecurityShiftOption | null,
 ): RecapDayStats {
   void _shift
@@ -1866,7 +1927,7 @@ export function calculateSecurity30DayRecap(
   records: SecurityRecapRecord[],
   todayStr: string,
   yesterdayStr: string,
-  now: Date = new Date(),
+  now: Date = getEffectiveNow(),
 ): Security30DayRecap {
   const groupMap = new Map<string, { masuk: SecurityRecapRecord | null; pulang: SecurityRecapRecord | null; work_date: string; shift: SecurityShiftOption }>()
 
@@ -1903,7 +1964,11 @@ export function calculateSecurity30DayRecap(
     if (hasMasuk && hasPulang) {
       shiftSelesai++
     } else if (hasMasuk && !hasPulang) {
-      const isOvernight = grp.shift === 'Shift III' || grp.shift === 'Shift 3' || grp.shift === 'Sesi Malam'
+      const isOvernight =
+        isOvernightSecurityShift(grp.work_date, grp.shift) ||
+        grp.shift === 'Shift III' ||
+        grp.shift === 'Shift 3' ||
+        grp.shift === 'Sesi Malam'
       const isTodayShift = grp.work_date === todayStr
       const isYesterdayShift = grp.work_date === yesterdayStr
 
@@ -1939,7 +2004,7 @@ export function buildSecurityShiftSessions(
   records: SecurityRecapRecord[],
   todayStr: string,
   yesterdayStr: string,
-  now: Date = new Date(),
+  now: Date = getEffectiveNow(),
 ): SecurityShiftSession[] {
   const groupMap = new Map<string, { masuk: SecurityRecapRecord | null; pulang: SecurityRecapRecord | null; work_date: string; shift: SecurityShiftOption }>()
 
@@ -1961,7 +2026,11 @@ export function buildSecurityShiftSessions(
   const sessions: SecurityShiftSession[] = []
 
   for (const [key, grp] of groupMap.entries()) {
-    const isOvernight = grp.shift === 'Shift III' || grp.shift === 'Shift 3' || grp.shift === 'Sesi Malam'
+    const isOvernight =
+      isOvernightSecurityShift(grp.work_date, grp.shift) ||
+      grp.shift === 'Shift III' ||
+      grp.shift === 'Shift 3' ||
+      grp.shift === 'Sesi Malam'
     const hasMasuk = grp.masuk !== null
     const hasPulang = grp.pulang !== null
 
@@ -2035,7 +2104,7 @@ export interface WeekDayCount {
  * Returns the 7 days of the current week (Senin to Minggu)
  * in Asia/Jakarta timezone, strictly formatted as YYYY-MM-DD.
  */
-export function getJakartaWeekDays(refDate: Date = new Date()): WeekDayCount[] {
+export function getJakartaWeekDays(refDate: Date = getEffectiveNow()): WeekDayCount[] {
   const todayStr = refDate.toLocaleDateString('en-CA', { timeZone: TIMEZONE })
   const [y, m, d] = todayStr.split('-').map(Number)
 

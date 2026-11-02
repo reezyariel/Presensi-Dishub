@@ -13,7 +13,6 @@ import {
 import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
 import {
-  todayJakarta,
   formatJakartaDate,
   formatJakartaTime,
   getScheduleInfo,
@@ -22,6 +21,7 @@ import {
   getNextAttendanceInfo,
   getAttendanceButtonState,
   getSecurityShiftCheckInStatus,
+  isOvernightSecurityShift,
   calculate30DayRecap,
   calculateSecurity30DayRecap,
   buildSecurityShiftSessions,
@@ -32,6 +32,7 @@ import {
   type WeekDayCount,
 } from '../../lib/scheduleEngine'
 import type { AttendanceRecord, SecurityShiftOption } from '../../types/attendance'
+import { getEffectiveNow, subscribeToMockClock } from '../../lib/mockClock'
 import TakeAttendanceModal from '../../pages/attendance/TakeAttendanceModal'
 import ShiftSelectionModal from './ShiftSelectionModal'
 import ServiceMenuGrid from './ServiceMenuGrid'
@@ -53,9 +54,9 @@ interface EmployeeHomeViewProps {
 
 export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
   const { user, profile, employeeProfile } = useAuth()
-  const today = todayJakarta()
-
-  const [currentTime, setCurrentTime] = useState<Date>(new Date())
+  // today bisa berubah saat mock clock diaktifkan; dihitung ulang tiap render berdasarkan currentTime
+  const [currentTime, setCurrentTime] = useState<Date>(() => getEffectiveNow())
+  const today = currentTime.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' })
 
   const [todayRecords, setTodayRecords] = useState<{
     masuk: AttendanceRecord | null
@@ -83,10 +84,21 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
   // Shift selection modal state (Security masuk only)
   const [isShiftPickerOpen, setIsShiftPickerOpen] = useState(false)
 
+  // Tick setiap detik — saat mock clock aktif, getEffectiveNow() mengembalikan waktu simulasi
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000)
+    const timer = setInterval(() => setCurrentTime(getEffectiveNow()), 1000)
     return () => clearInterval(timer)
   }, [])
+
+  // Subscribe ke perubahan mock clock agar UI langsung re-render + reload data tanpa refresh browser
+  useEffect(() => {
+    const unsub = subscribeToMockClock(() => {
+      setCurrentTime(getEffectiveNow())
+      loadAttendanceData()
+    })
+    return unsub
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [category, user?.id, employeeProfile?.id])
 
   // Preload schedule cache and periodically refresh so changes in Settings are picked up
   useEffect(() => {
@@ -120,7 +132,9 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
     // For Security Shift III overnight crossover, also query yesterday's records.
     // A guard who checked in yesterday evening (masuk) will do checkout this morning (H+1);
     // their masuk and pulang both have yesterday's work_date.
-    const yesterday = new Date()
+    // Gunakan getEffectiveNow() agar mock clock (dev-only) mempengaruhi kalkulasi tanggal.
+    const effectiveNow = getEffectiveNow()
+    const yesterday = new Date(effectiveNow)
     yesterday.setDate(yesterday.getDate() - 1)
     const yesterdayStr = yesterday.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' })
 
@@ -148,9 +162,9 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
         let pulang = filtered.find(r => r.attendance_type === 'pulang' && r.work_date === today) || null
 
         if (category === 'Security' && !masuk) {
-          // Check yesterday for Shift III overnight session
+          // Check yesterday for overnight session (Shift III Mon-Thu, Shift II Fri/Sat/Sun)
           const yMasuk = filtered.find(r => r.attendance_type === 'masuk' && r.work_date === yesterdayStr) || null
-          if (yMasuk && (yMasuk.shift === 'Shift III' || yMasuk.shift === 'Shift 3')) {
+          if (yMasuk && isOvernightSecurityShift(yesterdayStr, yMasuk.shift)) {
             masuk = yMasuk
             pulang = filtered.find(r => r.attendance_type === 'pulang' && r.work_date === yesterdayStr) || null
           }
@@ -162,7 +176,7 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
 
       // 2. Past 30 days for personal stats
       // Query 31 hari ke belakang agar kita bisa exclude hari ini secara eksplisit di client.
-      const past30StartDate = new Date()
+      const past30StartDate = new Date(effectiveNow)
       past30StartDate.setDate(past30StartDate.getDate() - 30)
       const past30Days = past30StartDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' })
       const { data: monthList } = await supabase
@@ -180,9 +194,9 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
         })
 
         if (category === 'Security') {
-          const secRecap = calculateSecurity30DayRecap(personalMonth, today, yesterdayStr, new Date())
+          const secRecap = calculateSecurity30DayRecap(personalMonth, today, yesterdayStr, effectiveNow)
           setSecurityRecap(secRecap)
-          const secSessions = buildSecurityShiftSessions(personalMonth, today, yesterdayStr, new Date())
+          const secSessions = buildSecurityShiftSessions(personalMonth, today, yesterdayStr, effectiveNow)
           setSecuritySessions(secSessions)
         } else {
           const masukRecords = personalMonth.filter(r => r.attendance_type === 'masuk')
@@ -202,7 +216,7 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
             category,
             masukRecords,
             joinDateStr,
-            new Date(),
+            effectiveNow,
             selectedShift,
           )
           setMonthStats(recapStats)
@@ -210,7 +224,7 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
       }
 
       // 3. Weekly bar chart data (Strict Asia/Jakarta calendar)
-      const weekDays = getJakartaWeekDays(new Date())
+      const weekDays = getJakartaWeekDays(effectiveNow)
       const mondayStr = weekDays[0].dateStr
       const sundayStr = weekDays[6].dateStr
       const { data: weekList } = await supabase
@@ -633,7 +647,7 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
               pulangTime={
                 todayRecords.pulang?.recorded_at
                   ? `${formatJakartaTime(new Date(todayRecords.pulang.recorded_at))}${
-                      selectedShift === 'Shift III' || selectedShift === 'Shift 3' || selectedShift === 'Sesi Malam' ? ' (H+1)' : ''
+                      selectedShift && isOvernightSecurityShift(todayRecords.masuk?.work_date || today, selectedShift) ? ' (H+1)' : ''
                     }`
                   : '--:--'
               }
@@ -642,7 +656,7 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
                   ? todayRecords.masuk.attendance_status === 'terlambat'
                   : Boolean(buttonState.status === 'can_masuk' && 'isLate' in buttonState && buttonState.isLate)
               }
-              isOvernight={Boolean(selectedShift && (selectedShift === 'Shift III' || selectedShift === 'Shift 3' || selectedShift === 'Sesi Malam'))}
+              isOvernight={Boolean(selectedShift && isOvernightSecurityShift(todayRecords.masuk?.work_date || today, selectedShift))}
               buttonStateTitle={buttonState.title}
               canTakeMasuk={Boolean(selectedShift && buttonState.status === 'can_masuk')}
               canTakePulang={Boolean(buttonState.status === 'can_pulang')}
@@ -1101,6 +1115,8 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
           category={category}
           attendanceType={attendanceTypeToTake}
           shift={selectedShift || undefined}
+          workDate={todayRecords.masuk?.work_date || today}
+          checkInRecordId={todayRecords.masuk?.id}
           onClose={() => setIsTakeModalOpen(false)}
           onSuccess={() => {
             setIsTakeModalOpen(false)
