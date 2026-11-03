@@ -22,6 +22,7 @@ import {
   getAttendanceButtonState,
   getSecurityShiftCheckInStatus,
   isOvernightSecurityShift,
+  getAutoSelectSecurityShift,
   calculate30DayRecap,
   calculateSecurity30DayRecap,
   buildSecurityShiftSessions,
@@ -162,16 +163,34 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
         let pulang = filtered.find(r => r.attendance_type === 'pulang' && r.work_date === today) || null
 
         if (category === 'Security' && !masuk) {
-          // Check yesterday for overnight session (Shift III Mon-Thu, Shift II Fri/Sat/Sun)
+          // Check yesterday for an ACTIVE (uncompleted) overnight session (e.g. Shift III Mon-Thu, Shift II Fri/Sat/Sun)
           const yMasuk = filtered.find(r => r.attendance_type === 'masuk' && r.work_date === yesterdayStr) || null
           if (yMasuk && isOvernightSecurityShift(yesterdayStr, yMasuk.shift)) {
-            masuk = yMasuk
-            pulang = filtered.find(r => r.attendance_type === 'pulang' && r.work_date === yesterdayStr) || null
+            const yPulang = filtered.find(r => r.attendance_type === 'pulang' && r.work_date === yesterdayStr && (r.shift === yMasuk.shift || !r.shift)) || null
+            if (!yPulang) {
+              // Yesterday's overnight shift is still active and awaiting checkout.
+              // Keep it active so the guard can/must complete their checkout before starting a new shift.
+              masuk = yMasuk
+              pulang = null
+            }
+            // If yPulang exists, yesterday's overnight shift is finished and complete!
+            // It must NOT block today's new shift check-in or mark today as "selesai".
           }
         }
 
         setTodayRecords({ masuk, istirahat, pulang })
-        if (masuk?.shift) setSelectedShift(masuk.shift)
+        if (masuk?.shift) {
+          setSelectedShift(masuk.shift)
+        } else {
+          // If no active shift is in progress, auto-select for today's active window if applicable
+          const autoShift = getAutoSelectSecurityShift(today, effectiveNow)
+          if (autoShift) {
+            setSelectedShift(autoShift)
+          } else if (selectedShift && isOvernightSecurityShift(yesterdayStr, selectedShift) && yesterdayStr !== today) {
+            // Clear leftover overnight shift from yesterday if it's no longer the active shift
+            setSelectedShift(null)
+          }
+        }
       }
 
       // 2. Past 30 days for personal stats

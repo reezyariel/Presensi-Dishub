@@ -47,8 +47,8 @@ function getShiftTimeLabel(shift: SecurityShiftOption, workDateStr?: string): st
     // Generic fallback (no date context)
     switch (shift) {
       case 'Shift I':   return '07.00 – 16.00'
-      case 'Shift II':  return '16.00 – 19.30'
-      case 'Shift III': return '19.30 – 07.00'
+      case 'Shift II':  return '15.00 – 19.30'
+      case 'Shift III': return '19.30 – 07.30'
       default: return ''
     }
   }

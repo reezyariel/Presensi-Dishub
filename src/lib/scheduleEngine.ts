@@ -136,8 +136,8 @@ export const DEFAULT_DAY_GROUPS: SecurityScheduleConfig['day_groups'] = {
         shift_name: 'Shift II',
         label: 'Shift II',
         shift_number: 2,
-        in_start: '16:00',
-        in_end: '16:30',
+        in_start: '15:00',
+        in_end: '15:30',
         out_start: '19:30',
         out_end: '20:00',
         out_next_day: false,
@@ -149,8 +149,8 @@ export const DEFAULT_DAY_GROUPS: SecurityScheduleConfig['day_groups'] = {
         shift_number: 3,
         in_start: '19:30',
         in_end: '20:00',
-        out_start: '07:00',
-        out_end: '07:30',
+        out_start: '07:30',
+        out_end: '08:00',
         out_next_day: true,
       },
     ],
@@ -164,10 +164,10 @@ export const DEFAULT_DAY_GROUPS: SecurityScheduleConfig['day_groups'] = {
         shift_name: 'Shift I',
         label: 'Shift I',
         shift_number: 1,
-        in_start: '07:30',
-        in_end: '08:00',
-        out_start: '19:30',
-        out_end: '20:00',
+        in_start: '07:00',
+        in_end: '07:30',
+        out_start: '19:00',
+        out_end: '19:30',
         out_next_day: false,
       },
       {
@@ -175,10 +175,10 @@ export const DEFAULT_DAY_GROUPS: SecurityScheduleConfig['day_groups'] = {
         shift_name: 'Shift II',
         label: 'Shift II',
         shift_number: 2,
-        in_start: '19:30',
-        in_end: '20:00',
-        out_start: '07:30',
-        out_end: '08:00',
+        in_start: '19:00',
+        in_end: '19:30',
+        out_start: '07:00',
+        out_end: '07:30',
         out_next_day: true,
       },
     ],
@@ -192,8 +192,8 @@ export const DEFAULT_DAY_GROUPS: SecurityScheduleConfig['day_groups'] = {
         shift_name: 'Shift I',
         label: 'Shift I — Pagi',
         shift_number: 1,
-        in_start: '08:00',
-        in_end: '08:30',
+        in_start: '07:30',
+        in_end: '08:00',
         out_start: '20:00',
         out_end: '20:30',
         out_next_day: false,
@@ -205,8 +205,8 @@ export const DEFAULT_DAY_GROUPS: SecurityScheduleConfig['day_groups'] = {
         shift_number: 2,
         in_start: '20:00',
         in_end: '20:30',
-        out_start: '08:00',
-        out_end: '08:30',
+        out_start: '07:30',
+        out_end: '08:00',
         out_next_day: true,
       },
     ],
@@ -228,13 +228,13 @@ export const DEFAULT_SECURITY_SCHEDULE: SecuritySchedule = {
       end_next_day: false, end_window_end_next_day: false,
     },
     'Shift II': {
-      start: '16:00', window_end: '16:30',
+      start: '15:00', window_end: '15:30',
       end: '19:30', end_window_end: '20:00',
       end_next_day: false, end_window_end_next_day: false,
     },
     'Shift III': {
       start: '19:30', window_end: '20:00',
-      end: '07:00', end_window_end: '07:30',
+      end: '07:30', end_window_end: '08:00',
       end_next_day: true, end_window_end_next_day: true,
     },
     // Numeric aliases (Shift 1/2/3) — same as Roman numerals
@@ -244,13 +244,13 @@ export const DEFAULT_SECURITY_SCHEDULE: SecuritySchedule = {
       end_next_day: false, end_window_end_next_day: false,
     },
     'Shift 2': {
-      start: '16:00', window_end: '16:30',
+      start: '15:00', window_end: '15:30',
       end: '19:30', end_window_end: '20:00',
       end_next_day: false, end_window_end_next_day: false,
     },
     'Shift 3': {
       start: '19:30', window_end: '20:00',
-      end: '07:00', end_window_end: '07:30',
+      end: '07:30', end_window_end: '08:00',
       end_next_day: true, end_window_end_next_day: true,
     },
   },
@@ -274,8 +274,8 @@ export interface SecurityWeekendSchedule {
 }
 
 export const DEFAULT_SECURITY_WEEKEND_SCHEDULE: SecurityWeekendSchedule = {
-  sesiPagi:  { open: '08:00', close: '08:30', out_start: '20:00', out_end: '20:30' },
-  sesiMalam: { open: '20:00', close: '20:30', out_start: '08:00', out_end: '08:30' },
+  sesiPagi:  { open: '07:30', close: '08:00', out_start: '20:00', out_end: '20:30' },
+  sesiMalam: { open: '20:00', close: '20:30', out_start: '07:30', out_end: '08:00' },
 }
 
 /**
@@ -329,9 +329,9 @@ export function getWeekendSessionSchedule(session: WeekendSession): WeekendSessi
 
 /**
  * Determines whether a specific shift on a given work date is an overnight (cross-midnight) shift.
- * - Senin–Kamis: Shift III (19:30 – 07:00 H+1)
- * - Jumat: Shift II (19:30 – 07:30 H+1)
- * - Sabtu–Minggu: Shift II / Sesi Malam (20:00 – 08:00 H+1)
+ * - Senin–Kamis: Shift III (19:30 – 07:30 H+1)
+ * - Jumat: Shift II (19:00 – 07:00 H+1)
+ * - Sabtu–Minggu: Shift II / Sesi Malam (20:00 – 07:30 H+1)
  */
 export function isOvernightSecurityShift(
   workDateStr: string,
@@ -448,7 +448,7 @@ export function getSecurityShiftCheckInStatus(
 
   const isOvernight =
     isOvernightSecurityShift(workDateStr, option) ||
-    (workDateStr === todayJakartaStr && isOvernightCheckout(todayJakartaStr, option))
+    (workDateStr === todayJakartaStr && currentHour < 12 && isOvernightCheckout(todayJakartaStr, option))
 
   // Determine effective work date: for overnight shift post-midnight (hour < 12),
   // the shift that started yesterday evening belongs to yesterday.
@@ -477,18 +477,18 @@ export function getSecurityShiftCheckInStatus(
   if (isWeekendDay) {
     if (canon === 'Shift I' || option === 'Sesi Pagi') {
       label = 'Shift I — Pagi'
-      sublabel = 'Sesi Akhir Pekan Pagi (08:00 – 20:00 WIB)'
+      sublabel = 'Sesi Akhir Pekan Pagi (07:30 – 20:00 WIB)'
     } else {
       label = 'Shift II — Malam'
-      sublabel = 'Sesi Akhir Pekan Malam (20:00 – 08:00 WIB H+1)'
+      sublabel = 'Sesi Akhir Pekan Malam (20:00 – 07:30 WIB H+1)'
     }
   } else if (isFri) {
     if (canon === 'Shift I') {
       label = 'Shift I'
-      sublabel = 'Shift Siang Jumat (07:30 – 19:30 WIB)'
+      sublabel = 'Shift Siang Jumat (07:00 – 19:00 WIB)'
     } else {
       label = 'Shift II'
-      sublabel = 'Shift Malam Jumat (19:30 – 07:30 WIB H+1)'
+      sublabel = 'Shift Malam Jumat (19:00 – 07:00 WIB H+1)'
     }
   } else {
     // Senin – Kamis
@@ -497,10 +497,10 @@ export function getSecurityShiftCheckInStatus(
       sublabel = 'Shift Pagi – Sore (07:00 – 16:00 WIB)'
     } else if (canon === 'Shift II') {
       label = 'Shift II'
-      sublabel = 'Shift Sore – Malam (16:00 – 19:30 WIB)'
+      sublabel = 'Shift Sore – Malam (15:00 – 19:30 WIB)'
     } else {
       label = 'Shift III'
-      sublabel = 'Shift Malam – Pagi (19:30 – 07:00 WIB H+1)'
+      sublabel = 'Shift Malam – Pagi (19:30 – 07:30 WIB H+1)'
     }
   }
 
@@ -869,12 +869,17 @@ export function normalizeSecurityWeekendSchedule(raw: any): SecurityWeekendSched
 
   const pagiOpen = isValidTimeString(rawPagi.open) ? rawPagi.open.trim() : DEFAULT_SECURITY_WEEKEND_SCHEDULE.sesiPagi.open
   const pagiClose = isValidTimeString(rawPagi.close) ? rawPagi.close.trim() : DEFAULT_SECURITY_WEEKEND_SCHEDULE.sesiPagi.close
+  const pagiOutStart = isValidTimeString(rawPagi.out_start) ? rawPagi.out_start.trim() : DEFAULT_SECURITY_WEEKEND_SCHEDULE.sesiPagi.out_start
+  const pagiOutEnd = isValidTimeString(rawPagi.out_end) ? rawPagi.out_end.trim() : DEFAULT_SECURITY_WEEKEND_SCHEDULE.sesiPagi.out_end
+
   const malamOpen = isValidTimeString(rawMalam.open) ? rawMalam.open.trim() : DEFAULT_SECURITY_WEEKEND_SCHEDULE.sesiMalam.open
   const malamClose = isValidTimeString(rawMalam.close) ? rawMalam.close.trim() : DEFAULT_SECURITY_WEEKEND_SCHEDULE.sesiMalam.close
+  const malamOutStart = isValidTimeString(rawMalam.out_start) ? rawMalam.out_start.trim() : DEFAULT_SECURITY_WEEKEND_SCHEDULE.sesiMalam.out_start
+  const malamOutEnd = isValidTimeString(rawMalam.out_end) ? rawMalam.out_end.trim() : DEFAULT_SECURITY_WEEKEND_SCHEDULE.sesiMalam.out_end
 
   return {
-    sesiPagi: { open: pagiOpen, close: pagiClose },
-    sesiMalam: { open: malamOpen, close: malamClose },
+    sesiPagi: { open: pagiOpen, close: pagiClose, out_start: pagiOutStart, out_end: pagiOutEnd },
+    sesiMalam: { open: malamOpen, close: malamClose, out_start: malamOutStart, out_end: malamOutEnd },
   }
 }
 
@@ -1055,7 +1060,12 @@ export function getScheduleInfo(
           dayType: 'normal',
         }
       }
-      return null
+      return {
+        scheduledStart: ws.out_start || (shift === 'Sesi Pagi' ? '20:00' : '07:30'),
+        scheduledEnd: ws.out_end || (shift === 'Sesi Pagi' ? '20:30' : '08:00'),
+        isNextDay: shift === 'Sesi Malam',
+        dayType: 'normal',
+      }
     }
 
     // Weekday shift (Shift I/II/III) fallback
@@ -1305,15 +1315,23 @@ export function checkAttendanceWindow(
 
       // Weekend pulang: Sesi Pagi ends at 20:00 (same day), Sesi Malam ends at 08:00 (H+1)
       if (shift === 'Sesi Pagi') {
-        const pulangStart = parseTimeOnDate('20:00', workDate, false)
+        const outStart = ws.out_start || '20:00'
+        const outEnd = ws.out_end || '20:30'
+        const pulangStart = parseTimeOnDate(outStart, workDate, false)
+        const pulangEnd = parseTimeOnDate(outEnd, workDate, false)
         if (current < pulangStart) return 'not_yet'
-        return 'open'
+        if (current <= pulangEnd) return 'open'
+        return 'closed_accept'
       }
 
       if (shift === 'Sesi Malam') {
-        const pulangStart = parseTimeOnDate('08:00', effectiveDate, true) // H+1
+        const outStart = ws.out_start || '07:30'
+        const outEnd = ws.out_end || '08:00'
+        const pulangStart = parseTimeOnDate(outStart, effectiveDate, true) // H+1
+        const pulangEnd = parseTimeOnDate(outEnd, effectiveDate, true)
         if (current < pulangStart) return 'not_yet'
-        return 'open'
+        if (current <= pulangEnd) return 'open'
+        return 'closed_accept'
       }
 
       return 'open'
@@ -1717,6 +1735,7 @@ export function getAttendanceButtonState(
   const todayJakartaStr = formatInTimeZone(jakartaNow, TIMEZONE, 'yyyy-MM-dd')
   const masukWorkDate = completedRecords.masuk.work_date || workDateStr
   const isNextDay = todayJakartaStr > masukWorkDate
+  const pulangWindowEndMins = getTimeInMinutes(item.out_end)
 
   if (isOvernight) {
     // Overnight shifts (e.g. Shift III Mon–Thu, Shift II Friday, Shift II Weekend)
@@ -1739,6 +1758,14 @@ export function getAttendanceButtonState(
       }
     }
 
+    if (currentMinutes > pulangWindowEndMins) {
+      return {
+        status: 'window_closed',
+        title: 'Jendela Presensi Pulang Ditutup',
+        message: `Jendela presensi pulang ${currentShift} telah ditutup pada pukul ${item.out_end.replace(':', '.')} WIB (H+1). Presensi pulang di luar jendela waktu tidak dapat dilakukan.`,
+      }
+    }
+
     return {
       status: 'can_pulang',
       title: 'Ambil Foto & Absen Pulang',
@@ -1755,6 +1782,14 @@ export function getAttendanceButtonState(
       startTime: item.out_start,
       note,
       message: `Check-in tercatat. Tombol presensi pulang akan aktif pukul ${item.out_start.replace(':', '.')} WIB.`,
+    }
+  }
+
+  if (currentMinutes > pulangWindowEndMins) {
+    return {
+      status: 'window_closed',
+      title: 'Jendela Presensi Pulang Ditutup',
+      message: `Jendela presensi pulang ${currentShift} telah ditutup pada pukul ${item.out_end.replace(':', '.')} WIB. Presensi pulang di luar jendela waktu tidak dapat dilakukan.`,
     }
   }
 

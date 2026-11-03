@@ -80,10 +80,12 @@ console.log('\nTEST 6: Shift II — belum_dibuka at 12:00 WIB')
   assert('windowStatus = belum_dibuka', s.windowStatus === 'belum_dibuka', `got ${s.windowStatus}`)
 }
 
-console.log('\nTEST 7: Shift II — tepat_waktu at 16:15 WIB')
+console.log('\nTEST 7: Shift II — tepat_waktu at 15:15 WIB (15:00–15:30)')
 {
-  const s = getSecurityShiftCheckInStatus('Shift II', WEEKDAY, jktDateTime(WEEKDAY, 16, 15))
+  const s = getSecurityShiftCheckInStatus('Shift II', WEEKDAY, jktDateTime(WEEKDAY, 15, 15))
   assert('windowStatus = tepat_waktu', s.windowStatus === 'tepat_waktu', `got ${s.windowStatus}`)
+  const sClosed = getSecurityShiftCheckInStatus('Shift II', WEEKDAY, jktDateTime(WEEKDAY, 16, 15))
+  assert('windowStatus = jendela_selesai at 16:15', sClosed.windowStatus === 'jendela_selesai', `got ${sClosed.windowStatus}`)
 }
 
 console.log('\nTEST 8: Shift III — tepat_waktu at 19:45 WIB')
@@ -110,9 +112,9 @@ console.log('\nTEST 11: Auto-select Shift I at 07:10 WIB')
   assert('auto = Shift I', r === 'Shift I', `got ${r}`)
 }
 
-console.log('\nTEST 12: Auto-select Shift II at 16:10 WIB')
+console.log('\nTEST 12: Auto-select Shift II at 15:10 WIB')
 {
-  const r = getAutoSelectSecurityShift(WEEKDAY, jktDateTime(WEEKDAY, 16, 10))
+  const r = getAutoSelectSecurityShift(WEEKDAY, jktDateTime(WEEKDAY, 15, 10))
   assert('auto = Shift II', r === 'Shift II', `got ${r}`)
 }
 
@@ -152,10 +154,12 @@ console.log('\nTEST 18: isOvernight — Shift III true')
   assert('isOvernight = true', s.isOvernight === true)
 }
 
-console.log('\nTEST 19: Sesi Pagi (weekend) — tepat_waktu at 08:10')
+console.log('\nTEST 19: Sesi Pagi (weekend 07:30–08:00) — tepat_waktu at 07:45, jendela_selesai at 08:10')
 {
-  const s = getSecurityShiftCheckInStatus('Sesi Pagi', WEEKEND, jktDateTime(WEEKEND, 8, 10))
-  assert('windowStatus = tepat_waktu for Sesi Pagi', s.windowStatus === 'tepat_waktu', `got ${s.windowStatus}`)
+  const s = getSecurityShiftCheckInStatus('Sesi Pagi', WEEKEND, jktDateTime(WEEKEND, 7, 45))
+  assert('windowStatus = tepat_waktu for Sesi Pagi at 07:45', s.windowStatus === 'tepat_waktu', `got ${s.windowStatus}`)
+  const sClosed = getSecurityShiftCheckInStatus('Sesi Pagi', WEEKEND, jktDateTime(WEEKEND, 8, 10))
+  assert('windowStatus = jendela_selesai for Sesi Pagi at 08:10', sClosed.windowStatus === 'jendela_selesai', `got ${sClosed.windowStatus}`)
 }
 
 console.log('\nTEST 20: Sesi Malam (weekend) — tepat_waktu at 20:10')

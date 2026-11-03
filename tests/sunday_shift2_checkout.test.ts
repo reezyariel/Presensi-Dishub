@@ -15,6 +15,7 @@ import {
   getSecurityShiftItem,
   calculateSecurity30DayRecap,
   buildSecurityShiftSessions,
+  getAutoSelectSecurityShift,
   type SecurityRecapRecord,
 } from '../src/lib/scheduleEngine'
 import type { AttendanceRecord } from '../src/types/attendance'
@@ -86,8 +87,8 @@ console.log('\nTEST GROUP 2: Jadwal Resmi Shift II Hari Minggu')
   const item = getSecurityShiftItem(SUNDAY, 'Shift II')
   assert('in_start = 20:00', item.in_start === '20:00')
   assert('in_end = 20:30', item.in_end === '20:30')
-  assert('out_start = 08:00', item.out_start === '08:00')
-  assert('out_end = 08:30', item.out_end === '08:30')
+  assert('out_start = 07:30', item.out_start === '07:30')
+  assert('out_end = 08:00', item.out_end === '08:00')
   assert('out_next_day = true', item.out_next_day === true)
 
   const infoMasuk = getScheduleInfo('Security', 'masuk', 'Shift II', SUNDAY)
@@ -96,8 +97,8 @@ console.log('\nTEST GROUP 2: Jadwal Resmi Shift II Hari Minggu')
   assert('infoMasuk isNextDay = false', infoMasuk?.isNextDay === false)
 
   const infoPulang = getScheduleInfo('Security', 'pulang', 'Shift II', SUNDAY)
-  assert('infoPulang scheduledStart = 08:00', infoPulang?.scheduledStart === '08:00')
-  assert('infoPulang scheduledEnd = 08:30', infoPulang?.scheduledEnd === '08:30')
+  assert('infoPulang scheduledStart = 07:30', infoPulang?.scheduledStart === '07:30')
+  assert('infoPulang scheduledEnd = 08:00', infoPulang?.scheduledEnd === '08:00')
   assert('infoPulang isNextDay = true (H+1)', infoPulang?.isNextDay === true)
 }
 
@@ -133,33 +134,33 @@ console.log('\nTEST GROUP 3: Check-in Shift II Hari Minggu (20.00–20.30 WIB)')
 }
 
 // ============================================================
-// TEST GROUP 4: Checkout Shift II Hari Senin (08.00–08.30 H+1)
+// TEST GROUP 4: Checkout Shift II Hari Senin (07.30–08.00 H+1)
 // ============================================================
-console.log('\nTEST GROUP 4: Checkout Shift II Hari Senin (08.00–08.30 WIB)')
+console.log('\nTEST GROUP 4: Checkout Shift II Hari Senin (07.30–08.00 WIB)')
 {
-  // Senin 07:59 WIB - Sebelum jendela checkout (belum dibuka)
-  const win0759 = checkAttendanceWindow('Security', 'pulang', 'Shift II', SUNDAY, jktDate(MONDAY, 7, 59))
-  assert('Senin 07:59 pulang = not_yet (belum dibuka)', win0759 === 'not_yet')
+  // Senin 07:29 WIB - Sebelum jendela checkout (belum dibuka)
+  const win0729 = checkAttendanceWindow('Security', 'pulang', 'Shift II', SUNDAY, jktDate(MONDAY, 7, 29))
+  assert('Senin 07:29 pulang = not_yet (belum dibuka)', win0729 === 'not_yet')
 
-  // Senin 08:00 WIB - Jendela checkout dibuka
+  // Senin 07:30 WIB - Jendela checkout dibuka
+  const win0730 = checkAttendanceWindow('Security', 'pulang', 'Shift II', SUNDAY, jktDate(MONDAY, 7, 30))
+  assert('Senin 07:30 pulang = open (berhasil)', win0730 === 'open')
+
+  // Senin 07:45 WIB - Tengah jendela checkout
+  const win0745 = checkAttendanceWindow('Security', 'pulang', 'Shift II', SUNDAY, jktDate(MONDAY, 7, 45))
+  assert('Senin 07:45 pulang = open (berhasil)', win0745 === 'open')
+
+  // Senin 08:00 WIB - Batas akhir jendela checkout
   const win0800 = checkAttendanceWindow('Security', 'pulang', 'Shift II', SUNDAY, jktDate(MONDAY, 8, 0))
-  assert('Senin 08:00 pulang = open (berhasil)', win0800 === 'open')
+  assert('Senin 08:00 pulang = open (berhasil sesuai batas waktu)', win0800 === 'open')
 
-  // Senin 08:15 WIB - Tengah jendela checkout
-  const win0815 = checkAttendanceWindow('Security', 'pulang', 'Shift II', SUNDAY, jktDate(MONDAY, 8, 15))
-  assert('Senin 08:15 pulang = open (berhasil)', win0815 === 'open')
-
-  // Senin 08:30 WIB - Batas akhir jendela checkout
-  const win0830 = checkAttendanceWindow('Security', 'pulang', 'Shift II', SUNDAY, jktDate(MONDAY, 8, 30))
-  assert('Senin 08:30 pulang = open (berhasil sesuai batas waktu)', win0830 === 'open')
-
-  // Senin 08:31 WIB - Melewati batas waktu checkout
-  const win0831 = checkAttendanceWindow('Security', 'pulang', 'Shift II', SUNDAY, jktDate(MONDAY, 8, 31))
-  assert('Senin 08:31 pulang = closed_accept', win0831 === 'closed_accept')
+  // Senin 08:01 WIB - Melewati batas waktu checkout
+  const win0801 = checkAttendanceWindow('Security', 'pulang', 'Shift II', SUNDAY, jktDate(MONDAY, 8, 1))
+  assert('Senin 08:01 pulang = closed_accept', win0801 === 'closed_accept')
 
   // Jika workDateStr dikirim sebagai MONDAY (misal client mengirim today),
   // checkAttendanceWindow secara cerdas mendeteksi overnight checkout dan me-resolve ke Minggu
-  const winFromMondayArg = checkAttendanceWindow('Security', 'pulang', 'Shift II', MONDAY, jktDate(MONDAY, 8, 15))
+  const winFromMondayArg = checkAttendanceWindow('Security', 'pulang', 'Shift II', MONDAY, jktDate(MONDAY, 7, 45))
   assert('checkAttendanceWindow dengan argumen tanggal Senin me-resolve ke Minggu = open', winFromMondayArg === 'open')
 }
 
@@ -179,7 +180,30 @@ console.log('\nTEST GROUP 5: Tombol Presensi di Dashboard (getAttendanceButtonSt
     scheduled_end: '20:30',
   }
 
-  // 1. Senin 07:45 (sebelum 08:00) -> status = waiting_pulang
+  // 1. Senin 07:15 (sebelum 07:30) -> status = waiting_pulang
+  const btn0715 = getAttendanceButtonState(
+    'Security',
+    { masuk: masukRecord, istirahat: null, pulang: null },
+    'Shift II',
+    SUNDAY,
+    jktDate(MONDAY, 7, 15)
+  )
+  assert('Senin 07:15: waiting_pulang', btn0715.status === 'waiting_pulang')
+
+  // 2. Senin 07:30 -> status = can_pulang
+  const btn0730 = getAttendanceButtonState(
+    'Security',
+    { masuk: masukRecord, istirahat: null, pulang: null },
+    'Shift II',
+    SUNDAY,
+    jktDate(MONDAY, 7, 30)
+  )
+  assert('Senin 07:30: can_pulang', btn0730.status === 'can_pulang')
+  if (btn0730.status === 'can_pulang') {
+    assert('Senin 07:30: startTime = 07:30', btn0730.startTime === '07:30')
+  }
+
+  // 3. Senin 07:45 -> status = can_pulang
   const btn0745 = getAttendanceButtonState(
     'Security',
     { masuk: masukRecord, istirahat: null, pulang: null },
@@ -187,9 +211,9 @@ console.log('\nTEST GROUP 5: Tombol Presensi di Dashboard (getAttendanceButtonSt
     SUNDAY,
     jktDate(MONDAY, 7, 45)
   )
-  assert('Senin 07:45: waiting_pulang', btn0745.status === 'waiting_pulang')
+  assert('Senin 07:45: can_pulang', btn0745.status === 'can_pulang')
 
-  // 2. Senin 08:00 -> status = can_pulang
+  // 4. Senin 08:00 -> status = can_pulang
   const btn0800 = getAttendanceButtonState(
     'Security',
     { masuk: masukRecord, istirahat: null, pulang: null },
@@ -198,37 +222,24 @@ console.log('\nTEST GROUP 5: Tombol Presensi di Dashboard (getAttendanceButtonSt
     jktDate(MONDAY, 8, 0)
   )
   assert('Senin 08:00: can_pulang', btn0800.status === 'can_pulang')
-  if (btn0800.status === 'can_pulang') {
-    assert('Senin 08:00: startTime = 08:00', btn0800.startTime === '08:00')
-  }
 
-  // 3. Senin 08:15 -> status = can_pulang
-  const btn0815 = getAttendanceButtonState(
+  // 5. Senin 08:01 -> status = window_closed (melewati 08:00 batas akhir checkout)
+  const btn0801 = getAttendanceButtonState(
     'Security',
     { masuk: masukRecord, istirahat: null, pulang: null },
     'Shift II',
     SUNDAY,
-    jktDate(MONDAY, 8, 15)
+    jktDate(MONDAY, 8, 1)
   )
-  assert('Senin 08:15: can_pulang', btn0815.status === 'can_pulang')
+  assert('Senin 08:01: window_closed', btn0801.status === 'window_closed')
 
-  // 4. Senin 08:30 -> status = can_pulang
-  const btn0830 = getAttendanceButtonState(
-    'Security',
-    { masuk: masukRecord, istirahat: null, pulang: null },
-    'Shift II',
-    SUNDAY,
-    jktDate(MONDAY, 8, 30)
-  )
-  assert('Senin 08:30: can_pulang', btn0830.status === 'can_pulang')
-
-  // 5. Pegawai TANPA check-in sebelumnya TIDAK BOLEH checkout
+  // 6. Pegawai TANPA check-in sebelumnya TIDAK BOLEH checkout
   const btnNoMasuk = getAttendanceButtonState(
     'Security',
     { masuk: null, istirahat: null, pulang: null },
     'Shift II',
     SUNDAY,
-    jktDate(MONDAY, 8, 15)
+    jktDate(MONDAY, 7, 45)
   )
   assert('Tanpa masuk: status BUKAN can_pulang', btnNoMasuk.status !== 'can_pulang')
 }
@@ -249,15 +260,15 @@ console.log('\nTEST GROUP 6: Rekap 30 Hari & Riwayat Shift')
     },
   ]
 
-  // Dievaluasi Senin pagi pukul 08:15 (masih dalam jendela tugas/pulang H+1)
-  const recapMorning = calculateSecurity30DayRecap(recordsIncomplete, MONDAY, SUNDAY, jktDate(MONDAY, 8, 15))
-  assert('Senin 08:15: pulangBelumLengkap = 0 (belum dihukum tidak lengkap)', recapMorning.pulangBelumLengkap === 0)
+  // Dievaluasi Senin pagi pukul 07:45 (masih dalam jendela tugas/pulang H+1)
+  const recapMorning = calculateSecurity30DayRecap(recordsIncomplete, MONDAY, SUNDAY, jktDate(MONDAY, 7, 45))
+  assert('Senin 07:45: pulangBelumLengkap = 0 (belum dihukum tidak lengkap)', recapMorning.pulangBelumLengkap === 0)
 
-  const sessionsMorning = buildSecurityShiftSessions(recordsIncomplete, MONDAY, SUNDAY, jktDate(MONDAY, 8, 15))
+  const sessionsMorning = buildSecurityShiftSessions(recordsIncomplete, MONDAY, SUNDAY, jktDate(MONDAY, 7, 45))
   assert('sessionsMorning[0].isOvernight = true', sessionsMorning[0].isOvernight === true)
   assert('sessionsMorning[0].status = menunggu_pulang', sessionsMorning[0].status === 'menunggu_pulang')
 
-  // Lengkap: check-in Minggu 20:05 + checkout Senin 08:15
+  // Lengkap: check-in Minggu 20:05 + checkout Senin 07:45
   const recordsComplete: SecurityRecapRecord[] = [
     ...recordsIncomplete,
     {
@@ -266,7 +277,7 @@ console.log('\nTEST GROUP 6: Rekap 30 Hari & Riwayat Shift')
       attendance_type: 'pulang',
       attendance_status: 'tepat_waktu',
       shift: 'Shift II',
-      recorded_at: '2026-11-02T08:15:00+07:00',
+      recorded_at: '2026-11-02T07:45:00+07:00',
     },
   ]
 
@@ -285,14 +296,16 @@ console.log('\nTEST GROUP 6: Rekap 30 Hari & Riwayat Shift')
 // ============================================================
 console.log('\nTEST GROUP 7: Shift I Hari Minggu & Jadwal CS Tidak Boleh Terdampak')
 {
-  // Minggu Shift I: 08:00 - 20:00 same day
+  // Minggu Shift I: 07:30 - 20:00 (Check-In: 07:30–08:00, Check-Out: 20:00–20:30)
   const itemSun1 = getSecurityShiftItem(SUNDAY, 'Shift I')
-  assert('Minggu Shift I in_start = 08:00', itemSun1.in_start === '08:00')
+  assert('Minggu Shift I in_start = 07:30', itemSun1.in_start === '07:30')
+  assert('Minggu Shift I in_end = 08:00', itemSun1.in_end === '08:00')
   assert('Minggu Shift I out_start = 20:00', itemSun1.out_start === '20:00')
+  assert('Minggu Shift I out_end = 20:30', itemSun1.out_end === '20:30')
   assert('Minggu Shift I out_next_day = false', itemSun1.out_next_day === false)
 
-  const winSun1In = checkAttendanceWindow('Security', 'masuk', 'Shift I', SUNDAY, jktDate(SUNDAY, 8, 15))
-  assert('Minggu 08:15 Shift I masuk = open', winSun1In === 'open')
+  const winSun1In = checkAttendanceWindow('Security', 'masuk', 'Shift I', SUNDAY, jktDate(SUNDAY, 7, 45))
+  assert('Minggu 07:45 Shift I masuk = open', winSun1In === 'open')
 
   const winSun1Out = checkAttendanceWindow('Security', 'pulang', 'Shift I', SUNDAY, jktDate(SUNDAY, 20, 15))
   assert('Minggu 20:15 Shift I pulang = open', winSun1Out === 'open')
@@ -445,13 +458,26 @@ console.log('\nTEST GROUP 8: Simulasi Logika Edge Function submit-attendance')
       // Timing check for Sunday Shift II checkout on Monday
       const item = getSecurityShiftItem(workDate, req.shift as any)
       const outStartMins = Number(item.out_start.split(':')[0]) * 60 + Number(item.out_start.split(':')[1])
+      const outEndMins = Number(item.out_end.split(':')[0]) * 60 + Number(item.out_end.split(':')[1])
 
       if (item.out_next_day) {
         if (jktDateStr === workDate) {
-          return { success: false, error: 'Presensi pulang belum dibuka (besok pagi).' }
+          return { success: false, error: 'Presensi pulang belum dibuka (besok pagi).', errorCode: 'WINDOW_NOT_OPEN' }
         }
-        if (jktDateStr > workDate && jktMins < outStartMins) {
-          return { success: false, error: 'Presensi pulang belum dibuka.' }
+        if (jktDateStr > workDate) {
+          if (jktMins < outStartMins) {
+            return { success: false, error: 'Presensi pulang belum dibuka.', errorCode: 'WINDOW_NOT_OPEN' }
+          }
+          if (jktMins > outEndMins) {
+            return { success: false, error: 'Batas waktu presensi pulang telah berakhir.', errorCode: 'WINDOW_CLOSED' }
+          }
+        }
+      } else {
+        if (jktMins < outStartMins) {
+          return { success: false, error: 'Presensi pulang belum dibuka.', errorCode: 'WINDOW_NOT_OPEN' }
+        }
+        if (jktMins > outEndMins) {
+          return { success: false, error: 'Batas waktu presensi pulang telah berakhir.', errorCode: 'WINDOW_CLOSED' }
         }
       }
     }
@@ -459,39 +485,18 @@ console.log('\nTEST GROUP 8: Simulasi Logika Edge Function submit-attendance')
     return { success: true, workDate }
   }
 
-  // 1. Senin 08:00 WIB: Pegawai A checkout Shift II berhasil
-  const res0800 = simulateEdgeFunctionSubmit({
+  // 1. Senin 07:30 WIB: Pegawai A checkout Shift II berhasil
+  const res0730 = simulateEdgeFunctionSubmit({
     employee_name: 'Budi Santoso',
     category: 'Security',
     attendance_type: 'pulang',
     shift: 'Shift II',
-    currentServerTime: jktDate(MONDAY, 8, 0),
+    currentServerTime: jktDate(MONDAY, 7, 30),
   })
-  assert('EdgeFn Senin 08:00: Checkout Budi berhasil', res0800.success === true)
-  assert('EdgeFn Senin 08:00: workDate = Minggu (terhubung ke check-in kemarin)', res0800.workDate === SUNDAY)
+  assert('EdgeFn Senin 07:30: Checkout Budi berhasil', res0730.success === true)
+  assert('EdgeFn Senin 07:30: workDate = Minggu (terhubung ke check-in kemarin)', res0730.workDate === SUNDAY)
 
-  // 2. Senin 08:15 WIB: Pegawai A checkout Shift II berhasil
-  const res0815 = simulateEdgeFunctionSubmit({
-    employee_name: 'Budi Santoso',
-    category: 'Security',
-    attendance_type: 'pulang',
-    shift: 'Shift II',
-    currentServerTime: jktDate(MONDAY, 8, 15),
-  })
-  assert('EdgeFn Senin 08:15: Checkout Budi berhasil', res0815.success === true)
-  assert('EdgeFn Senin 08:15: workDate = Minggu', res0815.workDate === SUNDAY)
-
-  // 3. Senin 08:30 WIB: Sesuai aturan batas waktu checkout
-  const res0830 = simulateEdgeFunctionSubmit({
-    employee_name: 'Budi Santoso',
-    category: 'Security',
-    attendance_type: 'pulang',
-    shift: 'Shift II',
-    currentServerTime: jktDate(MONDAY, 8, 30),
-  })
-  assert('EdgeFn Senin 08:30: Checkout Budi berhasil sesuai aturan batas waktu', res0830.success === true)
-
-  // 4. Senin 07:45 WIB: Belum dibuka
+  // 2. Senin 07:45 WIB: Pegawai A checkout Shift II berhasil
   const res0745 = simulateEdgeFunctionSubmit({
     employee_name: 'Budi Santoso',
     category: 'Security',
@@ -499,19 +504,60 @@ console.log('\nTEST GROUP 8: Simulasi Logika Edge Function submit-attendance')
     shift: 'Shift II',
     currentServerTime: jktDate(MONDAY, 7, 45),
   })
-  assert('EdgeFn Senin 07:45: Checkout ditolak karena belum dibuka', res0745.success === false)
+  assert('EdgeFn Senin 07:45: Checkout Budi berhasil', res0745.success === true)
+  assert('EdgeFn Senin 07:45: workDate = Minggu', res0745.workDate === SUNDAY)
 
-  // 5. Pegawai tanpa check-in sebelumnya (Pegawai B) tidak boleh checkout
+  // 3. Senin 08:00 WIB: Sesuai batas akhir jendela checkout (08:00)
+  const res0800 = simulateEdgeFunctionSubmit({
+    employee_name: 'Budi Santoso',
+    category: 'Security',
+    attendance_type: 'pulang',
+    shift: 'Shift II',
+    currentServerTime: jktDate(MONDAY, 8, 0),
+  })
+  assert('EdgeFn Senin 08:00: Checkout Budi berhasil sesuai aturan batas waktu', res0800.success === true)
+
+  // 4. Senin 07:15 WIB: Belum dibuka
+  const res0715 = simulateEdgeFunctionSubmit({
+    employee_name: 'Budi Santoso',
+    category: 'Security',
+    attendance_type: 'pulang',
+    shift: 'Shift II',
+    currentServerTime: jktDate(MONDAY, 7, 15),
+  })
+  assert('EdgeFn Senin 07:15: Checkout ditolak karena belum dibuka', res0715.success === false && res0715.errorCode === 'WINDOW_NOT_OPEN')
+
+  // 5. Senin 08:01 WIB: Melewati batas akhir jendela checkout ditolak
+  const res0801 = simulateEdgeFunctionSubmit({
+    employee_name: 'Budi Santoso',
+    category: 'Security',
+    attendance_type: 'pulang',
+    shift: 'Shift II',
+    currentServerTime: jktDate(MONDAY, 8, 1),
+  })
+  assert('EdgeFn Senin 08:01: Checkout ditolak karena jendela checkout berakhir', res0801.success === false && res0801.errorCode === 'WINDOW_CLOSED')
+
+  // 6. Senin 19:49 WIB: Checkout Minggu dilakukan malam hari Senin (kasus screenshot) DITOLAK backend
+  const res1949 = simulateEdgeFunctionSubmit({
+    employee_name: 'Budi Santoso',
+    category: 'Security',
+    attendance_type: 'pulang',
+    shift: 'Shift II',
+    currentServerTime: jktDate(MONDAY, 19, 49),
+  })
+  assert('EdgeFn Senin 19:49: Checkout Minggu di malam Senin ditolak backend (WINDOW_CLOSED)', res1949.success === false && res1949.errorCode === 'WINDOW_CLOSED')
+
+  // 7. Pegawai tanpa check-in sebelumnya (Pegawai B) tidak boleh checkout
   const resPegawaiB = simulateEdgeFunctionSubmit({
     employee_name: 'Ahmad Dahlan', // Belum pernah check-in
     category: 'Security',
     attendance_type: 'pulang',
     shift: 'Shift II',
-    currentServerTime: jktDate(MONDAY, 8, 15),
+    currentServerTime: jktDate(MONDAY, 7, 45),
   })
   assert('EdgeFn: Pegawai B tanpa check-in ditolak checkout', resPegawaiB.success === false && resPegawaiB.errorCode === 'NO_CHECKIN_FOUND')
 
-  // 6. Checkout tidak boleh mengambil data shift milik pegawai lain
+  // 8. Checkout tidak boleh mengambil data shift milik pegawai lain
   // Pegawai B mencoba passing check_in_record_id milik Pegawai A
   const resSpoof = simulateEdgeFunctionSubmit({
     employee_name: 'Ahmad Dahlan',
@@ -519,7 +565,7 @@ console.log('\nTEST GROUP 8: Simulasi Logika Edge Function submit-attendance')
     attendance_type: 'pulang',
     shift: 'Shift II',
     check_in_record_id: 'rec-pegawai-a-masuk', // Milik Budi Santoso
-    currentServerTime: jktDate(MONDAY, 8, 15),
+    currentServerTime: jktDate(MONDAY, 7, 45),
   })
   assert('EdgeFn: Tidak boleh mencuri record pegawai lain', resSpoof.success === false && resSpoof.errorCode === 'NO_CHECKIN_FOUND')
 }
@@ -708,13 +754,19 @@ console.log('\nTEST GROUP 9: Regresi — Dua Pegawai Berbeda (Shift II Minggu vs
     // ── Cek jendela waktu checkout ────────────────────────────────────────────────
     const item = getSecurityShiftItem(workDate, req.shift as 'Shift I' | 'Shift II' | 'Shift III')
     const outStartMins = Number(item.out_start.split(':')[0]) * 60 + Number(item.out_start.split(':')[1])
+    const outEndMins = Number(item.out_end.split(':')[0]) * 60 + Number(item.out_end.split(':')[1])
 
     if (item.out_next_day) {
       if (jktDateStr === workDate) {
         return { success: false, error: 'Presensi pulang belum dibuka (besok pagi).', errorCode: 'WINDOW_NOT_OPEN' }
       }
-      if (jktDateStr > workDate && jktMinTotal < outStartMins) {
-        return { success: false, error: 'Presensi pulang belum dibuka.', errorCode: 'WINDOW_NOT_OPEN' }
+      if (jktDateStr > workDate) {
+        if (jktMinTotal < outStartMins) {
+          return { success: false, error: 'Presensi pulang belum dibuka.', errorCode: 'WINDOW_NOT_OPEN' }
+        }
+        if (jktMinTotal > outEndMins) {
+          return { success: false, error: 'Batas waktu presensi pulang telah berakhir.', errorCode: 'WINDOW_CLOSED' }
+        }
       }
     }
 
@@ -767,7 +819,7 @@ console.log('\nTEST GROUP 9: Regresi — Dua Pegawai Berbeda (Shift II Minggu vs
   const winB = checkAttendanceWindow('Security', 'masuk', 'Shift I', MONDAY, jktDate(MONDAY, 7, 15))
   assert('STEP 3 — Pegawai B: jendela check-in Shift I Senin 07:15 = open', winB === 'open')
 
-  // ── STEP 4: Pegawai A checkout Shift II Senin 08:15 ─────────────────────────
+  // ── STEP 4: Pegawai A checkout Shift II Senin 07:45 ─────────────────────────
   const resA_out = simulateSubmit({
     auth_uid: 'uid-budi',
     employee_profile_id: 'emp-budi',
@@ -776,9 +828,9 @@ console.log('\nTEST GROUP 9: Regresi — Dua Pegawai Berbeda (Shift II Minggu vs
     category: 'Security',
     attendance_type: 'pulang',
     shift: 'Shift II',
-    currentServerTime: jktDate(MONDAY, 8, 15),
+    currentServerTime: jktDate(MONDAY, 7, 45),
   })
-  assert('STEP 4 — Pegawai A: checkout Shift II Senin 08:15 berhasil', resA_out.success === true)
+  assert('STEP 4 — Pegawai A: checkout Shift II Senin 07:45 berhasil', resA_out.success === true)
   assert('STEP 4 — Pegawai A: workDate checkout = Minggu (bukan Senin)', resA_out.workDate === SUNDAY)
 
   // ── STEP 5: Checkout Pegawai A tidak mengubah record Pegawai B ───────────────
@@ -953,7 +1005,7 @@ console.log('\nTEST GROUP 11: Regresi — Rekap Session Terpisah per Pegawai')
       attendance_type: 'pulang',
       attendance_status: 'tepat_waktu',
       shift: 'Shift II',
-      recorded_at: `${MONDAY}T08:15:00+07:00`,
+      recorded_at: `${MONDAY}T07:45:00+07:00`,
     },
     // ── Pegawai B ───────────────────────────────
     {
@@ -1233,6 +1285,24 @@ async function simulateConcurrentSubmit(
 
   const workDate = matchedMasuk.work_date
 
+  const item = getSecurityShiftItem(workDate, req.shift as any)
+  const outStartMins = Number(item.out_start.split(':')[0]) * 60 + Number(item.out_start.split(':')[1])
+  const outEndMins = Number(item.out_end.split(':')[0]) * 60 + Number(item.out_end.split(':')[1])
+
+  if (item.out_next_day) {
+    if (jktDateStr === workDate) {
+      return { success: false, error: 'Presensi pulang belum dibuka (besok pagi).', errorCode: 'WINDOW_NOT_OPEN' }
+    }
+    if (jktDateStr > workDate) {
+      if (jktMinTotal < outStartMins) {
+        return { success: false, error: 'Presensi pulang belum dibuka.', errorCode: 'WINDOW_NOT_OPEN' }
+      }
+      if (jktMinTotal > outEndMins) {
+        return { success: false, error: 'Batas waktu presensi pulang telah berakhir.', errorCode: 'WINDOW_CLOSED' }
+      }
+    }
+  }
+
   const newRec: AsyncMockRec = {
     id: `rec-${req.auth_uid}-out-${Math.random().toString(36).slice(2, 9)}`,
     auth_uid: req.auth_uid,
@@ -1283,8 +1353,8 @@ async function simulateConcurrentSubmit(
       category: 'Security',
       attendance_type: 'pulang',
       shift: 'Shift II',
-      currentServerTime: jktDate(MONDAY, 8, 15),
-      idempotency_key: 'idemp-a-out-0815',
+      currentServerTime: jktDate(MONDAY, 7, 45),
+      idempotency_key: 'idemp-a-out-0745',
     }),
     simulateConcurrentSubmit(dbAsync1, {
       auth_uid: 'uid-siti',
@@ -1294,8 +1364,8 @@ async function simulateConcurrentSubmit(
       category: 'Security',
       attendance_type: 'masuk',
       shift: 'Shift I',
-      currentServerTime: jktDate(MONDAY, 8, 15),
-      idempotency_key: 'idemp-b-in-0815',
+      currentServerTime: jktDate(MONDAY, 7, 45),
+      idempotency_key: 'idemp-b-in-0745',
     }),
   ])
 
@@ -1344,7 +1414,7 @@ async function simulateConcurrentSubmit(
     },
   ])
 
-  // Dua checkout Shift II Minggu dieksekusi bersamaan di Senin 08:15
+  // Dua checkout Shift II Minggu dieksekusi bersamaan di Senin 07:45
   const [resA, resC] = await Promise.all([
     simulateConcurrentSubmit(dbAsync2, {
       auth_uid: 'uid-budi',
@@ -1354,8 +1424,8 @@ async function simulateConcurrentSubmit(
       category: 'Security',
       attendance_type: 'pulang',
       shift: 'Shift II',
-      currentServerTime: jktDate(MONDAY, 8, 15),
-      idempotency_key: 'idemp-a-checkout-0815',
+      currentServerTime: jktDate(MONDAY, 7, 45),
+      idempotency_key: 'idemp-a-checkout-0745',
     }),
     simulateConcurrentSubmit(dbAsync2, {
       auth_uid: 'uid-eko',
@@ -1365,8 +1435,8 @@ async function simulateConcurrentSubmit(
       category: 'Security',
       attendance_type: 'pulang',
       shift: 'Shift II',
-      currentServerTime: jktDate(MONDAY, 8, 15),
-      idempotency_key: 'idemp-c-checkout-0815',
+      currentServerTime: jktDate(MONDAY, 7, 45),
+      idempotency_key: 'idemp-c-checkout-0745',
     }),
   ])
 
@@ -1413,7 +1483,7 @@ async function simulateConcurrentSubmit(
       category: 'Security',
       attendance_type: 'pulang',
       shift: 'Shift II',
-      currentServerTime: jktDate(MONDAY, 8, 15),
+      currentServerTime: jktDate(MONDAY, 7, 45),
       idempotency_key: sharedKey,
     }),
     simulateConcurrentSubmit(dbAsync3, {
@@ -1424,7 +1494,7 @@ async function simulateConcurrentSubmit(
       category: 'Security',
       attendance_type: 'pulang',
       shift: 'Shift II',
-      currentServerTime: jktDate(MONDAY, 8, 15),
+      currentServerTime: jktDate(MONDAY, 7, 45),
       idempotency_key: sharedKey,
     }),
   ])
@@ -1467,7 +1537,7 @@ async function simulateConcurrentSubmit(
       category: 'Security',
       attendance_type: 'pulang',
       shift: 'Shift II',
-      currentServerTime: jktDate(MONDAY, 8, 15),
+      currentServerTime: jktDate(MONDAY, 7, 45),
       idempotency_key: 'tab-1-key',
     }),
     simulateConcurrentSubmit(dbAsync4, {
@@ -1478,7 +1548,7 @@ async function simulateConcurrentSubmit(
       category: 'Security',
       attendance_type: 'pulang',
       shift: 'Shift II',
-      currentServerTime: jktDate(MONDAY, 8, 15),
+      currentServerTime: jktDate(MONDAY, 7, 45),
       idempotency_key: 'tab-2-key',
     }),
   ])
@@ -1532,6 +1602,142 @@ async function simulateConcurrentSubmit(
   assert('T12-23 — Race Condition Check-in: Kode error penolakan adalah DUPLICATE_CHECKIN', rejCheckin.errorCode === 'DUPLICATE_CHECKIN')
   const snap5 = dbAsync5.getSnapshot()
   assert('T12-24 — Race Condition Check-in: Database hanya mencatat tepat 1 record masuk', snap5.length === 1)
+}
+
+// ============================================================
+// TEST GROUP 13: Skenario Komprehensif Audit & Investigasi (11 Skenario User)
+// Kasus: Security Minggu Shift II -> Checkout Senin 07:30 -> Check-In Senin Shift II 15:00-15:30
+// ============================================================
+console.log('\nTEST GROUP 13: Skenario Komprehensif Audit & Investigasi (11 Skenario User)')
+{
+  // Skenario 1: Check-in Shift II Minggu pukul 20.15
+  const sIn = getSecurityShiftCheckInStatus('Shift II', SUNDAY, jktDate(SUNDAY, 20, 15))
+  assert('Skenario 1 — Minggu 20:15 check-in Shift II tepat_waktu', sIn.windowStatus === 'tepat_waktu')
+  assert('Skenario 1 — isOvernight = true', sIn.isOvernight === true)
+  assert('Skenario 1 — effectiveWorkDate = Minggu', sIn.effectiveWorkDate === SUNDAY)
+
+  // Skenario 6: Shift Minggu yang belum checkout tetap dianggap aktif di dashboard
+  const activeSundayInRecord: AttendanceRecord = {
+    id: 'rec-sun-in-2015',
+    work_date: SUNDAY,
+    attendance_type: 'masuk',
+    attendance_status: 'tepat_waktu',
+    shift: 'Shift II',
+    recorded_at: `${SUNDAY}T20:15:00+07:00`,
+    scheduled_start: '20:00',
+    scheduled_end: '20:30',
+  }
+  // Pada Senin pagi 07:00 sebelum checkout dibuka
+  const btnActiveSun = getAttendanceButtonState(
+    'Security',
+    { masuk: activeSundayInRecord, istirahat: null, pulang: null },
+    'Shift II',
+    SUNDAY,
+    jktDate(MONDAY, 7, 0)
+  )
+  assert('Skenario 6 — Shift Minggu belum checkout: waiting_pulang (masih aktif)', btnActiveSun.status === 'waiting_pulang')
+
+  // Skenario 2: Checkout Senin pukul 07.30
+  const winMon0730 = checkAttendanceWindow('Security', 'pulang', 'Shift II', SUNDAY, jktDate(MONDAY, 7, 30))
+  assert('Skenario 2 — Checkout Senin 07:30 = open', winMon0730 === 'open')
+  const btnMon0730 = getAttendanceButtonState(
+    'Security',
+    { masuk: activeSundayInRecord, istirahat: null, pulang: null },
+    'Shift II',
+    SUNDAY,
+    jktDate(MONDAY, 7, 30)
+  )
+  assert('Skenario 2 — Tombol checkout Senin 07:30 = can_pulang', btnMon0730.status === 'can_pulang')
+
+  // Skenario 9: Checkout di luar jendela waktu ditolak backend
+  // 9a: Checkout Minggu dilakukan Senin 19:49 WIB (kasus screenshot)
+  const winMon1949 = checkAttendanceWindow('Security', 'pulang', 'Shift II', SUNDAY, jktDate(MONDAY, 19, 49))
+  assert('Skenario 9a — Checkout Minggu di Senin 19:49 = closed_accept', winMon1949 === 'closed_accept')
+  // Dashboard button state at 19:49:
+  const btnMon1949 = getAttendanceButtonState(
+    'Security',
+    { masuk: activeSundayInRecord, istirahat: null, pulang: null },
+    'Shift II',
+    SUNDAY,
+    jktDate(MONDAY, 19, 49)
+  )
+  assert('Skenario 9a — Dashboard tombol checkout di Senin 19:49 = window_closed', btnMon1949.status === 'window_closed')
+
+  // Skenario 9a backend: checkout 19:49 jauh melewati batas 08:00 → window_closed (diverifikasi lewat button state = window_closed di atas)
+  // Verifikasi tambahan: checkout 07:30 tepat berada dalam jendela valid
+  const winMon0730ok = checkAttendanceWindow('Security', 'pulang', 'Shift II', SUNDAY, jktDate(MONDAY, 7, 30))
+  assert('Skenario 9a — Verifikasi: 07:30 masih dalam jendela = open', winMon0730ok === 'open')
+  const winMon0801closed = checkAttendanceWindow('Security', 'pulang', 'Shift II', SUNDAY, jktDate(MONDAY, 8, 1))
+  assert('Skenario 9a — Verifikasi: 08:01 melewati jendela = closed_accept', winMon0801closed === 'closed_accept')
+
+  // Skenario 4: work_date checkout tetap mengikuti tanggal check-in asal (Minggu)
+  // Diverifikasi via checkAttendanceWindow: checkout Senin 07:30 valid untuk Minggu Shift II
+  const winSun0730checkout = checkAttendanceWindow('Security', 'pulang', 'Shift II', SUNDAY, jktDate(MONDAY, 7, 30))
+  assert('Skenario 4 — work_date checkout Senin 07:30 valid untuk Minggu Shift II', winSun0730checkout === 'open')
+  // Juga verifikasi melalui getSecurityShiftItem
+  const shift2Item = getSecurityShiftItem(SUNDAY, 'Shift II')
+  assert('Skenario 4 — getSecurityShiftItem konfirmasi out_start = 07:30 untuk Minggu', shift2Item.out_start === '07:30')
+  assert('Skenario 4 — getSecurityShiftItem konfirmasi out_next_day = true', shift2Item.out_next_day === true)
+
+  // Skenario 8: Checkout di luar jendela diblokir di level checkAttendanceWindow → tidak perlu simulateSubmit
+  const btnSun0801 = getAttendanceButtonState(
+    'Security',
+    { masuk: activeSundayInRecord, istirahat: null, pulang: null },
+    'Shift II',
+    SUNDAY,
+    jktDate(MONDAY, 8, 1)
+  )
+  assert('Skenario 8 — Tombol pulang setelah 08:01 = window_closed (checkout tidak akan masuk ke backend)', btnSun0801.status === 'window_closed')
+
+
+  // Skenario 3: Setelah checkout berhasil, check-in shift Senin tersedia sesuai jadwal (Shift II 15:00-15:30)
+  // Simulasi status dashboard di Senin 15:15 WIB setelah checkout Minggu selesai
+  // Di EmployeeHomeView, shift kemarin yang sudah lengkap checkout tidak lagi memblokir todayRecords
+  const todayRecordsAfterCheckout = { masuk: null, istirahat: null, pulang: null }
+  const mondayShift2Status = getSecurityShiftCheckInStatus('Shift II', MONDAY, jktDate(MONDAY, 15, 15))
+  assert('Skenario 3 — Senin 15:15 Shift II status = tepat_waktu', mondayShift2Status.windowStatus === 'tepat_waktu')
+  assert('Skenario 3 — Senin Shift II BUKAN overnight', mondayShift2Status.isOvernight === false)
+  assert('Skenario 3 — effectiveWorkDate = Senin', mondayShift2Status.effectiveWorkDate === MONDAY)
+
+  const autoSelectMon = getAutoSelectSecurityShift(MONDAY, jktDate(MONDAY, 15, 15))
+  assert('Skenario 3 — Auto-select aktif pada 15:15 adalah Shift II', autoSelectMon === 'Shift II')
+
+  const btnMon1515 = getAttendanceButtonState(
+    'Security',
+    todayRecordsAfterCheckout,
+    'Shift II',
+    MONDAY,
+    jktDate(MONDAY, 15, 15)
+  )
+  assert('Skenario 3 — Tombol check-in Shift II Senin tersedia (can_masuk)', btnMon1515.status === 'can_masuk')
+
+  // Skenario 5: work_date check-in Senin menggunakan tanggal Senin
+  // Diverifikasi lewat checkAttendanceWindow dan getSecurityShiftCheckInStatus
+  const winMonIn1515 = checkAttendanceWindow('Security', 'masuk', 'Shift II', MONDAY, jktDate(MONDAY, 15, 15))
+  assert('Skenario 5 — Check-in Shift II Senin 15:15 valid (window open)', winMonIn1515 === 'open')
+  // work_date untuk check-in siang hari adalah tanggal hari ini (Senin), bukan kemarin
+  const monShiftItem = getSecurityShiftItem(MONDAY, 'Shift II')
+  assert('Skenario 5 — Senin Shift II in_start = 15:00 (bukan pagi hari)', monShiftItem.in_start === '15:00')
+  assert('Skenario 5 — Senin Shift II out_next_day = false (bukan overnight)', monShiftItem.out_next_day !== true)
+
+  // Skenario 7: Duplikasi check-in sama shift dideteksi oleh database unique constraint
+  // Diverifikasi lewat dummy db check-in duplicate (sama seperti yang sudah diuji di Group 10)
+  const winMonIn1520Late = checkAttendanceWindow('Security', 'masuk', 'Shift II', MONDAY, jktDate(MONDAY, 15, 20))
+  assert('Skenario 7 — Jendela check-in 15:20 masih open (duplikat akan ditolak oleh unique constraint DB)', winMonIn1520Late === 'open')
+
+
+  // Skenario 10: Shift overnight lainnya tetap berfungsi (Shift III Senin 19:30 - Selasa 07:30)
+  const sMon3In = getSecurityShiftCheckInStatus('Shift III', MONDAY, jktDate(MONDAY, 19, 45))
+  assert('Skenario 10 — Senin Shift III 19:45 = tepat_waktu', sMon3In.windowStatus === 'tepat_waktu')
+  assert('Skenario 10 — Senin Shift III isOvernight = true', sMon3In.isOvernight === true)
+  const winTueOut = checkAttendanceWindow('Security', 'pulang', 'Shift III', MONDAY, jktDate('2026-11-03', 7, 45))
+  assert('Skenario 10 — Selasa 07:45 checkout Shift III = open', winTueOut === 'open')
+
+  // Skenario 11: Presensi CS tetap berfungsi tanpa perubahan
+  const winCS_MonIn = checkAttendanceWindow('CS', 'masuk', null, MONDAY, jktDate(MONDAY, 7, 45))
+  assert('Skenario 11 — CS Senin 07:45 masuk = open', winCS_MonIn === 'open')
+  const winCS_MonOut = checkAttendanceWindow('CS', 'pulang', null, MONDAY, jktDate(MONDAY, 16, 15))
+  assert('Skenario 11 — CS Senin 16:15 pulang = open', winCS_MonOut === 'open')
 }
 
 console.log('\n============================================================')

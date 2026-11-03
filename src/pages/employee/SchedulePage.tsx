@@ -610,9 +610,9 @@ export default function SchedulePage() {
             <div className="space-y-1 text-xs text-neutral-600">
               <p className="font-semibold text-neutral-800">Ketentuan Jadwal Security SIPATEN Berbasis Hari</p>
               <ul className="space-y-1 text-[11px] list-disc ml-3">
-                <li><strong>Senin–Kamis (3 Shift)</strong>: Shift I (07:00–16:00), Shift II (16:00–19:30), dan Shift III (19:30–07:00 H+1).</li>
-                <li><strong>Jumat (2 Shift Khusus)</strong>: Shift I (07:30–19:30, 12 Jam) dan Shift II (19:30–07:30 H+1, 12 Jam).</li>
-                <li><strong>Sabtu–Minggu (2 Shift Akhir Pekan)</strong>: Shift I — Pagi (08:00–20:00, 12 Jam) dan Shift II — Malam (20:00–08:00 H+1, 12 Jam).</li>
+                <li><strong>Senin–Kamis (3 Shift)</strong>: Shift I (07:00–16:00), Shift II (15:00–19:30), dan Shift III (19:30–07:30 H+1).</li>
+                <li><strong>Jumat (2 Shift Khusus)</strong>: Shift I (07:00–19:00, 12 Jam) dan Shift II (19:00–07:00 H+1, 12 Jam).</li>
+                <li><strong>Sabtu–Minggu (2 Shift Akhir Pekan)</strong>: Shift I — Pagi (07:30–20:00) dan Shift II — Malam (20:00–07:30 H+1, Pulang 07:30–08:00).</li>
                 <li><strong>Shift Lintas Hari</strong>: Shift III (Senin–Kamis), Shift II (Jumat), dan Shift II (Weekend) berakhir pada pagi keesokan harinya (H+1) dan check-out terhubung secara otomatis ke catatan presensi masuk yang valid.</li>
                 <li>Seluruh jam jadwal, toleransi keterlambatan, dan jendela presensi divalidasi secara otoritatif oleh sistem server dalam zona waktu <strong>Asia/Jakarta (WIB)</strong>.</li>
               </ul>

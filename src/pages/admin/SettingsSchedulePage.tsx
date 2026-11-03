@@ -44,34 +44,34 @@ export default function SettingsSchedulePage() {
   const [secS1WinEnd, setSecS1WinEnd] = useState('07:30')
   const [secS1End, setSecS1End] = useState('16:00')
   const [secS1EndWin, setSecS1EndWin] = useState('16:30')
-  const [secS2Start, setSecS2Start] = useState('16:00')
-  const [secS2WinEnd, setSecS2WinEnd] = useState('16:30')
+  const [secS2Start, setSecS2Start] = useState('15:00')
+  const [secS2WinEnd, setSecS2WinEnd] = useState('15:30')
   const [secS2End, setSecS2End] = useState('19:30')
   const [secS2EndWin, setSecS2EndWin] = useState('20:00')
   const [secS3Start, setSecS3Start] = useState('19:30')
   const [secS3WinEnd, setSecS3WinEnd] = useState('20:00')
-  const [secS3End, setSecS3End] = useState('07:00')
-  const [secS3EndWin, setSecS3EndWin] = useState('07:30')
+  const [secS3End, setSecS3End] = useState('07:30')
+  const [secS3EndWin, setSecS3EndWin] = useState('08:00')
 
   // Security Schedule: Jumat (2 Shift)
-  const [secFriS1Start, setSecFriS1Start] = useState('07:30')
-  const [secFriS1WinEnd, setSecFriS1WinEnd] = useState('08:00')
-  const [secFriS1End, setSecFriS1End] = useState('19:30')
-  const [secFriS1EndWin, setSecFriS1EndWin] = useState('20:00')
-  const [secFriS2Start, setSecFriS2Start] = useState('19:30')
-  const [secFriS2WinEnd, setSecFriS2WinEnd] = useState('20:00')
-  const [secFriS2End, setSecFriS2End] = useState('07:30')
-  const [secFriS2EndWin, setSecFriS2EndWin] = useState('08:00')
+  const [secFriS1Start, setSecFriS1Start] = useState('07:00')
+  const [secFriS1WinEnd, setSecFriS1WinEnd] = useState('07:30')
+  const [secFriS1End, setSecFriS1End] = useState('19:00')
+  const [secFriS1EndWin, setSecFriS1EndWin] = useState('19:30')
+  const [secFriS2Start, setSecFriS2Start] = useState('19:00')
+  const [secFriS2WinEnd, setSecFriS2WinEnd] = useState('19:30')
+  const [secFriS2End, setSecFriS2End] = useState('07:00')
+  const [secFriS2EndWin, setSecFriS2EndWin] = useState('07:30')
 
   // Security Schedule: Akhir Pekan (Sabtu & Minggu 2 Shift)
-  const [secWkndS1Start, setSecWkndS1Start] = useState('08:00')
-  const [secWkndS1WinEnd, setSecWkndS1WinEnd] = useState('08:30')
+  const [secWkndS1Start, setSecWkndS1Start] = useState('07:30')
+  const [secWkndS1WinEnd, setSecWkndS1WinEnd] = useState('08:00')
   const [secWkndS1End, setSecWkndS1End] = useState('20:00')
   const [secWkndS1EndWin, setSecWkndS1EndWin] = useState('20:30')
   const [secWkndS2Start, setSecWkndS2Start] = useState('20:00')
   const [secWkndS2WinEnd, setSecWkndS2WinEnd] = useState('20:30')
-  const [secWkndS2End, setSecWkndS2End] = useState('08:00')
-  const [secWkndS2EndWin, setSecWkndS2EndWin] = useState('08:30')
+  const [secWkndS2End, setSecWkndS2End] = useState('07:30')
+  const [secWkndS2EndWin, setSecWkndS2EndWin] = useState('08:00')
 
   useEffect(() => {
     loadSettings()
@@ -370,7 +370,7 @@ export default function SettingsSchedulePage() {
             'Shift III': { start: secS3Start, window_end: secS3WinEnd, end: secS3End, end_window_end: secS3EndWin, end_next_day: true, end_window_end_next_day: true },
           },
         },
-        description: 'Jadwal Security day-based (Senin-Kamis 3 shift, Jumat 2 shift, Sabtu-Minggu 2 shift).',
+        description: 'Jadwal Security: Senin–Kamis (Shift I 07:00–16:00, Shift II 15:00–19:30, Shift III 19:30–07:30 H+1), Jumat (Shift I 07:00–19:00, Shift II 19:00–07:00 H+1), dan Akhir Pekan (Shift I 07:30–20:00, Shift II 20:00–07:30 H+1 Pulang 07:30–08:00).',
         updated_by: profile.id, updated_at: now,
       },
       {
@@ -379,7 +379,7 @@ export default function SettingsSchedulePage() {
           sesi_pagi: { open: secWkndS1Start, close: secWkndS1WinEnd, out_start: secWkndS1End, out_end: secWkndS1EndWin },
           sesi_malam: { open: secWkndS2Start, close: secWkndS2WinEnd, out_start: secWkndS2End, out_end: secWkndS2EndWin },
         },
-        description: 'Jadwal Security akhir pekan (Sabtu & Minggu). Shift I Pagi: 08:00–20:00, Shift II Malam: 20:00–08:00 WIB.',
+        description: 'Jadwal Security akhir pekan (Sabtu & Minggu). Shift I: 07:30–20:00 (Check-In: 07:30–08:00, Pulang: 20:00–20:30), Shift II: 20:00–07:30 H+1 (Check-In: 20:00–20:30, Pulang: 07:30–08:00 H+1).',
         updated_by: profile.id, updated_at: now,
       },
     ]
@@ -697,7 +697,7 @@ export default function SettingsSchedulePage() {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-neutral-900">Shift III (19:30 – 07:00 H+1)</span>
+                  <span className="text-xs font-bold text-neutral-900">Shift III (19:30 – 07:30 H+1)</span>
                   <span className="text-[10px] bg-neutral-900 text-white font-mono px-1.5 py-0.5 rounded font-bold">Lintas Hari (Besok)</span>
                 </div>
                 <span className="text-[10px] font-mono font-semibold text-neutral-600 bg-neutral-50 px-2 py-0.5 rounded border border-neutral-200">
@@ -728,7 +728,7 @@ export default function SettingsSchedulePage() {
             {/* Shift I Jumat */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-neutral-900">Shift I (07:30 – 19:30)</span>
+                <span className="text-xs font-bold text-neutral-900">Shift I (07:00 – 19:00)</span>
                 <span className="text-[10px] font-mono font-semibold text-neutral-600 bg-neutral-50 px-2 py-0.5 rounded border border-neutral-200">
                   Check-In: {secFriS1Start}–{secFriS1WinEnd} • Check-Out: {secFriS1End}–{secFriS1EndWin} WIB
                 </span>
@@ -745,7 +745,7 @@ export default function SettingsSchedulePage() {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-neutral-900">Shift II (19:30 – 07:30 H+1)</span>
+                  <span className="text-xs font-bold text-neutral-900">Shift II (19:00 – 07:00 H+1)</span>
                   <span className="text-[10px] bg-neutral-900 text-white font-mono px-1.5 py-0.5 rounded font-bold">Lintas Hari (Besok)</span>
                 </div>
                 <span className="text-[10px] font-mono font-semibold text-neutral-600 bg-neutral-50 px-2 py-0.5 rounded border border-neutral-200">
@@ -770,7 +770,7 @@ export default function SettingsSchedulePage() {
                   <span>3. Sabtu – Minggu (2 Shift Akhir Pekan)</span>
                 </div>
                 <p className="text-[11px] text-neutral-500 mt-0.5">
-                  Shift I dilabeli Pagi (08:00–20:00) dan Shift II dilabeli Malam (20:00–08:00 H+1).
+                  Shift I dilabeli Pagi (07:30–20:00) dan Shift II dilabeli Malam (20:00–07:30 H+1).
                 </p>
               </div>
               <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-0.5 rounded-full font-bold">
@@ -781,7 +781,7 @@ export default function SettingsSchedulePage() {
             {/* Shift I Weekend (Pagi) */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-neutral-900">Shift I — Pagi (08:00 – 20:00)</span>
+                <span className="text-xs font-bold text-neutral-900">Shift I — Pagi (07:30 – 20:00)</span>
                 <span className="text-[10px] font-mono font-semibold text-neutral-600 bg-neutral-50 px-2 py-0.5 rounded border border-neutral-200">
                   Check-In: {secWkndS1Start}–{secWkndS1WinEnd} • Check-Out: {secWkndS1End}–{secWkndS1EndWin} WIB
                 </span>
@@ -798,7 +798,7 @@ export default function SettingsSchedulePage() {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-neutral-900">Shift II — Malam (20:00 – 08:00 H+1)</span>
+                  <span className="text-xs font-bold text-neutral-900">Shift II — Malam (20:00 – 07:30 H+1)</span>
                   <span className="text-[10px] bg-neutral-900 text-white font-mono px-1.5 py-0.5 rounded font-bold">Lintas Hari (Besok)</span>
                 </div>
                 <span className="text-[10px] font-mono font-semibold text-neutral-600 bg-neutral-50 px-2 py-0.5 rounded border border-neutral-200">
