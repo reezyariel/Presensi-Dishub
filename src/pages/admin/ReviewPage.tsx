@@ -16,7 +16,8 @@ import {
   CategoryBadge,
   AttendanceTypeBadge,
 } from '../../components/admin/StatusBadges'
-import { formatJakartaTime, formatJakartaDate } from '../../lib/scheduleEngine'
+import { formatJakartaTime } from '../../lib/scheduleEngine'
+import { formatSecurityDisplayDate } from '../../lib/securityDateDisplay'
 import { formatDistance } from '../../lib/officeLocation'
 import type { AttendanceRecord, ReviewStatus } from '../../types/attendance'
 
@@ -386,7 +387,7 @@ export default function ReviewPage() {
 
                     {/* Tanggal & Jam */}
                     <td className="px-4 py-3.5">
-                      <span className="block font-medium text-neutral-900">{formatJakartaDate(rec.work_date)}</span>
+                      <span className="block font-medium text-neutral-900">{formatSecurityDisplayDate(rec.work_date, rec.shift, rec.attendance_type, rec.category)}</span>
                       <span className="block text-[11px] font-mono text-neutral-500">
                         {rec.recorded_at ? formatJakartaTime(new Date(rec.recorded_at)) : '--:--'} WIB
                       </span>
@@ -541,7 +542,7 @@ export default function ReviewPage() {
                   <div className="flex items-center justify-between">
                     <span className="text-neutral-500">Waktu Tercatat:</span>
                     <span className="font-mono font-bold text-neutral-900">
-                      {formatJakartaDate(activeModalRecord.work_date)} • {formatJakartaTime(new Date(activeModalRecord.recorded_at))} WIB
+                      {formatSecurityDisplayDate(activeModalRecord.work_date, activeModalRecord.shift, activeModalRecord.attendance_type, activeModalRecord.category)} • {formatJakartaTime(new Date(activeModalRecord.recorded_at))} WIB
                     </span>
                   </div>
                   {activeModalRecord.reason && (
@@ -666,7 +667,7 @@ export default function ReviewPage() {
               <div className="flex items-center justify-between">
                 <span className="text-neutral-500">Waktu Tercatat:</span>
                 <span className="font-mono font-bold text-neutral-900">
-                  {formatJakartaDate(deleteModalRecord.work_date)} • {formatJakartaTime(new Date(deleteModalRecord.recorded_at))} WIB
+                  {formatSecurityDisplayDate(deleteModalRecord.work_date, deleteModalRecord.shift, deleteModalRecord.attendance_type, deleteModalRecord.category)} • {formatJakartaTime(new Date(deleteModalRecord.recorded_at))} WIB
                 </span>
               </div>
               {deleteModalRecord.reason && (

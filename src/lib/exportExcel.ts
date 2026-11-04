@@ -1,6 +1,9 @@
 import ExcelJS from 'exceljs'
 import type { AttendanceRecord } from '../types/attendance'
 import { formatJakartaTime, formatJakartaDate } from './scheduleEngine'
+import { formatSecurityDisplayDate } from './securityDateDisplay'
+import { groupCSRecords } from './attendanceGrouping'
+import { fetchResizedSelfieBase64 } from './selfieStorage'
 
 export interface DailyRecapRow {
   employee_name: string
@@ -77,13 +80,15 @@ function styleHeaderRow(row: ExcelJS.Row) {
 /**
  * Apply borders and padding to data rows
  */
-function styleDataRows(worksheet: ExcelJS.Worksheet) {
+function styleDataRows(worksheet: ExcelJS.Worksheet, defaultHeight = 22) {
   worksheet.eachRow((row, rowNumber) => {
     if (rowNumber > 1) {
-      row.height = 20
+      if (!row.height || row.height < defaultHeight) {
+        row.height = defaultHeight
+      }
       row.eachCell((cell) => {
         cell.font = { size: 9 }
-        cell.alignment = { vertical: 'middle' }
+        cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
         cell.border = {
           top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
           bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
@@ -93,6 +98,218 @@ function styleDataRows(worksheet: ExcelJS.Worksheet) {
       })
     }
   })
+}
+
+/**
+ * Build CS worksheet with 1 row per employee per work_date and embedded selfie photos.
+ */
+async function buildCSWorksheet(
+  workbook: ExcelJS.Workbook,
+  records: AttendanceRecord[],
+  sheetName = 'Presensi CS'
+) {
+  const csGroups = groupCSRecords(records)
+  if (csGroups.length === 0) return
+
+  const worksheet = workbook.addWorksheet(sheetName, {
+    pageSetup: { orientation: 'landscape' },
+  })
+
+  worksheet.columns = [
+    { header: 'No', key: 'no', width: 6 },
+    { header: 'Nama Pegawai', key: 'name', width: 24 },
+    { header: 'Tanggal Kerja', key: 'work_date', width: 14 },
+    { header: 'Foto Masuk', key: 'foto_masuk', width: 13 },
+    { header: 'Jam Masuk', key: 'jam_masuk', width: 15 },
+    { header: 'Foto Istirahat', key: 'foto_istirahat', width: 13 },
+    { header: 'Jam Istirahat', key: 'jam_istirahat', width: 15 },
+    { header: 'Foto Pulang', key: 'foto_pulang', width: 13 },
+    { header: 'Jam Pulang', key: 'jam_pulang', width: 15 },
+    { header: 'Status Presensi', key: 'status', width: 16 },
+    { header: 'Status Review', key: 'review', width: 18 },
+  ]
+
+  styleHeaderRow(worksheet.getRow(1))
+
+  for (let idx = 0; idx < csGroups.length; idx++) {
+    const g = csGroups[idx]
+    const rowNumber = idx + 2 // 1-based, row 1 is header
+
+    const masukText = g.masuk
+      ? `${formatJakartaTime(g.masuk.recorded_at)}${g.masuk.late_minutes > 0 ? ` (+${g.masuk.late_minutes}m)` : ''}`
+      : 'Belum Absen'
+
+    const istirahatText = g.istirahat
+      ? `${formatJakartaTime(g.istirahat.recorded_at)}`
+      : 'Belum Absen'
+
+    const pulangText = g.pulang
+      ? `${formatJakartaTime(g.pulang.recorded_at)}`
+      : 'Belum Absen'
+
+    const row = worksheet.addRow({
+      no: idx + 1,
+      name: g.employee_name,
+      work_date: g.work_date,
+      foto_masuk: g.masuk?.selfie_storage_path ? '' : '-',
+      jam_masuk: masukText,
+      foto_istirahat: g.istirahat?.selfie_storage_path ? '' : '-',
+      jam_istirahat: istirahatText,
+      foto_pulang: g.pulang?.selfie_storage_path ? '' : '-',
+      jam_pulang: pulangText,
+      status: g.overall_attendance_status === 'tepat_waktu' ? 'Tepat Waktu' : 'Terlambat',
+      review:
+        g.overall_review_status === 'sudah_diperiksa'
+          ? 'Sudah Diperiksa'
+          : g.overall_review_status === 'perlu_tindak_lanjut'
+          ? 'Perlu Tindak Lanjut'
+          : 'Belum Diperiksa',
+    })
+
+    row.height = 44
+
+    // Embed photos asynchronously
+    if (g.masuk?.selfie_storage_path) {
+      try {
+        const img = await fetchResizedSelfieBase64(g.masuk.selfie_storage_path, 46)
+        if (img) {
+          const imageId = workbook.addImage({
+            base64: img.base64,
+            extension: img.extension,
+          })
+          worksheet.addImage(imageId, {
+            tl: { col: 3 + 0.15, row: rowNumber - 1 + 0.1 },
+            ext: { width: img.width, height: img.height },
+            editAs: 'oneCell',
+          })
+        }
+      } catch (e) {
+        console.warn('Failed embedding masuk selfie in excel:', e)
+      }
+    }
+
+    if (g.istirahat?.selfie_storage_path) {
+      try {
+        const img = await fetchResizedSelfieBase64(g.istirahat.selfie_storage_path, 46)
+        if (img) {
+          const imageId = workbook.addImage({
+            base64: img.base64,
+            extension: img.extension,
+          })
+          worksheet.addImage(imageId, {
+            tl: { col: 5 + 0.15, row: rowNumber - 1 + 0.1 },
+            ext: { width: img.width, height: img.height },
+            editAs: 'oneCell',
+          })
+        }
+      } catch (e) {
+        console.warn('Failed embedding istirahat selfie in excel:', e)
+      }
+    }
+
+    if (g.pulang?.selfie_storage_path) {
+      try {
+        const img = await fetchResizedSelfieBase64(g.pulang.selfie_storage_path, 46)
+        if (img) {
+          const imageId = workbook.addImage({
+            base64: img.base64,
+            extension: img.extension,
+          })
+          worksheet.addImage(imageId, {
+            tl: { col: 7 + 0.15, row: rowNumber - 1 + 0.1 },
+            ext: { width: img.width, height: img.height },
+            editAs: 'oneCell',
+          })
+        }
+      } catch (e) {
+        console.warn('Failed embedding pulang selfie in excel:', e)
+      }
+    }
+  }
+
+  styleDataRows(worksheet, 44)
+}
+
+/**
+ * Build Security worksheet with per-transaction format and embedded selfie photos.
+ */
+async function buildSecurityWorksheet(
+  workbook: ExcelJS.Workbook,
+  records: AttendanceRecord[],
+  sheetName = 'Presensi Security'
+) {
+  const secRecords = records.filter(r => r.category === 'Security')
+  if (secRecords.length === 0) return
+
+  const worksheet = workbook.addWorksheet(sheetName, {
+    pageSetup: { orientation: 'landscape' },
+  })
+
+  worksheet.columns = [
+    { header: 'No', key: 'no', width: 6 },
+    { header: 'Foto Selfie', key: 'foto_selfie', width: 13 },
+    { header: 'Nama Pegawai', key: 'name', width: 24 },
+    { header: 'Divisi', key: 'category', width: 12 },
+    { header: 'Shift', key: 'shift', width: 14 },
+    { header: 'Tipe Absen', key: 'type', width: 14 },
+    { header: 'Tanggal Kerja', key: 'work_date', width: 14 },
+    { header: 'Waktu Tercatat', key: 'recorded_at', width: 16 },
+    { header: 'Status Kehadiran', key: 'status', width: 16 },
+    { header: 'Terlambat (Mnt)', key: 'late_minutes', width: 16 },
+    { header: 'Status Pemeriksaan', key: 'review_status', width: 18 },
+    { header: 'Catatan Admin', key: 'admin_notes', width: 26 },
+  ]
+
+  styleHeaderRow(worksheet.getRow(1))
+
+  for (let idx = 0; idx < secRecords.length; idx++) {
+    const rec = secRecords[idx]
+    const rowNumber = idx + 2
+
+    const row = worksheet.addRow({
+      no: idx + 1,
+      foto_selfie: rec.selfie_storage_path ? '' : '-',
+      name: rec.employee_name,
+      category: rec.category,
+      shift: rec.shift || '-',
+      type: rec.attendance_type.toUpperCase(),
+      work_date: formatSecurityDisplayDate(rec.work_date, rec.shift, rec.attendance_type, rec.category),
+      recorded_at: formatJakartaTime(rec.recorded_at),
+      status: rec.attendance_status === 'tepat_waktu' ? 'Tepat Waktu' : 'Terlambat',
+      late_minutes: rec.late_minutes > 0 ? rec.late_minutes : 0,
+      review_status:
+        rec.review_status === 'sudah_diperiksa'
+          ? 'Sudah Diperiksa'
+          : rec.review_status === 'perlu_tindak_lanjut'
+          ? 'Perlu Tindak Lanjut'
+          : 'Belum Diperiksa',
+      admin_notes: rec.admin_notes || rec.reason || '',
+    })
+
+    row.height = 44
+
+    // Embed selfie photo
+    if (rec.selfie_storage_path) {
+      try {
+        const img = await fetchResizedSelfieBase64(rec.selfie_storage_path, 46)
+        if (img) {
+          const imageId = workbook.addImage({
+            base64: img.base64,
+            extension: img.extension,
+          })
+          worksheet.addImage(imageId, {
+            tl: { col: 1 + 0.15, row: rowNumber - 1 + 0.1 },
+            ext: { width: img.width, height: img.height },
+            editAs: 'oneCell',
+          })
+        }
+      } catch (e) {
+        console.warn('Failed embedding security selfie in excel:', e)
+      }
+    }
+  }
+
+  styleDataRows(worksheet, 44)
 }
 
 /**
@@ -106,51 +323,21 @@ export async function exportDailyRecapExcel(
   workbook.creator = 'SIPATEN'
   workbook.created = new Date()
 
-  const worksheet = workbook.addWorksheet('Rekap Harian', {
-    pageSetup: { orientation: 'landscape' },
-  })
+  const hasCS = records.some(r => r.category === 'CS')
+  const hasSec = records.some(r => r.category === 'Security')
 
-  // Columns definition
-  worksheet.columns = [
-    { header: 'No', key: 'no', width: 6 },
-    { header: 'Nama Pegawai', key: 'name', width: 24 },
-    { header: 'Kategori', key: 'category', width: 14 },
-    { header: 'Shift', key: 'shift', width: 14 },
-    { header: 'Tanggal Kerja', key: 'work_date', width: 14 },
-    { header: 'Tipe Absensi', key: 'attendance_type', width: 14 },
-    { header: 'Waktu Catat', key: 'recorded_at', width: 14 },
-    { header: 'Jadwal Mulai', key: 'scheduled_start', width: 14 },
-    { header: 'Status Kehadiran', key: 'status', width: 16 },
-    { header: 'Terlambat (Mnt)', key: 'late_minutes', width: 16 },
-    { header: 'Status Periksa', key: 'review_status', width: 18 },
-    { header: 'Catatan Admin', key: 'admin_notes', width: 28 },
-  ]
+  if (hasCS) {
+    await buildCSWorksheet(workbook, records, 'Rekap Harian CS')
+  }
+  if (hasSec) {
+    await buildSecurityWorksheet(workbook, records, 'Rekap Harian Security')
+  }
 
-  styleHeaderRow(worksheet.getRow(1))
-
-  records.forEach((rec, idx) => {
-    worksheet.addRow({
-      no: idx + 1,
-      name: rec.employee_name,
-      category: rec.category,
-      shift: rec.shift || '-',
-      work_date: rec.work_date,
-      attendance_type: rec.attendance_type.toUpperCase(),
-      recorded_at: formatJakartaTime(rec.recorded_at),
-      scheduled_start: rec.scheduled_start || '-',
-      status: rec.attendance_status === 'tepat_waktu' ? 'Tepat Waktu' : 'Terlambat',
-      late_minutes: rec.late_minutes > 0 ? rec.late_minutes : 0,
-      review_status:
-        rec.review_status === 'sudah_diperiksa'
-          ? 'Sudah Diperiksa'
-          : rec.review_status === 'perlu_tindak_lanjut'
-            ? 'Perlu Tindak Lanjut'
-            : 'Belum Diperiksa',
-      admin_notes: rec.admin_notes || '',
-    })
-  })
-
-  styleDataRows(worksheet)
+  // Fallback if no records
+  if (!hasCS && !hasSec) {
+    const ws = workbook.addWorksheet('Rekap Harian')
+    ws.addRow(['Tidak ada data presensi untuk tanggal terpilih'])
+  }
 
   const filename = `SIPATEN_Rekap_Harian_${selectedDate}.xlsx`
   await downloadWorkbook(workbook, filename)
@@ -197,14 +384,14 @@ export async function exportMonthlyRecapExcel(
     })
   })
 
-  styleDataRows(worksheet)
+  styleDataRows(worksheet, 22)
 
   const filename = `SIPATEN_Rekap_Bulanan_${monthLabel.replace(/\s+/g, '_')}.xlsx`
   await downloadWorkbook(workbook, filename)
 }
 
 /**
- * Export full attendance records list with filters
+ * Export full attendance records list with filters (CS 1-row, Security per-transaksi, embedded photos)
  */
 export async function exportAttendanceListExcel(
   records: AttendanceRecord[],
@@ -214,48 +401,21 @@ export async function exportAttendanceListExcel(
   workbook.creator = 'SIPATEN'
   workbook.created = new Date()
 
-  const worksheet = workbook.addWorksheet('Data Absensi', {
-    pageSetup: { orientation: 'landscape' },
-  })
+  const hasCS = records.some(r => r.category === 'CS')
+  const hasSec = records.some(r => r.category === 'Security')
 
-  worksheet.columns = [
-    { header: 'No', key: 'no', width: 6 },
-    { header: 'Nama Pegawai', key: 'name', width: 24 },
-    { header: 'Kategori', key: 'category', width: 12 },
-    { header: 'Shift', key: 'shift', width: 12 },
-    { header: 'Tipe Absen', key: 'type', width: 14 },
-    { header: 'Tanggal Kerja', key: 'work_date', width: 14 },
-    { header: 'Waktu Absen', key: 'recorded_at', width: 16 },
-    { header: 'Status Kehadiran', key: 'status', width: 16 },
-    { header: 'Keterlambatan (Mnt)', key: 'late_minutes', width: 18 },
-    { header: 'Status Pemeriksaan', key: 'review_status', width: 18 },
-    { header: 'Catatan Admin', key: 'admin_notes', width: 26 },
-  ]
+  if (hasCS) {
+    await buildCSWorksheet(workbook, records, 'Presensi CS')
+  }
+  if (hasSec) {
+    await buildSecurityWorksheet(workbook, records, 'Presensi Security')
+  }
 
-  styleHeaderRow(worksheet.getRow(1))
-
-  records.forEach((rec, idx) => {
-    worksheet.addRow({
-      no: idx + 1,
-      name: rec.employee_name,
-      category: rec.category,
-      shift: rec.shift || '-',
-      type: rec.attendance_type.toUpperCase(),
-      work_date: rec.work_date,
-      recorded_at: `${rec.work_date} ${formatJakartaTime(rec.recorded_at)}`,
-      status: rec.attendance_status === 'tepat_waktu' ? 'Tepat Waktu' : 'Terlambat',
-      late_minutes: rec.late_minutes,
-      review_status:
-        rec.review_status === 'sudah_diperiksa'
-          ? 'Sudah Diperiksa'
-          : rec.review_status === 'perlu_tindak_lanjut'
-            ? 'Perlu Tindak Lanjut'
-            : 'Belum Diperiksa',
-      admin_notes: rec.admin_notes || '',
-    })
-  })
-
-  styleDataRows(worksheet)
+  // Fallback if empty
+  if (!hasCS && !hasSec) {
+    const ws = workbook.addWorksheet('Data Absensi')
+    ws.addRow(['Tidak ada data absensi untuk filter yang dipilih'])
+  }
 
   const filename = `${filenamePrefix}_${formatJakartaDate(new Date()).replace(/\s+/g, '_')}.xlsx`
   await downloadWorkbook(workbook, filename)

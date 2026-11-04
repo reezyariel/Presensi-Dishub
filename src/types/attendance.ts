@@ -176,3 +176,21 @@ export interface AttendanceFilters {
   attendance_status: AttendanceStatus | ''
   review_status: ReviewStatus | ''
 }
+
+// Grouped daily record for CS division (1 row per employee per work date)
+export interface CSGroupedAttendance {
+  id: string
+  employee_id: string
+  employee_name: string
+  normalized_name: string | null
+  category: 'CS'
+  work_date: string
+  masuk: AttendanceRecord | null
+  istirahat: AttendanceRecord | null
+  pulang: AttendanceRecord | null
+  overall_attendance_status: AttendanceStatus
+  overall_review_status: ReviewStatus
+  total_late_minutes: number
+  records: AttendanceRecord[]
+}
+
