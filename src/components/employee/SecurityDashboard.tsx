@@ -24,6 +24,7 @@ import {
   isWeekendSession,
   getSecurityAvailableOptions,
   getSecurityShiftItem,
+  getSecurityShiftDisplayLabel,
   getJakartaDayOfWeek,
   formatJakartaDate,
   type Security30DayRecap,
@@ -46,9 +47,14 @@ function getShiftTimeLabel(shift: SecurityShiftOption, workDateStr?: string): st
   if (!workDateStr) {
     // Generic fallback (no date context)
     switch (shift) {
+      case 'shift_1_reguler': return '07.00 – 16.00'
+      case 'shift_1_panjang': return '07.00 – 19.00'
+      case 'shift_2_malam':   return '19.00 – 07.00 (H+1)'
       case 'Shift I':   return '07.00 – 16.00'
       case 'Shift II':  return '15.00 – 19.30'
       case 'Shift III': return '19.30 – 07.30'
+      case 'Sesi Pagi': return '07.30 – 20.00'
+      case 'Sesi Malam': return '20.00 – 07.30 (H+1)'
       default: return ''
     }
   }
@@ -171,7 +177,7 @@ export function SecurityShiftStatusCard({
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-bold text-neutral-900">
-                  {selectedShift || 'Pilih Shift Tugas'}
+                  {selectedShift ? getSecurityShiftDisplayLabel(selectedShift, workDateStr) : 'Pilih Shift Tugas'}
                 </span>
                 {isOvernight && (
                   <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-neutral-200 text-neutral-800">
@@ -207,10 +213,10 @@ export function SecurityShiftStatusCard({
             <div className="flex items-center justify-between text-xs">
               <span className="font-semibold text-neutral-800">Pilih Shift Hari Ini:</span>
               <span className="text-[11px] text-neutral-400">
-                {selectedShift ? `Shift aktif: ${selectedShift}` : 'Klik untuk memilih shift'}
+                {selectedShift ? `Shift aktif: ${getSecurityShiftDisplayLabel(selectedShift, workDateStr)}` : 'Klik untuk memilih shift'}
               </span>
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className={`grid ${availableOptions.length === 2 ? 'grid-cols-2' : 'grid-cols-3'} gap-2`}>
               {availableOptions.map(opt => {
                 const isSelected = selectedShift === opt
                 return (
@@ -223,7 +229,7 @@ export function SecurityShiftStatusCard({
                         : 'bg-white hover:bg-neutral-50 text-neutral-700 border-neutral-200 hover:border-neutral-300'
                       }`}
                   >
-                    <span>{opt}</span>
+                    <span>{getSecurityShiftDisplayLabel(opt, workDateStr)}</span>
                     <span className={`text-[10px] font-normal ${isSelected ? 'text-neutral-300' : 'text-neutral-400'}`}>
                       {getShiftTimeLabel(opt, workDateStr)}
                     </span>
@@ -401,7 +407,7 @@ export function SecurityScheduleCard({
       const isWeekendDay = day === 0 || day === 6
       const isFri = day === 5
 
-      let name = tab as string
+      let name = item.label || getSecurityShiftDisplayLabel(tab, workDateStr)
       let sub = ''
 
       if (isWeekendDay) {
@@ -413,8 +419,24 @@ export function SecurityScheduleCard({
           sub  = 'Sesi Akhir Pekan Malam (Lintas Hari)'
         }
       } else if (isFri) {
-        sub = tab === 'Shift I' ? 'Shift Siang Jumat' : 'Shift Malam Jumat (Lintas Hari)'
+        if (tab === 'shift_1_reguler') {
+          name = 'Shift I — Reguler'
+          sub  = 'Shift Jumat Reguler (07.00–16.00 WIB)'
+        } else if (tab === 'shift_1_panjang') {
+          name = 'Shift I — Panjang (12 Jam)'
+          sub  = 'Shift Jumat Panjang 12 Jam (07.00–19.00 WIB)'
+        } else if (tab === 'shift_2_malam') {
+          name = 'Shift II — Malam'
+          sub  = 'Shift Jumat Malam (19.00–07.00 WIB H+1)'
+        } else if (tab === 'Shift I' || tab === 'Shift 1') {
+          name = 'Shift I — Panjang (12 Jam)'
+          sub  = 'Shift Jumat Panjang 12 Jam (07.00–19.00 WIB)'
+        } else {
+          name = 'Shift II — Malam'
+          sub  = 'Shift Jumat Malam (19.00–07.00 WIB H+1)'
+        }
       } else {
+        name = tab as string
         sub = tab === 'Shift I' ? 'Pagi – Sore'
             : tab === 'Shift II' ? 'Sore – Malam'
             : 'Malam – Pagi (Lintas Hari)'
@@ -503,7 +525,7 @@ export function SecurityScheduleCard({
                     : 'text-neutral-500 hover:text-neutral-900'
                   }`}
               >
-                <span>{s}</span>
+                <span>{getSecurityShiftDisplayLabel(s, workDateStr)}</span>
                 {isCurrent && (
                   <span className="w-1.5 h-1.5 rounded-full bg-neutral-900 inline-block" title="Shift Terpilih" />
                 )}
@@ -688,7 +710,7 @@ export function SecurityShiftHistoryCard({ sessions, isLoading }: SecurityShiftH
                       </td>
                       <td className="px-5 py-3 font-semibold text-neutral-900">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span>{s.shift}</span>
+                          <span>{getSecurityShiftDisplayLabel(s.shift, s.work_date)}</span>
                           {s.isOvernight && (
                             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-600 border border-neutral-200">
                               H+1
@@ -745,7 +767,7 @@ export function SecurityShiftHistoryCard({ sessions, isLoading }: SecurityShiftH
                 <div key={s.id} className="p-4 space-y-2.5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-bold text-neutral-900">{s.shift}</span>
+                      <span className="text-xs font-bold text-neutral-900">{getSecurityShiftDisplayLabel(s.shift, s.work_date)}</span>
                       {s.isOvernight && (
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-600 border border-neutral-200">
                           Lintas Hari (H+1)

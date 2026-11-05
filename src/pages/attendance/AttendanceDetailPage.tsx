@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
-import { formatJakartaTime, formatJakartaDate } from '../../lib/scheduleEngine'
+import { formatJakartaTime, formatJakartaDate, getSecurityShiftDisplayLabel } from '../../lib/scheduleEngine'
 import { formatDistance } from '../../lib/officeLocation'
 import type { AttendanceRecord, AttendanceAuditLog, ReviewStatus } from '../../types/attendance'
 
@@ -226,7 +226,7 @@ export default function AttendanceDetailPage() {
               {record.employee_name}
             </h3>
             <p className="text-xs text-neutral-500 font-medium mt-0.5">
-              Divisi {record.category} {record.shift ? `• ${record.shift}` : ''} • ID: {record.id.substring(0, 8)}
+              Divisi {record.category} {record.shift ? `• ${getSecurityShiftDisplayLabel(record.shift, record.work_date)}` : ''} • ID: {record.id.substring(0, 8)}
             </p>
           </div>
         </div>

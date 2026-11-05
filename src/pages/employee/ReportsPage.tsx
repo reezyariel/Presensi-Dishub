@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
-import { todayJakarta, formatJakartaDate, formatJakartaTime } from '../../lib/scheduleEngine'
+import { todayJakarta, formatJakartaDate, formatJakartaTime, getSecurityShiftDisplayLabel } from '../../lib/scheduleEngine'
 import type { AttendanceRecord } from '../../types/attendance'
 import { exportRecapToExcel } from '../../lib/exportExcel'
 
@@ -503,7 +503,7 @@ export default function ReportsPage() {
                         <td className="px-5 py-3 font-semibold text-neutral-900">{rec.employee_name}</td>
                       )}
                       <td className="px-5 py-3 text-neutral-600">
-                        {rec.category} {rec.shift ? `· ${rec.shift}` : ''}
+                        {rec.category} {rec.shift ? `· ${getSecurityShiftDisplayLabel(rec.shift, rec.work_date)}` : ''}
                       </td>
                       <td className="px-5 py-3 font-medium text-neutral-700">{typeLabel}</td>
                       <td className="px-5 py-3 font-mono text-neutral-700">

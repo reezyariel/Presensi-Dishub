@@ -15,6 +15,7 @@ import {
   formatJakartaTime,
   todayJakarta,
   getDayName,
+  getSecurityShiftDisplayLabel,
 } from '../../lib/scheduleEngine'
 import { exportDailyRecapExcel } from '../../lib/exportExcel'
 import { exportDailyRecapPdf } from '../../lib/exportPdf'
@@ -365,7 +366,7 @@ export default function RecapDailyPage() {
                       <CategoryBadge category={rec.category} />
                     </td>
                     <td className="py-3.5 px-4 font-medium text-neutral-700">
-                      {rec.shift || <span className="text-neutral-400">-</span>}
+                      {rec.shift ? getSecurityShiftDisplayLabel(rec.shift, rec.work_date) : <span className="text-neutral-400">-</span>}
                     </td>
                     <td className="py-3.5 px-4">
                       <AttendanceTypeBadge type={rec.attendance_type} />

@@ -18,7 +18,7 @@ import {
   AttendanceTypeBadge,
   ReviewStatusBadge,
 } from '../../components/admin/StatusBadges'
-import { formatJakartaTime, todayJakarta, formatJakartaDate } from '../../lib/scheduleEngine'
+import { formatJakartaTime, todayJakarta, formatJakartaDate, getSecurityShiftDisplayLabel } from '../../lib/scheduleEngine'
 import {
   formatSecurityDisplayDate,
   getPreviousCalendarDate,
@@ -530,6 +530,9 @@ export default function AttendanceListPage() {
                 <option value="Shift I">Shift I (Weekday)</option>
                 <option value="Shift II">Shift II (Weekday)</option>
                 <option value="Shift III">Shift III (Weekday)</option>
+                <option value="shift_1_reguler">Shift I — Reguler (Jumat)</option>
+                <option value="shift_1_panjang">Shift I — Panjang (Jumat)</option>
+                <option value="shift_2_malam">Shift II — Malam (Jumat)</option>
                 <option value="Sesi Pagi">Sesi Pagi (Weekend)</option>
                 <option value="Sesi Malam">Sesi Malam (Weekend)</option>
               </select>
@@ -880,7 +883,7 @@ export default function AttendanceListPage() {
                       <td className="px-4 py-3.5">
                         {rec.shift ? (
                           <span className="px-2 py-0.5 rounded-md bg-neutral-100 border border-neutral-200 text-neutral-800 text-[11px] font-bold">
-                            {rec.shift}
+                            {getSecurityShiftDisplayLabel(rec.shift, rec.work_date)}
                           </span>
                         ) : (
                           <span className="text-neutral-400 font-mono">-</span>
@@ -1012,7 +1015,7 @@ export default function AttendanceListPage() {
                         <td className="px-4 py-3"><CategoryBadge category="Security" /></td>
                         <td className="px-4 py-3 text-neutral-600">
                           <span className="font-medium text-[11px] uppercase">{r.attendance_type}</span>
-                          {r.shift && <span className="ml-1 text-neutral-400">({r.shift})</span>}
+                          {r.shift && <span className="ml-1 text-neutral-400">({getSecurityShiftDisplayLabel(r.shift, r.work_date)})</span>}
                         </td>
                         <td className="px-4 py-3 text-neutral-700 font-medium">
                           {formatSecurityDisplayDate(r.work_date, r.shift, r.attendance_type, r.category)}

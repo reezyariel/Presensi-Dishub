@@ -8,7 +8,7 @@ import {
   User,
   Shield,
 } from 'lucide-react'
-import { formatJakartaTime } from '../../lib/scheduleEngine'
+import { formatJakartaTime, getSecurityShiftDisplayLabel } from '../../lib/scheduleEngine'
 import { formatSecurityDisplayDate } from '../../lib/securityDateDisplay'
 import { AttendanceStatusBadge, AttendanceTypeBadge, ReviewStatusBadge } from './StatusBadges'
 import AttendanceSelfieThumbnail from '../common/AttendanceSelfieThumbnail'
@@ -72,7 +72,7 @@ export default function SecurityAttendanceDetailModal({
                 <>
                   <span>•</span>
                   <span className="px-2 py-0.5 rounded-md bg-neutral-200 text-neutral-800 font-bold text-[10px]">
-                    {record.shift}
+                    {getSecurityShiftDisplayLabel(record.shift, record.work_date)}
                   </span>
                 </>
               )}
@@ -145,7 +145,7 @@ export default function SecurityAttendanceDetailModal({
                 Shift & Jadwal
               </span>
               <span className="font-bold text-neutral-900 block mt-0.5">
-                {record.shift || '-'}
+                {record.shift ? getSecurityShiftDisplayLabel(record.shift, record.work_date) : '-'}
               </span>
               {record.scheduled_start && (
                 <span className="text-[11px] text-neutral-500">

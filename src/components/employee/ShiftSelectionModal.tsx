@@ -80,14 +80,17 @@ export default function ShiftSelectionModal({
 
   const getOptionIcon = (opt: SecurityShiftOption) => {
     switch (opt) {
+      case 'shift_1_reguler':
+      case 'shift_1_panjang':
       case 'Shift I':
       case 'Sesi Pagi':
         return Sunrise
-      case 'Shift II':
-        return (isWeekendDay || isFriday) ? Moon : Sun
+      case 'shift_2_malam':
       case 'Shift III':
       case 'Sesi Malam':
         return Moon
+      case 'Shift II':
+        return (isWeekendDay || isFriday) ? Moon : Sun
       default:
         return Clock
     }

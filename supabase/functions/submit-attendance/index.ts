@@ -244,11 +244,12 @@ serve(async (req: Request) => {
       const validShifts = [
         'Shift 1', 'Shift 2', 'Shift 3',
         'Shift I', 'Shift II', 'Shift III',
-        'Sesi Pagi', 'Sesi Malam'
+        'Sesi Pagi', 'Sesi Malam',
+        'shift_1_reguler', 'shift_1_panjang', 'shift_2_malam'
       ]
       if (!shift || !validShifts.includes(shift)) {
         return new Response(
-          JSON.stringify({ error: 'Pilih shift yang valid untuk Security (Shift 1, Shift 2, Shift 3).' }),
+          JSON.stringify({ error: 'Pilih shift yang valid untuk Security (Shift I, Shift II, Shift III, shift_1_reguler, shift_1_panjang, shift_2_malam).' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
@@ -491,10 +492,22 @@ serve(async (req: Request) => {
       return t
     }
 
+    function shiftsCompatible(s1: string | null | undefined, s2: string | null | undefined): boolean {
+      if (!s1 || !s2) return false
+      if (s1 === s2) return true
+      const c1 = canonicalize(s1)
+      const c2 = canonicalize(s2)
+      if (c1 === c2) return true
+      // Friday backward compatibility mappings:
+      if ((c1 === 'Shift I' && c2 === 'shift_1_panjang') || (c2 === 'Shift I' && c1 === 'shift_1_panjang')) return true
+      if ((c1 === 'Shift II' && c2 === 'shift_2_malam') || (c2 === 'Shift II' && c1 === 'shift_2_malam')) return true
+      return false
+    }
+
     // 4c. Determine Work Date & Enforce Check-In Prerequisite for Checkout
     // Overnight shifts cross midnight into next day (H+1):
     //   Senin–Kamis: Shift III (19:30 – 07:30 H+1), Shift 3
-    //   Jumat:       Shift II  (19:00 – 07:00 H+1)
+    //   Jumat:       shift_2_malam / Shift II (19:00 – 07:00 H+1)
     //   Sabtu–Minggu: Shift II (20:00 – 07:30 H+1), Sesi Malam
     let workDate = jakartaDateToday
     const yesterday = new Date(serverNow.getTime() - 24 * 60 * 60 * 1000)
@@ -508,8 +521,8 @@ serve(async (req: Request) => {
       const canon = canonicalize(shiftName)
       // Senin–Kamis (1–4): Shift III overnight
       if (dayOfWeek >= 1 && dayOfWeek <= 4) return canon === 'Shift III'
-      // Jumat (5): Shift II overnight
-      if (dayOfWeek === 5) return canon === 'Shift II'
+      // Jumat (5): shift_2_malam or Shift II overnight
+      if (dayOfWeek === 5) return canon === 'Shift II' || shiftName === 'shift_2_malam'
       // Sabtu–Minggu (6,0): Shift II / Sesi Malam overnight
       if (dayOfWeek === 0 || dayOfWeek === 6) return canon === 'Shift II'
       return false
@@ -558,14 +571,14 @@ serve(async (req: Request) => {
             .eq('attendance_type', 'masuk')
             .maybeSingle()
 
-          if (byId && canonicalize(byId.shift) === canonShift) {
+          if (byId && shiftsCompatible(byId.shift, shift)) {
             matchedMasuk = byId
           }
         }
 
         // Priority 2: Look up open masuk for this employee in yesterday and today
         if (!matchedMasuk) {
-          // If yesterday had an overnight shift matching canonShift (e.g. Sunday Shift II ending Monday morning),
+          // If yesterday had an overnight shift matching shift (e.g. Sunday Shift II ending Monday morning),
           // search yesterday first, then today.
           const isYesterdayOvernight = isOvernightByDayAndShift(yesterdayDayNum, shift)
           const candidateDates = (currentHour < 14 && isYesterdayOvernight)
@@ -582,7 +595,7 @@ serve(async (req: Request) => {
             .order('recorded_at', { ascending: false })
 
           if (masukRecords && masukRecords.length > 0) {
-            const matchingShifts = masukRecords.filter(r => canonicalize(r.shift) === canonShift)
+            const matchingShifts = masukRecords.filter(r => shiftsCompatible(r.shift, shift))
 
             // Pick the first matching record that doesn't already have a pulang
             for (const cand of matchingShifts) {
@@ -795,9 +808,24 @@ serve(async (req: Request) => {
       function getDayGroupShift(dayGroups: any, groupKey: string, shiftCanon: string): any | null {
         const group = dayGroups?.[groupKey]
         if (!group?.shifts || !Array.isArray(group.shifts)) return null
+
+        if (groupKey === 'friday') {
+          const byId = group.shifts.find((s: any) => s.id === shiftCanon || s.shift_name === shiftCanon)
+          if (byId) return byId
+          // Backward compatibility for historical Friday records
+          if (shiftCanon === 'Shift I') {
+            const panjang = group.shifts.find((s: any) => s.id === 'shift_1_panjang' || s.shift_name === 'shift_1_panjang')
+            if (panjang) return panjang
+          }
+          if (shiftCanon === 'Shift II') {
+            const malam = group.shifts.find((s: any) => s.id === 'shift_2_malam' || s.shift_name === 'shift_2_malam')
+            if (malam) return malam
+          }
+        }
+
         return group.shifts.find((s: any) => {
           const sn = String(s.shift_name || '')
-          return canonicalize(sn) === shiftCanon
+          return canonicalize(sn) === shiftCanon || s.id === shiftCanon
         }) || null
       }
 
@@ -807,10 +835,16 @@ serve(async (req: Request) => {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const configuredShifts: string[] = Array.isArray(dayGroups?.[groupKey]?.shifts) && dayGroups[groupKey].shifts.length > 0
-        ? dayGroups[groupKey].shifts.map((s: any) => canonicalize(s.shift_name))
-        : (isFridayDay || isWeekendDay) ? ['Shift I', 'Shift II'] : ['Shift I', 'Shift II', 'Shift III']
+        ? dayGroups[groupKey].shifts.map((s: any) => s.id || canonicalize(s.shift_name))
+        : isFridayDay
+          ? ['shift_1_reguler', 'shift_1_panjang', 'shift_2_malam']
+          : isWeekendDay ? ['Shift I', 'Shift II'] : ['Shift I', 'Shift II', 'Shift III']
 
-      if (!configuredShifts.includes(canonicalShift)) {
+      const isAllowedShift = configuredShifts.includes(canonicalShift) ||
+        configuredShifts.includes(shiftStr) ||
+        (isFridayDay && (canonicalShift === 'Shift I' || canonicalShift === 'Shift II'))
+
+      if (!isAllowedShift) {
         const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
         return new Response(
           JSON.stringify({
@@ -838,8 +872,12 @@ serve(async (req: Request) => {
         }
         // Jumat
         if (dayOfWeek === 5) {
-          if (shiftCanon === 'Shift I')   return { in_start:'07:00', in_end:'07:30', out_start:'19:00', out_end:'19:30', out_next_day:false }
-          if (shiftCanon === 'Shift II')  return { in_start:'19:00', in_end:'19:30', out_start:'07:00', out_end:'07:30', out_next_day:true  }
+          if (shiftCanon === 'shift_1_reguler') return { in_start:'07:00', in_end:'07:30', out_start:'16:00', out_end:'16:30', out_next_day:false }
+          if (shiftCanon === 'shift_1_panjang') return { in_start:'07:00', in_end:'07:30', out_start:'19:00', out_end:'19:30', out_next_day:false }
+          if (shiftCanon === 'shift_2_malam')   return { in_start:'19:00', in_end:'19:30', out_start:'07:00', out_end:'07:30', out_next_day:true  }
+          // Backward compat: historical Shift I -> panjang, Shift II -> malam
+          if (shiftCanon === 'Shift I')         return { in_start:'07:00', in_end:'07:30', out_start:'19:00', out_end:'19:30', out_next_day:false }
+          if (shiftCanon === 'Shift II')        return { in_start:'19:00', in_end:'19:30', out_start:'07:00', out_end:'07:30', out_next_day:true  }
         }
         // Sabtu–Minggu
         if (dayOfWeek === 0 || dayOfWeek === 6) {

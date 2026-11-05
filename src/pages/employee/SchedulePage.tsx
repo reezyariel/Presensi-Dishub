@@ -24,6 +24,7 @@ import {
   getCSScheduleSync,
   getSecurityScheduleSync,
   getSecurityShiftItem,
+  getSecurityShiftDisplayLabel,
   getJakartaDayOfWeek,
   todayJakarta,
   DEFAULT_DAY_GROUPS,
@@ -189,13 +190,17 @@ export default function SchedulePage() {
   const userAssignedShiftName = employeeProfile?.default_shift || null
   const myTodayShiftItem = userAssignedShiftName ? getSecurityShiftItem(todayIso, userAssignedShiftName) : null
   const myShiftInfo = myTodayShiftItem ? {
-    name: myTodayShiftItem.label || myTodayShiftItem.shift_name,
+    name: myTodayShiftItem.label || getSecurityShiftDisplayLabel(myTodayShiftItem.shift_name, todayIso),
     shift_name: myTodayShiftItem.shift_name,
-    period: myTodayShiftItem.shift_number === 1
-      ? 'Pagi'
-      : myTodayShiftItem.shift_number === 2
-        ? (todayDayOfWeek === 5 || todayDayOfWeek === 0 || todayDayOfWeek === 6 ? 'Malam' : 'Sore')
-        : 'Malam',
+    period: todayDayOfWeek === 5
+      ? (myTodayShiftItem.id === 'shift_1_reguler' ? 'Pagi Reguler'
+        : myTodayShiftItem.id === 'shift_1_panjang' ? 'Pagi 12 Jam'
+        : 'Malam Lintas Hari')
+      : myTodayShiftItem.shift_number === 1
+        ? 'Pagi'
+        : myTodayShiftItem.shift_number === 2
+          ? (todayDayOfWeek === 0 || todayDayOfWeek === 6 ? 'Malam Lintas Hari' : 'Sore')
+          : 'Malam Lintas Hari',
     masuk: `${myTodayShiftItem.in_start.replace(':', '.')} WIB`,
     masukClose: `${myTodayShiftItem.in_end.replace(':', '.')} WIB`,
     pulang: `${myTodayShiftItem.out_start.replace(':', '.')} WIB${myTodayShiftItem.out_next_day ? ' (H+1)' : ''}`,
@@ -220,10 +225,10 @@ export default function SchedulePage() {
     {
       key: 'friday' as const,
       name: 'Jumat',
-      subtitle: '2 Shift Operasional Khusus',
-      badge: '2 Shift Khusus',
-      desc: 'Jadwal operasional khusus hari Jumat: Shift I 12 jam (siang) dan Shift II 12 jam (malam lintas hari).',
-      shifts: dayGroups.friday?.shifts || DEFAULT_DAY_GROUPS.friday.shifts,
+      subtitle: '3 Varian Shift Operasional',
+      badge: '3 Shift',
+      desc: 'Jadwal operasional hari Jumat: Shift I Reguler (07:00–16:00), Shift I Panjang 12 jam (07:00–19:00), dan Shift II Malam (19:00–07:00 H+1 lintas hari).',
+      shifts: (dayGroups.friday?.shifts && dayGroups.friday.shifts.length >= 3) ? dayGroups.friday.shifts : DEFAULT_DAY_GROUPS.friday.shifts,
       isToday: currentDayGroupKey === 'friday',
     },
     {
@@ -254,7 +259,7 @@ export default function SchedulePage() {
         {effectiveCategory === 'Security' && (
           <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-800 bg-neutral-100 border border-neutral-200 rounded-full px-3 py-1.5 self-start">
             <Calendar size={13} className="text-neutral-500" />
-            <span>Hari Ini: <strong>{todayDayOfWeek === 5 ? 'Jumat (2 Shift)' : (todayDayOfWeek === 0 || todayDayOfWeek === 6) ? 'Sabtu & Minggu (2 Shift)' : 'Senin–Kamis (3 Shift)'}</strong></span>
+            <span>Hari Ini: <strong>{todayDayOfWeek === 5 ? 'Jumat (3 Shift)' : (todayDayOfWeek === 0 || todayDayOfWeek === 6) ? 'Sabtu & Minggu (2 Shift)' : 'Senin–Kamis (3 Shift)'}</strong></span>
           </span>
         )}
       </div>
@@ -417,7 +422,7 @@ export default function SchedulePage() {
                 {[
                   { id: 'all', label: 'Semua Hari' },
                   { id: 'mon_thu', label: 'Senin–Kamis', badge: '3 Shift' },
-                  { id: 'friday', label: 'Jumat', badge: '2 Shift' },
+                  { id: 'friday', label: 'Jumat', badge: '3 Shift' },
                   { id: 'weekend', label: 'Sabtu–Minggu', badge: '2 Shift' },
                 ].map(tab => {
                   const isSelected = selectedDayGroupTab === tab.id
@@ -483,9 +488,16 @@ export default function SchedulePage() {
                   {/* Shift Cards Grid */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {group.shifts.map(shift => {
-                      const isMyShiftOnToday = group.isToday && userAssignedShiftName === shift.shift_name
+                      const isMyShiftOnToday = group.isToday && (
+                        userAssignedShiftName === shift.shift_name ||
+                        userAssignedShiftName === shift.id ||
+                        (group.key === 'friday' && (
+                          (userAssignedShiftName === 'Shift I' && shift.id === 'shift_1_panjang') ||
+                          (userAssignedShiftName === 'Shift II' && shift.id === 'shift_2_malam')
+                        ))
+                      )
                       const isOvernight = shift.out_next_day
-                      const Icon = isOvernight ? Moon : shift.shift_number === 1 ? Sunrise : Sunset
+                      const Icon = isOvernight ? Moon : (shift.shift_number === 1 || shift.id === 'shift_1_panjang') ? Sunrise : Sunset
                       const duration = formatDuration(shift.in_start, shift.out_start, shift.out_next_day)
 
                       return (
@@ -611,7 +623,7 @@ export default function SchedulePage() {
               <p className="font-semibold text-neutral-800">Ketentuan Jadwal Security SIPATEN Berbasis Hari</p>
               <ul className="space-y-1 text-[11px] list-disc ml-3">
                 <li><strong>Senin–Kamis (3 Shift)</strong>: Shift I (07:00–16:00), Shift II (15:00–19:30), dan Shift III (19:30–07:30 H+1).</li>
-                <li><strong>Jumat (2 Shift Khusus)</strong>: Shift I (07:00–19:00, 12 Jam) dan Shift II (19:00–07:00 H+1, 12 Jam).</li>
+                <li><strong>Jumat (3 Shift)</strong>: Shift I — Reguler (07:00–16:00), Shift I — Panjang (07:00–19:00, 12 Jam), dan Shift II — Malam (19:00–07:00 H+1).</li>
                 <li><strong>Sabtu–Minggu (2 Shift Akhir Pekan)</strong>: Shift I — Pagi (07:30–20:00) dan Shift II — Malam (20:00–07:30 H+1, Pulang 07:30–08:00).</li>
                 <li><strong>Shift Lintas Hari</strong>: Shift III (Senin–Kamis), Shift II (Jumat), dan Shift II (Weekend) berakhir pada pagi keesokan harinya (H+1) dan check-out terhubung secara otomatis ke catatan presensi masuk yang valid.</li>
                 <li>Seluruh jam jadwal, toleransi keterlambatan, dan jendela presensi divalidasi secara otoritatif oleh sistem server dalam zona waktu <strong>Asia/Jakarta (WIB)</strong>.</li>

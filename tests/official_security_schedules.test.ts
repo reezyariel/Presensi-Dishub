@@ -96,23 +96,30 @@ console.log('GRUP 1: Verifikasi Nilai Konfigurasi DEFAULT_DAY_GROUPS')
   assert('Mon-Thu Shift III out_end = 08:00', mtShifts[2].out_end === '08:00')
   assert('Mon-Thu Shift III out_next_day = true', mtShifts[2].out_next_day === true)
 
-  // Friday
+  // Friday (3 Varian Shift)
   const friShifts = DEFAULT_DAY_GROUPS.friday.shifts
-  assert('Jumat punya 2 shift', friShifts.length === 2)
+  assert('Jumat punya 3 shift', friShifts.length === 3)
 
-  // Jumat Shift I
-  assert('Jumat Shift I in_start = 07:00', friShifts[0].in_start === '07:00')
-  assert('Jumat Shift I in_end = 07:30', friShifts[0].in_end === '07:30')
-  assert('Jumat Shift I out_start = 19:00', friShifts[0].out_start === '19:00')
-  assert('Jumat Shift I out_end = 19:30', friShifts[0].out_end === '19:30')
-  assert('Jumat Shift I out_next_day = false', friShifts[0].out_next_day === false)
+  // Jumat Shift I Reguler
+  assert('Jumat Shift I Reguler in_start = 07:00', friShifts[0].in_start === '07:00')
+  assert('Jumat Shift I Reguler in_end = 07:30', friShifts[0].in_end === '07:30')
+  assert('Jumat Shift I Reguler out_start = 16:00', friShifts[0].out_start === '16:00')
+  assert('Jumat Shift I Reguler out_end = 16:30', friShifts[0].out_end === '16:30')
+  assert('Jumat Shift I Reguler out_next_day = false', friShifts[0].out_next_day === false)
 
-  // Jumat Shift II
-  assert('Jumat Shift II in_start = 19:00', friShifts[1].in_start === '19:00')
-  assert('Jumat Shift II in_end = 19:30', friShifts[1].in_end === '19:30')
-  assert('Jumat Shift II out_start = 07:00', friShifts[1].out_start === '07:00')
-  assert('Jumat Shift II out_end = 07:30', friShifts[1].out_end === '07:30')
-  assert('Jumat Shift II out_next_day = true', friShifts[1].out_next_day === true)
+  // Jumat Shift I Panjang (12 Jam)
+  assert('Jumat Shift I Panjang in_start = 07:00', friShifts[1].in_start === '07:00')
+  assert('Jumat Shift I Panjang in_end = 07:30', friShifts[1].in_end === '07:30')
+  assert('Jumat Shift I Panjang out_start = 19:00', friShifts[1].out_start === '19:00')
+  assert('Jumat Shift I Panjang out_end = 19:30', friShifts[1].out_end === '19:30')
+  assert('Jumat Shift I Panjang out_next_day = false', friShifts[1].out_next_day === false)
+
+  // Jumat Shift II Malam
+  assert('Jumat Shift II Malam in_start = 19:00', friShifts[2].in_start === '19:00')
+  assert('Jumat Shift II Malam in_end = 19:30', friShifts[2].in_end === '19:30')
+  assert('Jumat Shift II Malam out_start = 07:00', friShifts[2].out_start === '07:00')
+  assert('Jumat Shift II Malam out_end = 07:30', friShifts[2].out_end === '07:30')
+  assert('Jumat Shift II Malam out_next_day = true', friShifts[2].out_next_day === true)
 
   // Weekend
   const wkndShifts = DEFAULT_DAY_GROUPS.weekend.shifts
@@ -265,15 +272,27 @@ console.log('\nGRUP 4: Uji Jendela Waktu Sabtu–Minggu')
 // ============================================================
 console.log('\nGRUP 5: Uji getSecurityShiftCheckInStatus & Auto-Select')
 {
-  // Jumat Shift I tepat_waktu pada 07:15
-  const stFri1 = getSecurityShiftCheckInStatus('Shift I', FRI, jktDate(FRI, 7, 15))
-  assert('Jumat 07:15 Shift I windowStatus = tepat_waktu', stFri1.windowStatus === 'tepat_waktu')
-  assert('Jumat 07:15 Shift I auto-select = Shift I', getAutoSelectSecurityShift(FRI, jktDate(FRI, 7, 15)) === 'Shift I')
+  // Jumat 07:15: shift_1_reguler & shift_1_panjang keduanya tepat_waktu
+  const stFriReg = getSecurityShiftCheckInStatus('shift_1_reguler', FRI, jktDate(FRI, 7, 15))
+  assert('Jumat 07:15 shift_1_reguler windowStatus = tepat_waktu', stFriReg.windowStatus === 'tepat_waktu')
+  const stFriPjg = getSecurityShiftCheckInStatus('shift_1_panjang', FRI, jktDate(FRI, 7, 15))
+  assert('Jumat 07:15 shift_1_panjang windowStatus = tepat_waktu', stFriPjg.windowStatus === 'tepat_waktu')
 
-  // Jumat Shift II tepat_waktu pada 19:15
+  // Karena ada 2 varian pagi yang aktif bersamaan, auto-select menghasilkan null (wajib pilih di modal)
+  assert('Jumat 07:15 auto-select = null (2 varian pagi aktif)', getAutoSelectSecurityShift(FRI, jktDate(FRI, 7, 15)) === null)
+
+  // Backward compat: Shift I lama tetap tepat_waktu
+  const stFri1 = getSecurityShiftCheckInStatus('Shift I', FRI, jktDate(FRI, 7, 15))
+  assert('Jumat 07:15 Shift I lama windowStatus = tepat_waktu', stFri1.windowStatus === 'tepat_waktu')
+
+  // Jumat Shift II Malam tepat_waktu pada 19:15
+  const stFriMlm = getSecurityShiftCheckInStatus('shift_2_malam', FRI, jktDate(FRI, 19, 15))
+  assert('Jumat 19:15 shift_2_malam windowStatus = tepat_waktu', stFriMlm.windowStatus === 'tepat_waktu')
+  assert('Jumat 19:15 auto-select = shift_2_malam', getAutoSelectSecurityShift(FRI, jktDate(FRI, 19, 15)) === 'shift_2_malam')
+
+  // Backward compat: Shift II lama tepat_waktu pada 19:15
   const stFri2 = getSecurityShiftCheckInStatus('Shift II', FRI, jktDate(FRI, 19, 15))
-  assert('Jumat 19:15 Shift II windowStatus = tepat_waktu', stFri2.windowStatus === 'tepat_waktu')
-  assert('Jumat 19:15 Shift II auto-select = Shift II', getAutoSelectSecurityShift(FRI, jktDate(FRI, 19, 15)) === 'Shift II')
+  assert('Jumat 19:15 Shift II lama windowStatus = tepat_waktu', stFri2.windowStatus === 'tepat_waktu')
 
   // Sabtu Shift I tepat_waktu pada 07:45
   const stSat1 = getSecurityShiftCheckInStatus('Shift I', SAT, jktDate(SAT, 7, 45))
@@ -397,11 +416,12 @@ console.log('\nGRUP 8: Uji Penolakan Pilihan Shift Tidak Sesuai Jadwal')
   assert('Senin mencakup Shift II', monOptions.includes('Shift II'))
   assert('Senin mencakup Shift III', monOptions.includes('Shift III'))
 
-  // 2. Jumat hanya memiliki 2 shift resmi (Shift I & Shift II)
+  // 2. Jumat memiliki 3 varian shift resmi (shift_1_reguler, shift_1_panjang, shift_2_malam)
   const friOptions = getSecurityAvailableOptions(FRI)
-  assert('Jumat memiliki 2 pilihan shift', friOptions.length === 2)
-  assert('Jumat mencakup Shift I', friOptions.includes('Shift I'))
-  assert('Jumat mencakup Shift II', friOptions.includes('Shift II'))
+  assert('Jumat memiliki 3 pilihan shift', friOptions.length === 3)
+  assert('Jumat mencakup shift_1_reguler', friOptions.includes('shift_1_reguler'))
+  assert('Jumat mencakup shift_1_panjang', friOptions.includes('shift_1_panjang'))
+  assert('Jumat mencakup shift_2_malam', friOptions.includes('shift_2_malam'))
   assert('Jumat TIDAK mencakup Shift III', !friOptions.includes('Shift III'))
 
   // 3. Weekend (Sabtu & Minggu) hanya memiliki 2 shift resmi (Shift I & Shift II)
@@ -421,11 +441,13 @@ console.log('\nGRUP 8: Uji Penolakan Pilihan Shift Tidak Sesuai Jadwal')
       : (shift === 'Shift 3' || shift === 'Shift III') ? 'Shift III'
       : shift
 
-    const allowed = (dayOfWeek === 5 || dayOfWeek === 0 || dayOfWeek === 6)
-      ? ['Shift I', 'Shift II']
-      : ['Shift I', 'Shift II', 'Shift III']
+    const allowed = dayOfWeek === 5
+      ? ['shift_1_reguler', 'shift_1_panjang', 'shift_2_malam', 'Shift I', 'Shift II']
+      : (dayOfWeek === 0 || dayOfWeek === 6)
+        ? ['Shift I', 'Shift II']
+        : ['Shift I', 'Shift II', 'Shift III']
 
-    if (!allowed.includes(canon)) {
+    if (!allowed.includes(canon) && !allowed.includes(shift)) {
       const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
       return {
         valid: false,
@@ -440,9 +462,12 @@ console.log('\nGRUP 8: Uji Penolakan Pilihan Shift Tidak Sesuai Jadwal')
   assert('Validasi Backend: Shift II Senin diterima', validateShiftForDay(MON, 'Shift II').valid === true)
   assert('Validasi Backend: Shift III Senin diterima', validateShiftForDay(MON, 'Shift III').valid === true)
 
-  // Jumat: Shift I & II valid, Shift III DITOLAK
-  assert('Validasi Backend: Shift I Jumat diterima', validateShiftForDay(FRI, 'Shift I').valid === true)
-  assert('Validasi Backend: Shift II Jumat diterima', validateShiftForDay(FRI, 'Shift II').valid === true)
+  // Jumat: 3 varian shift baru + Shift I/II kompatibel, Shift III DITOLAK
+  assert('Validasi Backend: shift_1_reguler Jumat diterima', validateShiftForDay(FRI, 'shift_1_reguler').valid === true)
+  assert('Validasi Backend: shift_1_panjang Jumat diterima', validateShiftForDay(FRI, 'shift_1_panjang').valid === true)
+  assert('Validasi Backend: shift_2_malam Jumat diterima', validateShiftForDay(FRI, 'shift_2_malam').valid === true)
+  assert('Validasi Backend: Shift I kompatibilitas Jumat diterima', validateShiftForDay(FRI, 'Shift I').valid === true)
+  assert('Validasi Backend: Shift II kompatibilitas Jumat diterima', validateShiftForDay(FRI, 'Shift II').valid === true)
   const friShift3Res = validateShiftForDay(FRI, 'Shift III')
   assert('Validasi Backend: Shift III Jumat DITOLAK', friShift3Res.valid === false)
   assert('Validasi Backend: Pesan penolakan Jumat menyebut hari Jumat', friShift3Res.error?.includes('hari Jumat') === true)

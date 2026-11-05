@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs'
 import type { AttendanceRecord } from '../types/attendance'
-import { formatJakartaTime, formatJakartaDate } from './scheduleEngine'
+import { formatJakartaTime, formatJakartaDate, getSecurityShiftDisplayLabel } from './scheduleEngine'
 import { formatSecurityDisplayDate } from './securityDateDisplay'
 import { groupCSRecords } from './attendanceGrouping'
 import { fetchResizedSelfieBase64 } from './selfieStorage'
@@ -271,7 +271,7 @@ async function buildSecurityWorksheet(
       foto_selfie: rec.selfie_storage_path ? '' : '-',
       name: rec.employee_name,
       category: rec.category,
-      shift: rec.shift || '-',
+      shift: rec.shift ? getSecurityShiftDisplayLabel(rec.shift, rec.work_date) : '-',
       type: rec.attendance_type.toUpperCase(),
       work_date: formatSecurityDisplayDate(rec.work_date, rec.shift, rec.attendance_type, rec.category),
       recorded_at: formatJakartaTime(rec.recorded_at),

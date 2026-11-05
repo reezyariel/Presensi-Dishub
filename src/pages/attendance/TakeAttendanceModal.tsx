@@ -22,7 +22,7 @@ import {
 } from '../../lib/officeLocation'
 import { supabase } from '../../lib/supabase'
 import { FunctionsHttpError } from '@supabase/supabase-js'
-import { formatJakartaTime, getScheduleInfo, getCSScheduleSync, checkAttendanceWindow } from '../../lib/scheduleEngine'
+import { formatJakartaTime, getScheduleInfo, getCSScheduleSync, checkAttendanceWindow, getSecurityShiftDisplayLabel } from '../../lib/scheduleEngine'
 import { getEffectiveNow, getEffectiveTodayJakarta } from '../../lib/mockClock'
 import type { AttendanceRecord, AttendanceType, SecurityShiftOption } from '../../types/attendance'
 
@@ -162,7 +162,7 @@ export default function TakeAttendanceModal({
 
     if (isWindowNotYet) {
       setSubmitError(
-        `Presensi ${attendanceType} ${shift ? `${shift} ` : ''}belum dibuka. Jendela presensi dimulai pukul ${
+        `Presensi ${attendanceType} ${shift ? `${getSecurityShiftDisplayLabel(shift, effectiveWorkDate)} ` : ''}belum dibuka. Jendela presensi dimulai pukul ${
           scheduleDisplay[attendanceType] || 'jadwal resmi'
         } WIB.`
       )
@@ -220,7 +220,7 @@ export default function TakeAttendanceModal({
 
     if (isWindowNotYet) {
       setSubmitError(
-        `Presensi ${attendanceType} ${shift ? `${shift} ` : ''}belum dibuka. Jendela presensi dimulai pukul ${
+        `Presensi ${attendanceType} ${shift ? `${getSecurityShiftDisplayLabel(shift, effectiveWorkDate)} ` : ''}belum dibuka. Jendela presensi dimulai pukul ${
           scheduleDisplay[attendanceType] || 'jadwal resmi'
         } WIB.`
       )
@@ -369,7 +369,7 @@ export default function TakeAttendanceModal({
                 </h3>
                 {category === 'Security' && (
                   <span className="text-[10px] font-bold px-2 py-0.5 bg-neutral-900 text-white rounded-full">
-                    {shift}
+                    {getSecurityShiftDisplayLabel(shift, effectiveWorkDate)}
                   </span>
                 )}
               </div>

@@ -2,7 +2,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import type { AttendanceRecord } from '../types/attendance'
 import type { MonthlyEmployeeSummary } from './exportExcel'
-import { formatJakartaTime, formatJakartaDate } from './scheduleEngine'
+import { formatJakartaTime, formatJakartaDate, getSecurityShiftDisplayLabel } from './scheduleEngine'
 import { formatSecurityDisplayDate } from './securityDateDisplay'
 import { groupCSRecords } from './attendanceGrouping'
 import { fetchResizedSelfieBase64, type ResizedSelfieResult } from './selfieStorage'
@@ -234,7 +234,7 @@ export async function exportAttendanceListPdf(
         idx + 1,
         r.selfie_storage_path ? '' : '-',
         r.employee_name,
-        r.shift || '-',
+        r.shift ? getSecurityShiftDisplayLabel(r.shift, r.work_date) : '-',
         r.attendance_type.toUpperCase(),
         formatSecurityDisplayDate(r.work_date, r.shift, r.attendance_type, r.category),
         formatJakartaTime(r.recorded_at),

@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
-import type { EmployeeProfile, EmployeeRole, ShiftType } from '../../types/attendance'
+import type { EmployeeProfile, EmployeeRole, SecurityShiftOption } from '../../types/attendance'
 import { cn, normalizeName } from '../../lib/utils'
 import AvatarImage from '../../components/common/AvatarImage'
 
@@ -50,7 +50,7 @@ export default function EmployeesPage() {
   const [formPassword, setFormPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [formRole, setFormRole] = useState<EmployeeRole>('CS')
-  const [formDefaultShift, setFormDefaultShift] = useState<ShiftType | ''>('')
+  const [formDefaultShift, setFormDefaultShift] = useState<SecurityShiftOption | ''>('')
   const [formIsActive, setFormIsActive] = useState(true)
   const [formNotes, setFormNotes] = useState('')
 
@@ -144,7 +144,7 @@ export default function EmployeesPage() {
     setFormEmail(emp.email || '')
     setFormPassword('')
     setFormRole(emp.employee_role)
-    setFormDefaultShift((emp.default_shift as ShiftType) || '')
+    setFormDefaultShift((emp.default_shift as SecurityShiftOption) || '')
     setFormIsActive(emp.is_active)
     setFormNotes(emp.notes || '')
     setFormError(null)
@@ -681,7 +681,10 @@ export default function EmployeesPage() {
                       {emp.employee_role === 'Security' && emp.default_shift ? (
                         <span className="inline-flex items-center gap-1.5 text-xs text-neutral-800 bg-neutral-100 border border-neutral-200 px-2.5 py-1 rounded-md font-medium">
                           <Clock size={12} className="text-neutral-500" />
-                          {emp.default_shift}
+                          {emp.default_shift === 'shift_1_reguler' ? 'Jumat: Shift I — Reguler'
+                            : emp.default_shift === 'shift_1_panjang' ? 'Jumat: Shift I — Panjang (12 Jam)'
+                            : emp.default_shift === 'shift_2_malam' ? 'Jumat: Shift II — Malam'
+                            : emp.default_shift}
                         </span>
                       ) : (
                         <span className="text-neutral-400 font-mono">-</span>
@@ -904,17 +907,31 @@ export default function EmployeesPage() {
               {/* Shift Default for Security */}
               {formRole === 'Security' && (
                 <div className="space-y-1.5">
-                  <label className="form-label text-xs">Shift Bawaan Security</label>
+                  <label className="form-label text-xs">Penugasan Shift Security</label>
                   <select
                     value={formDefaultShift}
-                    onChange={e => setFormDefaultShift(e.target.value as ShiftType)}
+                    onChange={e => setFormDefaultShift(e.target.value as SecurityShiftOption)}
                     className="form-input text-xs py-2.5"
                   >
-                    <option value="">Pilih shift</option>
-                    <option value="Shift I">Shift I (Pagi: 07.00 - 16.00)</option>
-                    <option value="Shift II">Shift II (Siang: 16.00 - 19.30)</option>
-                    <option value="Shift III">Shift III (Malam: 19.30 - 07.00)</option>
+                    <option value="">Pilih shift penugasan</option>
+                    <optgroup label="Jadwal Reguler (Senin – Kamis)">
+                      <option value="Shift I">Shift I (Pagi: 07.00 – 16.00 WIB)</option>
+                      <option value="Shift II">Shift II (Sore: 15.00 – 19.30 WIB)</option>
+                      <option value="Shift III">Shift III (Malam: 19.30 – 07.30 WIB H+1)</option>
+                    </optgroup>
+                    <optgroup label="Jadwal Khusus Hari Jumat (3 Varian)">
+                      <option value="shift_1_reguler">Shift I — Reguler (07.00 – 16.00 WIB)</option>
+                      <option value="shift_1_panjang">Shift I — Panjang (07.00 – 19.00 WIB, 12 Jam)</option>
+                      <option value="shift_2_malam">Shift II — Malam (19.00 – 07.00 WIB H+1)</option>
+                    </optgroup>
+                    <optgroup label="Jadwal Akhir Pekan (Sabtu & Minggu)">
+                      <option value="Sesi Pagi">Akhir Pekan: Sesi Pagi (07.30 – 20.00 WIB)</option>
+                      <option value="Sesi Malam">Akhir Pekan: Sesi Malam (20.00 – 07.30 WIB H+1)</option>
+                    </optgroup>
                   </select>
+                  <p className="text-[11px] text-neutral-500">
+                    Khusus hari Jumat, pilih salah satu dari 3 varian shift operasional yang berlaku.
+                  </p>
                 </div>
               )}
 

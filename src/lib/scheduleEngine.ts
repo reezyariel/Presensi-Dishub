@@ -160,10 +160,21 @@ export const DEFAULT_DAY_GROUPS: SecurityScheduleConfig['day_groups'] = {
     days: [5],
     shifts: [
       {
-        id: 'shift_1',
-        shift_name: 'Shift I',
-        label: 'Shift I',
+        id: 'shift_1_reguler',
+        shift_name: 'shift_1_reguler',
+        label: 'Shift I — Reguler',
         shift_number: 1,
+        in_start: '07:00',
+        in_end: '07:30',
+        out_start: '16:00',
+        out_end: '16:30',
+        out_next_day: false,
+      },
+      {
+        id: 'shift_1_panjang',
+        shift_name: 'shift_1_panjang',
+        label: 'Shift I — Panjang (12 Jam)',
+        shift_number: 2,
         in_start: '07:00',
         in_end: '07:30',
         out_start: '19:00',
@@ -171,10 +182,10 @@ export const DEFAULT_DAY_GROUPS: SecurityScheduleConfig['day_groups'] = {
         out_next_day: false,
       },
       {
-        id: 'shift_2',
-        shift_name: 'Shift II',
-        label: 'Shift II',
-        shift_number: 2,
+        id: 'shift_2_malam',
+        shift_name: 'shift_2_malam',
+        label: 'Shift II — Malam',
+        shift_number: 3,
         in_start: '19:00',
         in_end: '19:30',
         out_start: '07:00',
@@ -296,6 +307,42 @@ export function canonicalShiftName(shift: string | null | undefined): string {
 }
 
 /**
+ * Returns human-readable display label for any security shift option or internal ID.
+ * Maps Friday internal IDs ('shift_1_reguler', 'shift_1_panjang', 'shift_2_malam')
+ * to standard user-facing labels:
+ * - 'shift_1_reguler' -> 'Shift I — Reguler'
+ * - 'shift_1_panjang' -> 'Shift I — Panjang (12 Jam)'
+ * - 'shift_2_malam'   -> 'Shift II — Malam'
+ * If workDateStr is provided, retrieves the contextual shift item label if available.
+ */
+export function getSecurityShiftDisplayLabel(
+  shift: SecurityShiftOption | string | null | undefined,
+  workDateStr?: string
+): string {
+  if (!shift) return ''
+  const s = shift.trim()
+  if (s === 'shift_1_reguler') return 'Shift I — Reguler'
+  if (s === 'shift_1_panjang') return 'Shift I — Panjang (12 Jam)'
+  if (s === 'shift_2_malam') return 'Shift II — Malam'
+
+  if (workDateStr) {
+    try {
+      const item = getSecurityShiftItem(workDateStr, s as SecurityShiftOption)
+      if (item && item.label) {
+        return item.label
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  if (s === 'Shift 1' || s === 'Shift I') return 'Shift I'
+  if (s === 'Shift 2' || s === 'Shift II') return 'Shift II'
+  if (s === 'Shift 3' || s === 'Shift III') return 'Shift III'
+  return s
+}
+
+/**
  * Returns available SecurityShiftOptions for the given work date in Asia/Jakarta.
  * - Senin–Kamis: returns ['Shift I', 'Shift II', 'Shift III']
  * - Jumat: returns ['Shift I', 'Shift II']
@@ -307,7 +354,7 @@ export function getSecurityAvailableOptions(workDateStr: string): SecurityShiftO
     return ['Shift I', 'Shift II']
   }
   if (day === 5) {
-    return ['Shift I', 'Shift II']
+    return ['shift_1_reguler', 'shift_1_panjang', 'shift_2_malam']
   }
   return ['Shift I', 'Shift II', 'Shift III']
 }
@@ -330,7 +377,7 @@ export function getWeekendSessionSchedule(session: WeekendSession): WeekendSessi
 /**
  * Determines whether a specific shift on a given work date is an overnight (cross-midnight) shift.
  * - Senin–Kamis: Shift III (19:30 – 07:30 H+1)
- * - Jumat: Shift II (19:00 – 07:00 H+1)
+ * - Jumat: shift_2_malam / Shift II (19:00 – 07:00 H+1)
  * - Sabtu–Minggu: Shift II / Sesi Malam (20:00 – 07:30 H+1)
  */
 export function isOvernightSecurityShift(
@@ -344,7 +391,7 @@ export function isOvernightSecurityShift(
     return canon === 'Shift III'
   }
   if (day === 5) {
-    return canon === 'Shift II'
+    return shift === 'shift_2_malam' || canon === 'Shift II'
   }
   if (day === 0 || day === 6) {
     return canon === 'Shift II' || shift === 'Sesi Malam'
@@ -357,7 +404,7 @@ export function isOvernightSecurityShift(
  * is an overnight shift that started yesterday.
  * - Monday morning (< 12:00): Sunday's Shift II / Sesi Malam
  * - Tuesday-Friday morning (< 12:00): Mon-Thu's Shift III
- * - Saturday morning (< 12:00): Friday's Shift II
+ * - Saturday morning (< 12:00): Friday's shift_2_malam / Shift II
  * - Sunday morning (< 12:00): Saturday's Shift II / Sesi Malam
  */
 export function isOvernightCheckout(
@@ -371,8 +418,8 @@ export function isOvernightCheckout(
   if (day === 1) return canon === 'Shift II' || shift === 'Sesi Malam'
   // If checkout is on Tuesday-Friday (2..5), the overnight shift was Shift III
   if (day >= 2 && day <= 5) return canon === 'Shift III'
-  // If checkout is on Saturday (6), the overnight shift from Friday was Shift II
-  if (day === 6) return canon === 'Shift II'
+  // If checkout is on Saturday (6), the overnight shift from Friday was shift_2_malam or Shift II
+  if (day === 6) return shift === 'shift_2_malam' || canon === 'Shift II'
   // If checkout is on Sunday (0), the overnight shift from Saturday was Shift II (or Sesi Malam)
   if (day === 0) return canon === 'Shift II' || shift === 'Sesi Malam'
   return false
@@ -395,6 +442,25 @@ export function getSecurityShiftItem(
     group = dayGroups.friday
   } else if (day === 0 || day === 6) {
     group = dayGroups.weekend
+  }
+
+  // Friday specific ID matching with backward compatibility
+  if (day === 5) {
+    const byId = group.shifts.find(s => s.id === shift || s.shift_name === shift)
+    if (byId) return byId
+
+    const canon = canonicalShiftName(shift)
+    // Backward compat: old records with 'Shift I' -> fallback to shift_1_panjang (12 Jam, ends 19:00)
+    if (canon === 'Shift I') {
+      const panjang = group.shifts.find(s => s.id === 'shift_1_panjang' || s.shift_name === 'shift_1_panjang')
+      if (panjang) return panjang
+    }
+    // Backward compat: old records with 'Shift II' -> fallback to shift_2_malam (ends 07:00 H+1)
+    if (canon === 'Shift II') {
+      const malam = group.shifts.find(s => s.id === 'shift_2_malam' || s.shift_name === 'shift_2_malam')
+      if (malam) return malam
+    }
+    return group.shifts[0]
   }
 
   const canon = canonicalShiftName(shift)
@@ -483,12 +549,21 @@ export function getSecurityShiftCheckInStatus(
       sublabel = 'Sesi Akhir Pekan Malam (20:00 – 07:30 WIB H+1)'
     }
   } else if (isFri) {
-    if (canon === 'Shift I') {
-      label = 'Shift I'
-      sublabel = 'Shift Siang Jumat (07:00 – 19:00 WIB)'
+    if (option === 'shift_1_reguler') {
+      label = 'Shift I — Reguler'
+      sublabel = 'Shift Jumat Reguler (07:00 – 16:00 WIB)'
+    } else if (option === 'shift_1_panjang') {
+      label = 'Shift I — Panjang (12 Jam)'
+      sublabel = 'Shift Jumat Panjang 12 Jam (07:00 – 19:00 WIB)'
+    } else if (option === 'shift_2_malam') {
+      label = 'Shift II — Malam'
+      sublabel = 'Shift Jumat Malam (19:00 – 07:00 WIB H+1)'
+    } else if (canon === 'Shift I') {
+      label = 'Shift I — Panjang (12 Jam)'
+      sublabel = 'Shift Jumat Panjang 12 Jam (07:00 – 19:00 WIB)'
     } else {
-      label = 'Shift II'
-      sublabel = 'Shift Malam Jumat (19:00 – 07:00 WIB H+1)'
+      label = 'Shift II — Malam'
+      sublabel = 'Shift Jumat Malam (19:00 – 07:00 WIB H+1)'
     }
   } else {
     // Senin – Kamis
@@ -820,10 +895,17 @@ export function normalizeSecuritySchedule(raw: any): SecuritySchedule {
                  typeof si.out_start === 'string' && typeof si.out_end === 'string'
         })
     }
-    if (isValidGroup(dg.mon_thu) || isValidGroup(dg.friday) || isValidGroup(dg.weekend)) {
+    const isFridayValid = (g: unknown): boolean => {
+      if (!isValidGroup(g)) return false
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ga = g as any
+      return ga.shifts.length >= 3 &&
+        ga.shifts.some((s: any) => s.id === 'shift_1_reguler' || s.shift_name === 'shift_1_reguler')
+    }
+    if (isValidGroup(dg.mon_thu) || isFridayValid(dg.friday) || isValidGroup(dg.weekend)) {
       day_groups = {
         mon_thu: isValidGroup(dg.mon_thu) ? dg.mon_thu : DEFAULT_DAY_GROUPS.mon_thu,
-        friday:  isValidGroup(dg.friday)  ? dg.friday  : DEFAULT_DAY_GROUPS.friday,
+        friday:  isFridayValid(dg.friday)  ? dg.friday  : DEFAULT_DAY_GROUPS.friday,
         weekend: isValidGroup(dg.weekend) ? dg.weekend : DEFAULT_DAY_GROUPS.weekend,
       }
     }
@@ -2003,7 +2085,8 @@ export function calculateSecurity30DayRecap(
         isOvernightSecurityShift(grp.work_date, grp.shift) ||
         grp.shift === 'Shift III' ||
         grp.shift === 'Shift 3' ||
-        grp.shift === 'Sesi Malam'
+        grp.shift === 'Sesi Malam' ||
+        grp.shift === 'shift_2_malam'
       const isTodayShift = grp.work_date === todayStr
       const isYesterdayShift = grp.work_date === yesterdayStr
 
@@ -2065,7 +2148,8 @@ export function buildSecurityShiftSessions(
       isOvernightSecurityShift(grp.work_date, grp.shift) ||
       grp.shift === 'Shift III' ||
       grp.shift === 'Shift 3' ||
-      grp.shift === 'Sesi Malam'
+      grp.shift === 'Sesi Malam' ||
+      grp.shift === 'shift_2_malam'
     const hasMasuk = grp.masuk !== null
     const hasPulang = grp.pulang !== null
 

@@ -54,8 +54,8 @@ export function isOvernightSecurityShift(
   // Mon–Thu (1–4): Shift III is overnight
   if (day >= 1 && day <= 4) return canon === 'Shift III'
 
-  // Fri (5): Shift II is overnight
-  if (day === 5) return canon === 'Shift II'
+  // Fri (5): shift_2_malam is overnight; Shift II for backward compat
+  if (day === 5) return shift === 'shift_2_malam' || canon === 'Shift II'
 
   // Sat (6) or Sun (0): Shift II or Sesi Malam is overnight
   if (day === 0 || day === 6) return canon === 'Shift II' || shift === 'Sesi Malam'

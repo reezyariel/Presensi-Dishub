@@ -16,7 +16,7 @@ import {
   CategoryBadge,
   AttendanceTypeBadge,
 } from '../../components/admin/StatusBadges'
-import { formatJakartaTime } from '../../lib/scheduleEngine'
+import { formatJakartaTime, getSecurityShiftDisplayLabel } from '../../lib/scheduleEngine'
 import { formatSecurityDisplayDate } from '../../lib/securityDateDisplay'
 import { formatDistance } from '../../lib/officeLocation'
 import type { AttendanceRecord, ReviewStatus } from '../../types/attendance'
@@ -374,7 +374,7 @@ export default function ReviewPage() {
                         <CategoryBadge category={rec.category} />
                         {rec.shift && (
                           <span className="text-[10px] px-2 py-0.5 rounded-md bg-neutral-100 border border-neutral-200 text-neutral-700 font-medium">
-                            {rec.shift}
+                            {getSecurityShiftDisplayLabel(rec.shift, rec.work_date)}
                           </span>
                         )}
                       </div>
@@ -536,7 +536,7 @@ export default function ReviewPage() {
                   <div className="flex items-center justify-between">
                     <span className="text-neutral-500">Divisi & Shift:</span>
                     <span className="font-semibold text-neutral-800">
-                      {activeModalRecord.category} {activeModalRecord.shift ? `• ${activeModalRecord.shift}` : ''}
+                      {activeModalRecord.category} {activeModalRecord.shift ? `• ${getSecurityShiftDisplayLabel(activeModalRecord.shift, activeModalRecord.work_date)}` : ''}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
@@ -657,7 +657,7 @@ export default function ReviewPage() {
               <div className="flex items-center justify-between">
                 <span className="text-neutral-500">Divisi & Shift:</span>
                 <span className="font-semibold text-neutral-800">
-                  {deleteModalRecord.category} {deleteModalRecord.shift ? `• ${deleteModalRecord.shift}` : ''}
+                  {deleteModalRecord.category} {deleteModalRecord.shift ? `• ${getSecurityShiftDisplayLabel(deleteModalRecord.shift, deleteModalRecord.work_date)}` : ''}
                 </span>
               </div>
               <div className="flex items-center justify-between">

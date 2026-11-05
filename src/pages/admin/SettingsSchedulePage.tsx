@@ -53,11 +53,15 @@ export default function SettingsSchedulePage() {
   const [secS3End, setSecS3End] = useState('07:30')
   const [secS3EndWin, setSecS3EndWin] = useState('08:00')
 
-  // Security Schedule: Jumat (2 Shift)
-  const [secFriS1Start, setSecFriS1Start] = useState('07:00')
-  const [secFriS1WinEnd, setSecFriS1WinEnd] = useState('07:30')
-  const [secFriS1End, setSecFriS1End] = useState('19:00')
-  const [secFriS1EndWin, setSecFriS1EndWin] = useState('19:30')
+  // Security Schedule: Jumat (3 Shift)
+  const [secFriS1RegStart, setSecFriS1RegStart] = useState('07:00')
+  const [secFriS1RegWinEnd, setSecFriS1RegWinEnd] = useState('07:30')
+  const [secFriS1RegOutStart, setSecFriS1RegOutStart] = useState('16:00')
+  const [secFriS1RegOutEnd, setSecFriS1RegOutEnd] = useState('16:30')
+  const [secFriS1PanjangStart, setSecFriS1PanjangStart] = useState('07:00')
+  const [secFriS1PanjangWinEnd, setSecFriS1PanjangWinEnd] = useState('07:30')
+  const [secFriS1PanjangOutStart, setSecFriS1PanjangOutStart] = useState('19:00')
+  const [secFriS1PanjangOutEnd, setSecFriS1PanjangOutEnd] = useState('19:30')
   const [secFriS2Start, setSecFriS2Start] = useState('19:00')
   const [secFriS2WinEnd, setSecFriS2WinEnd] = useState('19:30')
   const [secFriS2End, setSecFriS2End] = useState('07:00')
@@ -150,17 +154,48 @@ export default function SettingsSchedulePage() {
               if (m3?.out_start) setSecS3End(m3.out_start)
               if (m3?.out_end) setSecS3EndWin(m3.out_end)
 
-              const f1 = dg.friday?.shifts?.[0]
-              const f2 = dg.friday?.shifts?.[1]
-              if (f1?.in_start) setSecFriS1Start(f1.in_start)
-              if (f1?.in_end) setSecFriS1WinEnd(f1.in_end)
-              if (f1?.out_start) setSecFriS1End(f1.out_start)
-              if (f1?.out_end) setSecFriS1EndWin(f1.out_end)
+              const fShifts = dg.friday?.shifts || []
+              if (fShifts.length >= 3) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const f_reg = fShifts.find((s: any) => s.id === 'shift_1_reguler') || fShifts[0]
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const f_pjg = fShifts.find((s: any) => s.id === 'shift_1_panjang') || fShifts[1]
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const f_mlm = fShifts.find((s: any) => s.id === 'shift_2_malam') || fShifts[2]
 
-              if (f2?.in_start) setSecFriS2Start(f2.in_start)
-              if (f2?.in_end) setSecFriS2WinEnd(f2.in_end)
-              if (f2?.out_start) setSecFriS2End(f2.out_start)
-              if (f2?.out_end) setSecFriS2EndWin(f2.out_end)
+                if (f_reg?.in_start) setSecFriS1RegStart(f_reg.in_start)
+                if (f_reg?.in_end) setSecFriS1RegWinEnd(f_reg.in_end)
+                if (f_reg?.out_start) setSecFriS1RegOutStart(f_reg.out_start)
+                if (f_reg?.out_end) setSecFriS1RegOutEnd(f_reg.out_end)
+
+                if (f_pjg?.in_start) setSecFriS1PanjangStart(f_pjg.in_start)
+                if (f_pjg?.in_end) setSecFriS1PanjangWinEnd(f_pjg.in_end)
+                if (f_pjg?.out_start) setSecFriS1PanjangOutStart(f_pjg.out_start)
+                if (f_pjg?.out_end) setSecFriS1PanjangOutEnd(f_pjg.out_end)
+
+                if (f_mlm?.in_start) setSecFriS2Start(f_mlm.in_start)
+                if (f_mlm?.in_end) setSecFriS2WinEnd(f_mlm.in_end)
+                if (f_mlm?.out_start) setSecFriS2End(f_mlm.out_start)
+                if (f_mlm?.out_end) setSecFriS2EndWin(f_mlm.out_end)
+              } else {
+                const f1 = fShifts[0]
+                const f2 = fShifts[1]
+                if (f1?.in_start) {
+                  setSecFriS1RegStart(f1.in_start)
+                  setSecFriS1PanjangStart(f1.in_start)
+                }
+                if (f1?.in_end) {
+                  setSecFriS1RegWinEnd(f1.in_end)
+                  setSecFriS1PanjangWinEnd(f1.in_end)
+                }
+                if (f1?.out_start) setSecFriS1PanjangOutStart(f1.out_start)
+                if (f1?.out_end) setSecFriS1PanjangOutEnd(f1.out_end)
+
+                if (f2?.in_start) setSecFriS2Start(f2.in_start)
+                if (f2?.in_end) setSecFriS2WinEnd(f2.in_end)
+                if (f2?.out_start) setSecFriS2End(f2.out_start)
+                if (f2?.out_end) setSecFriS2EndWin(f2.out_end)
+              }
 
               const w1 = dg.weekend?.shifts?.[0]
               const w2 = dg.weekend?.shifts?.[1]
@@ -311,21 +346,32 @@ export default function SettingsSchedulePage() {
               days: [5],
               shifts: [
                 {
-                  id: 'shift_1',
-                  shift_name: 'Shift I',
-                  label: 'Shift I',
+                  id: 'shift_1_reguler',
+                  shift_name: 'shift_1_reguler',
+                  label: 'Shift I — Reguler',
                   shift_number: 1,
-                  in_start: secFriS1Start,
-                  in_end: secFriS1WinEnd,
-                  out_start: secFriS1End,
-                  out_end: secFriS1EndWin,
+                  in_start: secFriS1RegStart,
+                  in_end: secFriS1RegWinEnd,
+                  out_start: secFriS1RegOutStart,
+                  out_end: secFriS1RegOutEnd,
                   out_next_day: false,
                 },
                 {
-                  id: 'shift_2',
-                  shift_name: 'Shift II',
-                  label: 'Shift II',
+                  id: 'shift_1_panjang',
+                  shift_name: 'shift_1_panjang',
+                  label: 'Shift I — Panjang (12 Jam)',
                   shift_number: 2,
+                  in_start: secFriS1PanjangStart,
+                  in_end: secFriS1PanjangWinEnd,
+                  out_start: secFriS1PanjangOutStart,
+                  out_end: secFriS1PanjangOutEnd,
+                  out_next_day: false,
+                },
+                {
+                  id: 'shift_2_malam',
+                  shift_name: 'shift_2_malam',
+                  label: 'Shift II — Malam',
+                  shift_number: 3,
                   in_start: secFriS2Start,
                   in_end: secFriS2WinEnd,
                   out_start: secFriS2End,
@@ -713,39 +759,55 @@ export default function SettingsSchedulePage() {
             </div>
           </div>
 
-          {/* Kelompok 2: Jumat (2 Shift) */}
+          {/* Kelompok 2: Jumat (3 Shift) */}
           <div className="pt-6 border-t border-neutral-200 space-y-4">
             <div className="flex items-center justify-between border-b border-neutral-100 pb-2">
               <div className="flex items-center gap-2 text-xs font-bold text-neutral-900 uppercase tracking-wide">
                 <Calendar size={14} className="text-emerald-600" />
-                <span>2. Jumat (2 Shift Khusus 12 Jam)</span>
+                <span>2. Jumat (3 Varian Shift)</span>
               </div>
               <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 rounded-full font-bold">
                 Jumat
               </span>
             </div>
 
-            {/* Shift I Jumat */}
+            {/* Shift I — Reguler */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-neutral-900">Shift I (07:00 – 19:00)</span>
+                <span className="text-xs font-bold text-neutral-900">Shift I — Reguler (07:00 – 16:00)</span>
                 <span className="text-[10px] font-mono font-semibold text-neutral-600 bg-neutral-50 px-2 py-0.5 rounded border border-neutral-200">
-                  Check-In: {secFriS1Start}–{secFriS1WinEnd} • Check-Out: {secFriS1End}–{secFriS1EndWin} WIB
+                  Check-In: {secFriS1RegStart}–{secFriS1RegWinEnd} • Check-Out: {secFriS1RegOutStart}–{secFriS1RegOutEnd} WIB
                 </span>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 rounded-xl border border-neutral-200 bg-white">
-                {timeInput(secFriS1Start, setSecFriS1Start, 'Mulai Check-In')}
-                {timeInput(secFriS1WinEnd, setSecFriS1WinEnd, 'Batas Check-In')}
-                {timeInput(secFriS1End, setSecFriS1End, 'Mulai Check-Out')}
-                {timeInput(secFriS1EndWin, setSecFriS1EndWin, 'Batas Check-Out')}
+                {timeInput(secFriS1RegStart, setSecFriS1RegStart, 'Mulai Check-In')}
+                {timeInput(secFriS1RegWinEnd, setSecFriS1RegWinEnd, 'Batas Check-In')}
+                {timeInput(secFriS1RegOutStart, setSecFriS1RegOutStart, 'Mulai Check-Out')}
+                {timeInput(secFriS1RegOutEnd, setSecFriS1RegOutEnd, 'Batas Check-Out')}
               </div>
             </div>
 
-            {/* Shift II Jumat */}
+            {/* Shift I — Panjang (12 Jam) */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-neutral-900">Shift I — Panjang (07:00 – 19:00, 12 Jam)</span>
+                <span className="text-[10px] font-mono font-semibold text-neutral-600 bg-neutral-50 px-2 py-0.5 rounded border border-neutral-200">
+                  Check-In: {secFriS1PanjangStart}–{secFriS1PanjangWinEnd} • Check-Out: {secFriS1PanjangOutStart}–{secFriS1PanjangOutEnd} WIB
+                </span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 rounded-xl border border-neutral-200 bg-white">
+                {timeInput(secFriS1PanjangStart, setSecFriS1PanjangStart, 'Mulai Check-In')}
+                {timeInput(secFriS1PanjangWinEnd, setSecFriS1PanjangWinEnd, 'Batas Check-In')}
+                {timeInput(secFriS1PanjangOutStart, setSecFriS1PanjangOutStart, 'Mulai Check-Out')}
+                {timeInput(secFriS1PanjangOutEnd, setSecFriS1PanjangOutEnd, 'Batas Check-Out')}
+              </div>
+            </div>
+
+            {/* Shift II — Malam */}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-neutral-900">Shift II (19:00 – 07:00 H+1)</span>
+                  <span className="text-xs font-bold text-neutral-900">Shift II — Malam (19:00 – 07:00 H+1)</span>
                   <span className="text-[10px] bg-neutral-900 text-white font-mono px-1.5 py-0.5 rounded font-bold">Lintas Hari (Besok)</span>
                 </div>
                 <span className="text-[10px] font-mono font-semibold text-neutral-600 bg-neutral-50 px-2 py-0.5 rounded border border-neutral-200">

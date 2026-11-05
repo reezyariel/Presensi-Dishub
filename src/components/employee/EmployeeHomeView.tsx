@@ -21,6 +21,7 @@ import {
   getNextAttendanceInfo,
   getAttendanceButtonState,
   getSecurityShiftCheckInStatus,
+  getSecurityShiftDisplayLabel,
   isOvernightSecurityShift,
   getAutoSelectSecurityShift,
   calculate30DayRecap,
@@ -618,7 +619,7 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
                     : 'bg-amber-50 border border-amber-200 text-amber-800'
                 }`}>
                   <Clock size={11} />
-                  {selectedShift ? selectedShift : 'Pilih Shift'}
+                  {selectedShift ? getSecurityShiftDisplayLabel(selectedShift, todayRecords.masuk?.work_date || today) : 'Pilih Shift'}
                 </span>
               )}
               <span className={`inline-flex items-center gap-1 text-xs font-semibold rounded-full px-2.5 py-1 ${todayRecords.pulang

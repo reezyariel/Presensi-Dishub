@@ -7,10 +7,18 @@ export type EmployeeRole = 'CS' | 'Security'
 export type Category = 'CS' | 'Security'
 export type AttendanceType = 'masuk' | 'istirahat' | 'pulang'
 export type ShiftType = 'Shift 1' | 'Shift 2' | 'Shift 3' | 'Shift I' | 'Shift II' | 'Shift III'
+/**
+ * Friday-specific shift variant identifiers.
+ * Used as the primary internal identity for Friday Security shifts.
+ * - shift_1_reguler : Jumat pagi, pulang 16.00 (bukan lintas hari)
+ * - shift_1_panjang : Jumat pagi, pulang 19.00 (bukan lintas hari; fallback untuk record lama "Shift I")
+ * - shift_2_malam   : Jumat malam, pulang 07.00 H+1 (lintas hari; fallback untuk record lama "Shift II")
+ */
+export type FridaySecurityShift = 'shift_1_reguler' | 'shift_1_panjang' | 'shift_2_malam'
 /** Weekend session labels used exclusively for Security on Sabtu–Minggu */
 export type WeekendSession = 'Sesi Pagi' | 'Sesi Malam'
-/** All possible Security shift/session values (weekday + weekend) */
-export type SecurityShiftOption = ShiftType | WeekendSession | string
+/** All possible Security shift/session values (weekday + friday + weekend) */
+export type SecurityShiftOption = ShiftType | FridaySecurityShift | WeekendSession | string
 export type AttendanceStatus = 'tepat_waktu' | 'terlambat'
 export type ReviewStatus = 'belum_diperiksa' | 'sudah_diperiksa' | 'perlu_tindak_lanjut'
 
@@ -53,6 +61,7 @@ export interface EmployeeProfile {
   avatar_url?: string | null
   employee_role: EmployeeRole
   default_shift: SecurityShiftOption | null
+  friday_shift?: SecurityShiftOption | null
   is_active: boolean
   notes: string | null
   created_at: string

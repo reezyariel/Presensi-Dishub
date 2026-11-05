@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import AvatarImage from '../../components/common/AvatarImage'
+import { getSecurityShiftDisplayLabel } from '../../lib/scheduleEngine'
 
 export default function ProfilePage() {
   const navigate = useNavigate()
@@ -123,7 +124,7 @@ export default function ProfilePage() {
             </div>
             {role === 'Security' && employeeProfile?.default_shift && (
               <span className="text-[11px] text-neutral-400 font-medium">
-                {employeeProfile.default_shift}
+                {getSecurityShiftDisplayLabel(employeeProfile.default_shift)}
               </span>
             )}
           </div>

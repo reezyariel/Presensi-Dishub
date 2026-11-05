@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
-import { formatJakartaTime, todayJakarta } from '../../lib/scheduleEngine'
+import { formatJakartaTime, todayJakarta, getSecurityShiftDisplayLabel } from '../../lib/scheduleEngine'
 import type { AttendanceRecord } from '../../types/attendance'
 
 const PAGE_SIZE = 15
@@ -249,7 +249,7 @@ export default function AttendanceHistoryPage() {
                             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${rec.category === 'CS' ? 'bg-neutral-100 text-neutral-700 border border-neutral-200' : 'bg-neutral-900 text-white'}`}>
                               {rec.category}
                             </span>
-                            {rec.shift && <span className="text-neutral-500 text-[10px]">{rec.shift}</span>}
+                            {rec.shift && <span className="text-neutral-500 text-[10px]">{getSecurityShiftDisplayLabel(rec.shift, rec.work_date)}</span>}
                           </div>
                         </td>
                         <td className="px-6 py-3.5 font-mono text-neutral-700">{time}</td>
@@ -327,7 +327,7 @@ export default function AttendanceHistoryPage() {
                           <div>
                             <p className="text-xs font-bold text-neutral-900">{typeLabel(rec.attendance_type)}</p>
                             <p className="text-[11px] text-neutral-500 font-mono mt-0.5">
-                              {time} {rec.shift ? `· ${rec.shift}` : ''}
+                              {time} {rec.shift ? `· ${getSecurityShiftDisplayLabel(rec.shift, rec.work_date)}` : ''}
                             </p>
                           </div>
                         </div>
