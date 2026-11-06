@@ -317,8 +317,8 @@ export function SecurityShiftStatusCard({
               <Camera size={19} />
               <span>
                 {isLate
-                  ? `Ambil Foto & Absen Masuk (Terlambat) (${selectedShift})`
-                  : `Ambil Foto & Absen Masuk (${selectedShift})`}
+                  ? `Ambil Foto & Absen Masuk (Terlambat) (${getSecurityShiftDisplayLabel(selectedShift, workDateStr)})`
+                  : `Ambil Foto & Absen Masuk (${getSecurityShiftDisplayLabel(selectedShift, workDateStr)})`}
               </span>
             </button>
           ) : canTakePulang ? (
@@ -327,7 +327,7 @@ export function SecurityShiftStatusCard({
               className="w-full py-4 bg-neutral-900 hover:bg-black text-white font-bold text-sm rounded-xl flex items-center justify-center gap-3 transition-all shadow-sm active:scale-[0.99]"
             >
               <Camera size={19} />
-              <span>Ambil Foto &amp; Absen Pulang ({selectedShift})</span>
+              <span>Ambil Foto &amp; Absen Pulang ({getSecurityShiftDisplayLabel(selectedShift, workDateStr)})</span>
             </button>
           ) : status === 'selesai' ? (
             <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-200 flex items-center justify-between">

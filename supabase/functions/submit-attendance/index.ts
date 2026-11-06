@@ -694,8 +694,11 @@ serve(async (req: Request) => {
       for (const row of scheduleSettingsRows) {
         if (row.setting_key === 'cs_schedule' && row.setting_value) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const sv = row.setting_value as any
-          const m = sv.masuk
+          let sv = row.setting_value as any
+          if (typeof sv === 'string') {
+            try { sv = JSON.parse(sv) } catch {}
+          }
+          const m = sv?.masuk
           if (m) {
             csOpen = m.open ?? m.start ?? csOpen
             csDeadline = m.ontime_deadline ?? m.end ?? csDeadline
@@ -703,8 +706,14 @@ serve(async (req: Request) => {
           }
         } else if (row.setting_key === 'security_schedule' && row.setting_value) {
           secScheduleData = row.setting_value
+          if (typeof secScheduleData === 'string') {
+            try { secScheduleData = JSON.parse(secScheduleData) } catch {}
+          }
         } else if (row.setting_key === 'security_weekend_schedule' && row.setting_value) {
           secWeekendData = row.setting_value
+          if (typeof secWeekendData === 'string') {
+            try { secWeekendData = JSON.parse(secWeekendData) } catch {}
+          }
         }
       }
     }
@@ -957,8 +966,8 @@ serve(async (req: Request) => {
         timings = getDefaultShiftTimings(workDayOfWeek, canonicalShift)
       }
 
-      // Thu/Fri offset (only for Mon–Fri, never weekend)
-      const shiftOffset = (!isWeekendDay && isShiftedDay) ? (Number(secScheduleData?.thursday_friday_shift_minutes) || 0) : 0
+      // Thu offset (only for Mon–Thu, Friday has dedicated day group, never weekend)
+      const shiftOffset = (!isWeekendDay && !isFridayDay && isShiftedDay) ? (Number(secScheduleData?.thursday_friday_shift_minutes) || 0) : 0
       if (shiftOffset > 0) {
         const fmtMin = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2,'0')}:${String(m % 60).padStart(2,'0')}`
         timings = {
