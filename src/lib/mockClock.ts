@@ -33,6 +33,76 @@ export interface MockClockPreset {
 
 export const DEV_CLOCK_PRESETS: MockClockPreset[] = [
   {
+    id: 'thu_shift3_in',
+    label: 'Kamis 19:45 WIB',
+    sublabel: 'Masuk Shift III Kamis Malam',
+    iso: '2026-11-05T19:45:00+07:00',
+    description: 'Jendela check-in Shift III Kamis malam (19.30–20.00 WIB). Mulai dinas malam lintas hari.',
+  },
+  {
+    id: 'fri_shift3_before_out',
+    label: 'Jumat 07:15 WIB (H+1)',
+    sublabel: 'Sebelum Checkout Shift III',
+    iso: '2026-11-06T07:15:00+07:00',
+    description: '15 menit sebelum checkout Shift III Kamis dibuka (07.30 WIB). Tombol disabled menunggu jadwal.',
+  },
+  {
+    id: 'fri_shift3_out_exact',
+    label: 'Jumat 07:30 WIB (H+1)',
+    sublabel: 'Awal Checkout Shift III',
+    iso: '2026-11-06T07:30:00+07:00',
+    description: 'Tepat awal dibukanya checkout Shift III Kamis (07.30 WIB). Tombol check-out aktif.',
+  },
+  {
+    id: 'fri_shift3_out',
+    label: 'Jumat 07:45 WIB (H+1)',
+    sublabel: 'Checkout Shift III Kamis Malam',
+    iso: '2026-11-06T07:45:00+07:00',
+    description: 'Jendela checkout Shift III Kamis malam (07.30–08.00 WIB H+1). Menyelesaikan shift semalam.',
+  },
+  {
+    id: 'fri_shift3_out_end',
+    label: 'Jumat 08:00 WIB (H+1)',
+    sublabel: 'Batas Akhir Checkout Shift III',
+    iso: '2026-11-06T08:00:00+07:00',
+    description: 'Tepat batas akhir checkout Shift III Kamis (08.00 WIB). Tombol check-out masih aktif.',
+  },
+  {
+    id: 'fri_shift3_after_out',
+    label: 'Jumat 08:15 WIB (H+1)',
+    sublabel: 'Setelah Checkout Shift III Ditutup',
+    iso: '2026-11-06T08:15:00+07:00',
+    description: 'Setelah jendela checkout Shift III Kamis ditutup (> 08.00 WIB). Status window_closed.',
+  },
+  {
+    id: 'fri_shift1_in',
+    label: 'Jumat 07:15 WIB',
+    sublabel: 'Masuk Shift I (Reguler & Panjang)',
+    iso: '2026-11-06T07:15:00+07:00',
+    description: 'Jendela check-in Shift I Jumat (07.00–07.30 WIB). Kedua varian pagi aktif.',
+  },
+  {
+    id: 'fri_shift1_reg_out',
+    label: 'Jumat 16:15 WIB',
+    sublabel: 'Pulang Shift I Reguler',
+    iso: '2026-11-06T16:15:00+07:00',
+    description: 'Jendela pulang Shift I Reguler Jumat (16.00–16.30 WIB).',
+  },
+  {
+    id: 'fri_shift2_in',
+    label: 'Jumat 19:15 WIB',
+    sublabel: 'Masuk Shift II Malam / Pulang Shift I Panjang',
+    iso: '2026-11-06T19:15:00+07:00',
+    description: 'Jendela masuk Shift II Malam (19.00–19.30 WIB) & batas akhir pulang Shift I Panjang.',
+  },
+  {
+    id: 'sat_shift2_out',
+    label: 'Sabtu 07:15 WIB (H+1)',
+    sublabel: 'Checkout Shift II Malam dari Jumat',
+    iso: '2026-11-07T07:15:00+07:00',
+    description: 'Jendela checkout Shift II Malam Jumat (07.00–07.30 WIB H+1).',
+  },
+  {
     id: 'sun_shift2_in',
     label: 'Minggu 20:15 WIB',
     sublabel: 'Check-in Shift II Minggu',
@@ -75,7 +145,11 @@ const listeners = new Set<() => void>()
 
 function isDev(): boolean {
   try {
-    return Boolean(import.meta.env?.DEV)
+    if (typeof import.meta !== 'undefined' && import.meta.env && typeof import.meta.env.DEV === 'boolean') {
+      return import.meta.env.DEV
+    }
+    const proc = (globalThis as unknown as { process?: { env?: Record<string, string> } }).process
+    return typeof proc !== 'undefined' && proc.env?.NODE_ENV !== 'production'
   } catch {
     return false
   }

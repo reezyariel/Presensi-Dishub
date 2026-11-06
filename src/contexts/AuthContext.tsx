@@ -297,9 +297,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     })
 
+    // 3. Listen for mock role & testing mode changes (Dev / Sandbox only)
+    const handleMockStateChanged = async () => {
+      if (!isMounted) return
+      setIsLoading(true)
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user) {
+        const { profile: p, employeeProfile: ep, role: r, isAdmin: adm, error: err } = await loadUserProfile(session.user)
+        if (isMounted) applyAuthData(session.user, p, ep, r, adm, err)
+      } else {
+        if (isMounted) applyAuthData(null, null, null, null, false, null)
+      }
+    }
+
+    window.addEventListener('sipaten_mock_role_changed', handleMockStateChanged)
+    window.addEventListener('sipaten_testing_mode_changed', handleMockStateChanged)
+
     return () => {
       isMounted = false
       subscription.unsubscribe()
+      window.removeEventListener('sipaten_mock_role_changed', handleMockStateChanged)
+      window.removeEventListener('sipaten_testing_mode_changed', handleMockStateChanged)
     }
   }, [loadUserProfile, applyAuthData])
 

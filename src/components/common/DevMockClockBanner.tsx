@@ -2,7 +2,7 @@
 // SIPATEN — Development Mock Clock Banner & Floating Controller
 // Rendered ONLY in development (import.meta.env.DEV).
 // Allows toggling mock time, switching presets (e.g. Minggu 20:15,
-// Senin 08:15), and custom time for testing overnight shifts.
+// Jumat 07:15, Senin 08:15), and enabling Mock Testing Sandbox.
 //
 // In production builds, this component compiles to null.
 // ============================================================
@@ -10,7 +10,7 @@
 import React, { useState, useEffect } from 'react'
 import {
   Clock, AlertTriangle, RotateCcw, ChevronDown, ChevronUp,
-  Sliders, Check, ShieldAlert
+  Sliders, Check, ShieldAlert, Sparkles, Database, Shield, Lock
 } from 'lucide-react'
 import {
   isMockClockActive,
@@ -22,6 +22,13 @@ import {
   subscribeToMockClock,
   TIMEZONE,
 } from '../../lib/mockClock'
+import {
+  isTestingModeActive,
+  setTestingModeActive,
+  getActiveMockRole,
+  setActiveMockRole,
+  type MockRole,
+} from '../../lib/mockSandbox'
 import { formatInTimeZone } from 'date-fns-tz'
 
 export default function DevMockClockBanner() {
@@ -36,6 +43,8 @@ export default function DevMockClockBanner() {
   const [isExpanded, setIsExpanded] = useState(false)
   const [customDateTime, setCustomDateTime] = useState('')
   const [isTicking, setIsTicking] = useState(false)
+  const [isSandboxActive, setIsSandboxActive] = useState(() => isTestingModeActive())
+  const [activeRole, setActiveRoleState] = useState<MockRole>(() => getActiveMockRole())
 
   useEffect(() => {
     const unsub = subscribeToMockClock(() => {
@@ -48,9 +57,19 @@ export default function DevMockClockBanner() {
       setCurrentTime(getEffectiveNow())
     }, 1000)
 
+    const handleTestingChange = () => {
+      setIsSandboxActive(isTestingModeActive())
+      setActiveRoleState(getActiveMockRole())
+    }
+
+    window.addEventListener('sipaten_testing_mode_changed', handleTestingChange)
+    window.addEventListener('sipaten_mock_role_changed', handleTestingChange)
+
     return () => {
       unsub()
       clearInterval(interval)
+      window.removeEventListener('sipaten_testing_mode_changed', handleTestingChange)
+      window.removeEventListener('sipaten_mock_role_changed', handleTestingChange)
     }
   }, [])
 
@@ -62,7 +81,6 @@ export default function DevMockClockBanner() {
   const handleApplyCustom = (e: React.FormEvent) => {
     e.preventDefault()
     if (!customDateTime) return
-    // customDateTime is "YYYY-MM-DDTHH:mm", append seconds +07:00
     const isoWithTz = `${customDateTime}:00+07:00`
     setMockClock(isoWithTz, { ticking: isTicking })
     setIsExpanded(false)
@@ -71,6 +89,23 @@ export default function DevMockClockBanner() {
   const handleResetToRealTime = () => {
     clearMockClock()
     setIsExpanded(false)
+  }
+
+  const handleToggleSandbox = () => {
+    const nextState = !isSandboxActive
+    setTestingModeActive(nextState, activeRole)
+    setIsSandboxActive(nextState)
+    window.location.reload()
+  }
+
+  const handleSwitchMockRole = (role: MockRole) => {
+    setActiveMockRole(role)
+    setActiveRoleState(role)
+    if (!isSandboxActive) {
+      setTestingModeActive(true, role)
+      setIsSandboxActive(true)
+    }
+    window.location.reload()
   }
 
   const formattedJakartaNow = formatInTimeZone(currentTime, TIMEZONE, 'EEEE, dd MMM yyyy — HH:mm:ss')
@@ -84,8 +119,8 @@ export default function DevMockClockBanner() {
         {/* Banner Bar */}
         <div
           className={`rounded-2xl border shadow-2xl backdrop-blur-md transition-all duration-300 overflow-hidden ${
-            active
-              ? 'bg-amber-950/90 text-amber-100 border-amber-500/50 shadow-amber-900/30 ring-1 ring-amber-400/30'
+            active || isSandboxActive
+              ? 'bg-amber-950/95 text-amber-100 border-amber-500/50 shadow-amber-900/40 ring-1 ring-amber-400/30'
               : 'bg-neutral-900/90 text-neutral-200 border-neutral-700/60 shadow-black/40'
           }`}
         >
@@ -100,8 +135,15 @@ export default function DevMockClockBanner() {
                 }`}
               >
                 {active ? <AlertTriangle size={12} className="stroke-[2.5]" /> : <Clock size={12} />}
-                {active ? 'Simulasi Waktu DEV Aktif' : 'Dev Clock (Waktu Nyata)'}
+                {active ? 'DevClock Aktif' : 'DevClock (Waktu Nyata)'}
               </span>
+
+              {isSandboxActive && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold text-[10px]">
+                  <Database size={11} />
+                  <span>Sandbox ON ({activeRole})</span>
+                </span>
+              )}
 
               <div className="truncate">
                 <span className="font-semibold text-white">
@@ -128,13 +170,13 @@ export default function DevMockClockBanner() {
                 type="button"
                 onClick={() => setIsExpanded(!isExpanded)}
                 className={`px-3 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
-                  active
+                  active || isSandboxActive
                     ? 'bg-amber-400 hover:bg-amber-300 text-neutral-950 shadow-sm'
                     : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-100 border border-neutral-600'
                 }`}
               >
                 <Sliders size={12} />
-                <span>{isExpanded ? 'Tutup Kontrol' : 'Atur Waktu'}</span>
+                <span>{isExpanded ? 'Tutup Kontrol' : 'Atur Waktu & Sandbox'}</span>
                 {isExpanded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
               </button>
             </div>
@@ -142,11 +184,78 @@ export default function DevMockClockBanner() {
 
           {/* Expandable Control Panel */}
           {isExpanded && (
-            <div className="border-t border-white/10 px-4 py-3 bg-black/40 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-200 text-xs">
+            <div className="border-t border-white/10 px-4 py-3 bg-black/50 space-y-3.5 animate-in fade-in slide-in-from-bottom-2 duration-200 text-xs">
+              {/* Sandbox Control Row */}
+              <div className="p-3 rounded-xl bg-neutral-900 border border-amber-500/30 space-y-2">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <Database size={16} className="text-amber-400" />
+                    <div>
+                      <span className="font-bold text-white text-xs block">
+                        Mode Testing Lokal (Offline Mock Sandbox)
+                      </span>
+                      <span className="text-[10px] text-neutral-400">
+                        {isSandboxActive
+                          ? 'Aktif: Presensi, foto, dan database disimulasikan lokal. 0 request ke Supabase Production.'
+                          : 'Nonaktif: Terhubung ke database Supabase nyata.'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleToggleSandbox}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      isSandboxActive
+                        ? 'bg-red-600 hover:bg-red-700 text-white'
+                        : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
+                    }`}
+                  >
+                    {isSandboxActive ? 'Nonaktifkan Sandbox' : 'Aktifkan Mode Testing (Sandbox)'}
+                  </button>
+                </div>
+
+                {isSandboxActive && (
+                  <div className="pt-2 border-t border-neutral-800 flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] text-neutral-400 font-semibold">Simulasikan Role:</span>
+                    <button
+                      type="button"
+                      onClick={() => handleSwitchMockRole('admin')}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold flex items-center gap-1 cursor-pointer ${
+                        activeRole === 'admin' ? 'bg-amber-400 text-neutral-950' : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
+                      }`}
+                    >
+                      <Lock size={11} />
+                      Admin
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSwitchMockRole('Security')}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold flex items-center gap-1 cursor-pointer ${
+                        activeRole === 'Security' ? 'bg-amber-400 text-neutral-950' : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
+                      }`}
+                    >
+                      <Shield size={11} />
+                      Security (Ahmad Dani)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSwitchMockRole('CS')}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold flex items-center gap-1 cursor-pointer ${
+                        activeRole === 'CS' ? 'bg-amber-400 text-neutral-950' : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
+                      }`}
+                    >
+                      <Sparkles size={11} />
+                      CS (Budi Santoso)
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {/* Presets */}
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 mb-2">
-                  Preset Skenario Pengujian (Lintas Hari Security):
+                  Preset Skenario Pengujian Jadwal & Lintas Hari:
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {DEV_CLOCK_PRESETS.map(preset => {
@@ -208,13 +317,10 @@ export default function DevMockClockBanner() {
                 <ShieldAlert size={16} className="text-amber-400 shrink-0 mt-0.5" />
                 <div>
                   <strong className="text-white block font-semibold mb-0.5">
-                    Catatan Arsitektur Waktu Server (Authoritative Server Time):
+                    Isolasi Lingkungan Pengujian:
                   </strong>
                   <p className="text-neutral-400 leading-relaxed text-[10px]">
-                    Simulasi waktu ini mengatur jam frontend (React, scheduleEngine, dan TakeAttendanceModal) di localhost
-                    sehingga Anda dapat melihat transisi status tombol (&ldquo;can_masuk&rdquo; vs &ldquo;can_pulang&rdquo;) dan countdown secara langsung.
-                    Supabase Edge Function (<code className="text-amber-300">submit-attendance</code>) di server tetap memvalidasi waktu server asli.
-                    Jika Anda menekan tombol kirim di luar jadwal server yang sebenarnya, server akan menolak dengan galat resmi.
+                    Saat <strong>Mode Sandbox</strong> aktif, simulasi presensi, unggah foto, dan database berjalan sepenuhnya di browser/memori lokal. DevClock bertindak sebagai waktu otoritatif untuk menguji semua shift tanpa menyentuh database Supabase Production.
                   </p>
                 </div>
               </div>

@@ -24,6 +24,8 @@ import {
   getSecurityShiftDisplayLabel,
   isOvernightSecurityShift,
   getAutoSelectSecurityShift,
+  getSecurityAvailableOptions,
+  shiftsCompatible,
   calculate30DayRecap,
   calculateSecurity30DayRecap,
   buildSecurityShiftSessions,
@@ -85,6 +87,10 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
   const [selectedShift, setSelectedShift] = useState<SecurityShiftOption | null>(null)
   // Shift selection modal state (Security masuk only)
   const [isShiftPickerOpen, setIsShiftPickerOpen] = useState(false)
+  const [completedOvernightInfo, setCompletedOvernightInfo] = useState<{
+    masuk: AttendanceRecord
+    pulang: AttendanceRecord
+  } | null>(null)
 
   // Tick setiap detik — saat mock clock aktif, getEffectiveNow() mengembalikan waktu simulasi
   useEffect(() => {
@@ -157,26 +163,100 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
           return r.category === category && (r.normalized_name === normName || r.employee_name === employeeName)
         })
 
-        // For Security: prefer records from today. If no masuk today but Shift III masuk was yesterday,
-        // use yesterday's masuk (and pulang) as the "current" session.
-        let masuk = filtered.find(r => r.attendance_type === 'masuk' && r.work_date === today) || null
-        let istirahat = filtered.find(r => r.attendance_type === 'istirahat' && r.work_date === today) || null
-        let pulang = filtered.find(r => r.attendance_type === 'pulang' && r.work_date === today) || null
+        let masuk: AttendanceRecord | null = null
+        let istirahat: AttendanceRecord | null = null
+        let pulang: AttendanceRecord | null = null
+        let isOvernightCompleted = false
 
-        if (category === 'Security' && !masuk) {
-          // Check yesterday for an ACTIVE (uncompleted) overnight session (e.g. Shift III Mon-Thu, Shift II Fri/Sat/Sun)
-          const yMasuk = filtered.find(r => r.attendance_type === 'masuk' && r.work_date === yesterdayStr) || null
-          if (yMasuk && isOvernightSecurityShift(yesterdayStr, yMasuk.shift)) {
-            const yPulang = filtered.find(r => r.attendance_type === 'pulang' && r.work_date === yesterdayStr && (r.shift === yMasuk.shift || !r.shift)) || null
-            if (!yPulang) {
-              // Yesterday's overnight shift is still active and awaiting checkout.
-              // Keep it active so the guard can/must complete their checkout before starting a new shift.
-              masuk = yMasuk
-              pulang = null
+        if (category === 'Security') {
+          // 1. Is there an active on-duty (uncompleted) shift on today?
+          // (A masuk record on today where NO matching pulang exists)
+          const uncompletedToday = filtered.find(r =>
+            r.attendance_type === 'masuk' &&
+            r.work_date === today &&
+            !filtered.some(p =>
+              p.attendance_type === 'pulang' &&
+              p.work_date === today &&
+              (p.check_in_record_id === r.id || shiftsCompatible(p.shift, r.shift))
+            )
+          ) || null
+
+          if (uncompletedToday) {
+            masuk = uncompletedToday
+            pulang = null
+            setCompletedOvernightInfo(null)
+          } else {
+            // 2. Check yesterday for an active uncompleted overnight shift (e.g. Shift III Mon-Thu, Shift II Fri/Sat/Sun)
+            const yMasuk = filtered.find(r => r.attendance_type === 'masuk' && r.work_date === yesterdayStr && isOvernightSecurityShift(yesterdayStr, r.shift)) || null
+            if (yMasuk) {
+              const yPulang = filtered.find(r =>
+                r.attendance_type === 'pulang' &&
+                r.work_date === yesterdayStr &&
+                (r.check_in_record_id === yMasuk.id || shiftsCompatible(r.shift, yMasuk.shift) || !r.shift)
+              ) || null
+
+              if (!yPulang) {
+                // Yesterday's overnight shift is still active and awaiting checkout H+1!
+                masuk = yMasuk
+                pulang = null
+                setCompletedOvernightInfo(null)
+              } else {
+                // Yesterday's overnight shift is finished and complete!
+                setCompletedOvernightInfo({ masuk: yMasuk, pulang: yPulang })
+                isOvernightCompleted = true
+              }
+            } else {
+              setCompletedOvernightInfo(null)
             }
-            // If yPulang exists, yesterday's overnight shift is finished and complete!
-            // It must NOT block today's new shift check-in or mark today as "selesai".
+
+            // 3. If no active uncompleted shift from yesterday or today:
+            if (!masuk) {
+              const autoShift = getAutoSelectSecurityShift(today, effectiveNow)
+              const targetShift = autoShift || (selectedShift && getSecurityAvailableOptions(today).includes(selectedShift) ? selectedShift : null)
+
+              if (targetShift) {
+                // Look for record belonging to this target shift on today
+                const targetMasuk = filtered.find(r =>
+                  r.attendance_type === 'masuk' &&
+                  r.work_date === today &&
+                  shiftsCompatible(r.shift, targetShift)
+                ) || null
+
+                if (targetMasuk) {
+                  masuk = targetMasuk
+                  pulang = filtered.find(p =>
+                    p.attendance_type === 'pulang' &&
+                    p.work_date === today &&
+                    (p.check_in_record_id === targetMasuk.id || shiftsCompatible(p.shift, targetMasuk.shift))
+                  ) || null
+                } else {
+                  masuk = null
+                  pulang = null
+                }
+              } else {
+                // No specific target shift window active: check if any completed shift exists on today
+                const todayMasukList = filtered.filter(r => r.attendance_type === 'masuk' && r.work_date === today)
+                if (todayMasukList.length > 0) {
+                  const latestMasuk = todayMasukList[0]
+                  masuk = latestMasuk
+                  pulang = filtered.find(p =>
+                    p.attendance_type === 'pulang' &&
+                    p.work_date === today &&
+                    (p.check_in_record_id === latestMasuk.id || shiftsCompatible(p.shift, latestMasuk.shift))
+                  ) || null
+                } else {
+                  masuk = null
+                  pulang = null
+                }
+              }
+            }
           }
+        } else {
+          // CS logic (no shifts)
+          masuk = filtered.find(r => r.attendance_type === 'masuk' && r.work_date === today) || null
+          istirahat = filtered.find(r => r.attendance_type === 'istirahat' && r.work_date === today) || null
+          pulang = filtered.find(r => r.attendance_type === 'pulang' && r.work_date === today) || null
+          setCompletedOvernightInfo(null)
         }
 
         setTodayRecords({ masuk, istirahat, pulang })
@@ -187,9 +267,15 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
           const autoShift = getAutoSelectSecurityShift(today, effectiveNow)
           if (autoShift) {
             setSelectedShift(autoShift)
-          } else if (selectedShift && isOvernightSecurityShift(yesterdayStr, selectedShift) && yesterdayStr !== today) {
-            // Clear leftover overnight shift from yesterday if it's no longer the active shift
-            setSelectedShift(null)
+          } else {
+            const availableToday = getSecurityAvailableOptions(today)
+            if (
+              isOvernightCompleted ||
+              (selectedShift && !availableToday.includes(selectedShift as any)) ||
+              (selectedShift && isOvernightSecurityShift(yesterdayStr, selectedShift) && yesterdayStr !== today)
+            ) {
+              setSelectedShift(null)
+            }
           }
         }
       }
@@ -648,6 +734,23 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
 
         {/* ── LEFT COLUMN (2/3 width on desktop): Main attendance + Weekly recap ── */}
         <div className="lg:col-span-2 space-y-5">
+
+          {/* Banner konfirmasi shift overnight semalam selesai */}
+          {category === 'Security' && completedOvernightInfo && !todayRecords.masuk && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-start gap-3 shadow-xs">
+              <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Check size={16} strokeWidth={2.5} />
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-bold text-emerald-950">
+                  Shift Semalam Telah Selesai ({getSecurityShiftDisplayLabel(completedOvernightInfo.masuk.shift, completedOvernightInfo.masuk.work_date)})
+                </p>
+                <p className="text-[11px] text-emerald-800 mt-0.5 leading-relaxed">
+                  Presensi pulang tercatat pukul {formatJakartaTime(new Date(completedOvernightInfo.pulang.recorded_at))} WIB. Rekapitulasi dan riwayat telah diperbarui. Silakan pilih shift dinas baru di bawah ini jika Anda bertugas hari ini.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* A. Main Attendance Card */}
           {category === 'Security' ? (

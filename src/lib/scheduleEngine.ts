@@ -307,6 +307,22 @@ export function canonicalShiftName(shift: string | null | undefined): string {
 }
 
 /**
+ * Checks if two security shift identifiers are compatible/refer to the same shift session.
+ * Supports legacy aliases ('Shift 1' vs 'Shift I') and Friday variants
+ * ('Shift I' <-> 'shift_1_panjang', 'Shift II' <-> 'shift_2_malam').
+ */
+export function shiftsCompatible(s1: string | null | undefined, s2: string | null | undefined): boolean {
+  if (!s1 || !s2) return false
+  if (s1 === s2) return true
+  const c1 = canonicalShiftName(s1)
+  const c2 = canonicalShiftName(s2)
+  if (c1 === c2) return true
+  if ((c1 === 'Shift I' && c2 === 'shift_1_panjang') || (c2 === 'Shift I' && c1 === 'shift_1_panjang')) return true
+  if ((c1 === 'Shift II' && c2 === 'shift_2_malam') || (c2 === 'Shift II' && c1 === 'shift_2_malam')) return true
+  return false
+}
+
+/**
  * Returns human-readable display label for any security shift option or internal ID.
  * Maps Friday internal IDs ('shift_1_reguler', 'shift_1_panjang', 'shift_2_malam')
  * to standard user-facing labels:

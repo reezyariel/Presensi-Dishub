@@ -387,13 +387,16 @@ export function SecurityScheduleCard({
   canChangeShift = true,
 }: SecurityScheduleCardProps) {
   const shiftList = getSecurityAvailableOptions(workDateStr)
-  const [activeTab, setActiveTab] = useState<SecurityShiftOption>(currentShift || shiftList[0])
+  const validShift = (currentShift && shiftList.includes(currentShift)) ? currentShift : shiftList[0]
+  const [activeTab, setActiveTab] = useState<SecurityShiftOption>(validShift)
 
   useEffect(() => {
-    if (currentShift) {
+    if (currentShift && shiftList.includes(currentShift)) {
       setActiveTab(currentShift)
+    } else {
+      setActiveTab(shiftList[0])
     }
-  }, [currentShift])
+  }, [currentShift, workDateStr])
 
   const secSettings = getSecurityScheduleSync()
   const offsetMin = secSettings.thursday_friday_shift_minutes || 0
@@ -419,21 +422,18 @@ export function SecurityScheduleCard({
           sub  = 'Sesi Akhir Pekan Malam (Lintas Hari)'
         }
       } else if (isFri) {
-        if (tab === 'shift_1_reguler') {
+        if (item.id === 'shift_1_reguler' || tab === 'shift_1_reguler') {
           name = 'Shift I — Reguler'
           sub  = 'Shift Jumat Reguler (07.00–16.00 WIB)'
-        } else if (tab === 'shift_1_panjang') {
+        } else if (item.id === 'shift_1_panjang' || tab === 'shift_1_panjang' || tab === 'Shift I' || tab === 'Shift 1') {
           name = 'Shift I — Panjang (12 Jam)'
           sub  = 'Shift Jumat Panjang 12 Jam (07.00–19.00 WIB)'
-        } else if (tab === 'shift_2_malam') {
+        } else if (item.id === 'shift_2_malam' || tab === 'shift_2_malam' || tab === 'Shift II' || tab === 'Shift 2') {
           name = 'Shift II — Malam'
           sub  = 'Shift Jumat Malam (19.00–07.00 WIB H+1)'
-        } else if (tab === 'Shift I' || tab === 'Shift 1') {
-          name = 'Shift I — Panjang (12 Jam)'
-          sub  = 'Shift Jumat Panjang 12 Jam (07.00–19.00 WIB)'
         } else {
-          name = 'Shift II — Malam'
-          sub  = 'Shift Jumat Malam (19.00–07.00 WIB H+1)'
+          name = item.label || getSecurityShiftDisplayLabel(item.id as SecurityShiftOption, workDateStr)
+          sub  = 'Shift Operasional Jumat'
         }
       } else {
         name = tab as string
