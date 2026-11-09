@@ -193,7 +193,10 @@ serve(async (req: Request) => {
     const employee_name = typeof body.employee_name === 'string' ? body.employee_name.trim() : ''
     const category = body.category as string
     const attendance_type = body.attendance_type as string
-    const shift = (typeof body.shift === 'string' && body.shift.trim() ? body.shift.trim() : null) as string | null
+    // `shift` is declared as `let` because for Security check-out it is authoritatively
+    // overwritten at line ~705 from the matched masuk record (server-side resolution),
+    // ensuring the recorded shift always matches the check-in record regardless of client input.
+    let shift = (typeof body.shift === 'string' && body.shift.trim() ? body.shift.trim() : null) as string | null
     const check_in_record_id = (typeof body.check_in_record_id === 'string' && body.check_in_record_id.trim()) ? body.check_in_record_id.trim() : null
     const selfie_base64 = typeof body.selfie_base64 === 'string' ? body.selfie_base64 : ''
     const idempotency_key = typeof body.idempotency_key === 'string' ? body.idempotency_key.trim() : ''
