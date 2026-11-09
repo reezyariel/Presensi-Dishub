@@ -840,7 +840,7 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
                         {todayRecords.masuk.shift && (
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-800 border border-neutral-200">
                             <Clock size={10} />
-                            {todayRecords.masuk.shift}
+                            {getSecurityShiftDisplayLabel(todayRecords.masuk.shift, todayRecords.masuk.work_date)}
                           </span>
                         )}
                       </div>
@@ -1091,7 +1091,7 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
                                   <span>{typeLabel}</span>
                                   {rec.shift && (
                                     <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-700 border border-neutral-200">
-                                      {rec.shift}
+                                      {getSecurityShiftDisplayLabel(rec.shift, rec.work_date)}
                                     </span>
                                   )}
                                 </div>
@@ -1130,7 +1130,7 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
                             <div>
                               <p className="text-xs font-bold text-neutral-900">{typeLabel}</p>
                               <p className="text-[11px] text-neutral-400 mt-0.5">
-                                {rec.work_date} · {timeStr} {rec.shift ? `· ${rec.shift}` : ''}
+                                {rec.work_date} · {timeStr} {rec.shift ? `· ${getSecurityShiftDisplayLabel(rec.shift, rec.work_date)}` : ''}
                               </p>
                             </div>
                           </div>

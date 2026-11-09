@@ -242,14 +242,15 @@ serve(async (req: Request) => {
         )
       }
       const validShifts = [
+        'shift_1', 'shift_2', 'shift_3',
+        'shift_1_reguler', 'shift_1_panjang', 'shift_2_malam',
         'Shift 1', 'Shift 2', 'Shift 3',
         'Shift I', 'Shift II', 'Shift III',
         'Sesi Pagi', 'Sesi Malam',
-        'shift_1_reguler', 'shift_1_panjang', 'shift_2_malam'
       ]
       if (!shift || !validShifts.includes(shift)) {
         return new Response(
-          JSON.stringify({ error: 'Pilih shift yang valid untuk Security (Shift I, Shift II, Shift III, shift_1_reguler, shift_1_panjang, shift_2_malam).' }),
+          JSON.stringify({ error: 'Pilih shift yang valid untuk Security (shift_1, shift_2, shift_3, shift_1_reguler, shift_1_panjang, shift_2_malam).' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
@@ -489,6 +490,10 @@ serve(async (req: Request) => {
       if (t === 'shift_1_reguler' || t === 'Shift I — Reguler' || t === 'Shift I - Reguler' || t === 'Shift I Reguler') return 'shift_1_reguler'
       if (t === 'shift_1_panjang' || t === 'Shift I — Panjang (12 Jam)' || t === 'Shift I - Panjang (12 Jam)' || t === 'Shift I Panjang') return 'shift_1_panjang'
       if (t === 'shift_2_malam' || t === 'Shift II — Malam' || t === 'Shift II - Malam' || t === 'Shift II Malam') return 'shift_2_malam'
+      // Mon–Thu / weekend internal IDs from day_groups
+      if (t === 'shift_1') return 'Shift I'
+      if (t === 'shift_2') return 'Shift II'
+      if (t === 'shift_3') return 'Shift III'
       if (t === 'Shift 1' || t === 'Shift I' || t === 'Sesi Pagi' || t === 'Shift I — Pagi' || t === 'Shift I - Pagi' || t === 'Shift I Pagi') return 'Shift I'
       if (t === 'Shift 2' || t === 'Shift II' || t === 'Sesi Malam') return 'Shift II'
       if (t === 'Shift 3' || t === 'Shift III') return 'Shift III'
@@ -524,12 +529,12 @@ serve(async (req: Request) => {
     function isOvernightByDayAndShift(dayOfWeek: number, shiftName: string | null): boolean {
       if (!shiftName) return false
       const canon = canonicalize(shiftName)
-      // Senin–Kamis (1–4): Shift III overnight
-      if (dayOfWeek >= 1 && dayOfWeek <= 4) return canon === 'Shift III'
+      // Senin–Kamis (1–4): shift_3 / Shift III overnight
+      if (dayOfWeek >= 1 && dayOfWeek <= 4) return shiftName === 'shift_3' || canon === 'Shift III'
       // Jumat (5): shift_2_malam or Shift II overnight
       if (dayOfWeek === 5) return canon === 'Shift II' || shiftName === 'shift_2_malam'
-      // Sabtu–Minggu (6,0): Shift II / Sesi Malam overnight
-      if (dayOfWeek === 0 || dayOfWeek === 6) return canon === 'Shift II'
+      // Sabtu–Minggu (6,0): shift_2 / Shift II / Sesi Malam overnight
+      if (dayOfWeek === 0 || dayOfWeek === 6) return shiftName === 'shift_2' || canon === 'Shift II'
       return false
     }
 
@@ -963,10 +968,12 @@ serve(async (req: Request) => {
         ? dayGroups[groupKey].shifts.map((s: any) => s.id || canonicalize(s.shift_name))
         : isFridayDay
           ? ['shift_1_reguler', 'shift_1_panjang', 'shift_2_malam']
-          : isWeekendDay ? ['Shift I', 'Shift II'] : ['Shift I', 'Shift II', 'Shift III']
+          : isWeekendDay ? ['shift_1', 'shift_2'] : ['shift_1', 'shift_2', 'shift_3']
 
+      // Allow if the raw shift string or its canonical form matches any configured shift ID or canonical form
       const isAllowedShift = configuredShifts.includes(canonicalShift) ||
         configuredShifts.includes(shiftStr) ||
+        configuredShifts.some(cs => canonicalize(cs) === canonicalShift) ||
         (isFridayDay && (canonicalShift === 'Shift I' || canonicalShift === 'Shift II'))
 
       if (!isAllowedShift) {
@@ -1337,21 +1344,31 @@ serve(async (req: Request) => {
     if (uploadError) {
       console.error('Storage upload error:', uploadError)
       return new Response(
-        JSON.stringify({ error: 'Gagal mengunggah foto selfie ke penyimpanan privat.' }),
+        JSON.stringify({
+          error: 'Gagal mengunggah foto selfie ke penyimpanan privat.',
+          stage: 'storage_upload',
+          error_message: uploadError.message,
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
+    // Helper to validate UUID for PostgreSQL foreign key columns
+    const isValidUUID = (val: unknown): val is string =>
+      typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
 
     // 8. Database Insert with Service Role
     const baseRecordPayload: Record<string, unknown> = {
       employee_name: authoritativeEmployeeName,
       normalized_name: authoritativeNormalizedName,
-      employee_profile_id: matchedEmployee.id,
-      auth_uid: matchedEmployee.auth_uid || (callerUser ? callerUser.id : null),
+      employee_profile_id: isValidUUID(matchedEmployee?.id) ? matchedEmployee.id : null,
+      auth_uid: isValidUUID(matchedEmployee?.auth_uid)
+        ? matchedEmployee.auth_uid
+        : (callerUser && isValidUUID(callerUser.id) ? callerUser.id : null),
       category,
       attendance_type,
       shift: category === 'Security' ? shift : null,
-      check_in_record_id: attendance_type === 'pulang' ? resolvedCheckInRecordId : null,
+      check_in_record_id: (attendance_type === 'pulang' && isValidUUID(resolvedCheckInRecordId)) ? resolvedCheckInRecordId : null,
       work_date: workDate,
       recorded_at: serverNow.toISOString(),
       scheduled_start: scheduledStart,
@@ -1380,26 +1397,69 @@ serve(async (req: Request) => {
       .select()
       .single()
 
-    // If dedicated columns don't exist yet in PostgreSQL schema, fallback to base payload with admin_notes
+    // 8a. Self-healing fallback if database constraint attendance_records_shift_check (code 23514)
+    // has not yet been widened with migration 024. Falls back to canonical shift name ('Shift I', 'Shift II', etc.)
+    if (insertRes.error && insertRes.error.code === '23514' && category === 'Security' && shift) {
+      const canonicalDbShift = canonicalize(shift)
+      if (canonicalDbShift !== shift) {
+        console.warn(`[submit-attendance] Retrying insert with canonical shift "${canonicalDbShift}" due to DB constraint on "${shift}"`)
+        insertRes = await supabase
+          .from('attendance_records')
+          .insert({
+            ...fullPayload,
+            shift: canonicalDbShift,
+          })
+          .select()
+          .single()
+      }
+    }
+
+    // 8b. If dedicated columns don't exist yet in PostgreSQL schema, fallback to base payload with admin_notes
     if (insertRes.error && (insertRes.error.code === 'PGRST204' || insertRes.error.message?.includes('column'))) {
       insertRes = await supabase
         .from('attendance_records')
         .insert(baseRecordPayload)
         .select()
         .single()
+
+      if (insertRes.error && insertRes.error.code === '23514' && category === 'Security' && shift) {
+        const canonicalDbShift = canonicalize(shift)
+        if (canonicalDbShift !== shift) {
+          insertRes = await supabase
+            .from('attendance_records')
+            .insert({
+              ...baseRecordPayload,
+              shift: canonicalDbShift,
+            })
+            .select()
+            .single()
+        }
+      }
     }
 
     if (insertRes.error) {
       // Check for concurrent unique constraint violation
       if (insertRes.error.code === '23505') {
         return new Response(
-          JSON.stringify({ error: 'Presensi ini sudah berhasil dicatat sebelumnya (duplikasi terdeteksi).' }),
+          JSON.stringify({
+            error: 'Presensi ini sudah berhasil dicatat sebelumnya (duplikasi terdeteksi).',
+            stage: 'database_insert',
+            error_code: insertRes.error.code,
+            error_message: insertRes.error.message,
+          }),
           { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
       console.error('DB insert error:', insertRes.error)
       return new Response(
-        JSON.stringify({ error: 'Gagal menyimpan catatan presensi ke database.' }),
+        JSON.stringify({
+          error: 'Gagal menyimpan catatan presensi ke database.',
+          stage: 'database_insert',
+          error_code: insertRes.error.code,
+          error_message: insertRes.error.message,
+          error_details: insertRes.error.details || undefined,
+          error_hint: insertRes.error.hint || undefined,
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }

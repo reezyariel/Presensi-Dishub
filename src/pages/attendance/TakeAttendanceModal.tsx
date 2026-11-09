@@ -246,9 +246,11 @@ export default function TakeAttendanceModal({
 
       const payload = {
         employee_name: employeeName,
+        employee_profile_id: employeeProfile?.id || undefined,
         category,
         attendance_type: attendanceType,
         shift: category === 'Security' ? shift : null,
+        work_date: workDate || undefined,
         check_in_record_id: checkInRecordId || undefined,
         selfie_base64: photoToUpload,
         idempotency_key: idempotencyKey,
@@ -271,7 +273,15 @@ export default function TakeAttendanceModal({
       if (fnError) {
         if (fnError instanceof FunctionsHttpError) {
           try {
-            const errBody = await fnError.context.json() as { error?: string; requires_reason?: boolean }
+            const errBody = await fnError.context.json() as {
+              error?: string
+              requires_reason?: boolean
+              stage?: string
+              error_code?: string
+              error_message?: string
+              error_details?: string
+              error_hint?: string
+            }
             if (errBody?.requires_reason) {
               setServerRequiresReason(true)
               setSubmitError(errBody.error || 'Harap sertakan alasan untuk melanjutkan.')
@@ -279,7 +289,14 @@ export default function TakeAttendanceModal({
               return
             }
             if (errBody?.error) {
-              throw new Error(errBody.error)
+              const diagParts: string[] = []
+              if (errBody.error_code) diagParts.push(`Kode: ${errBody.error_code}`)
+              if (errBody.stage) diagParts.push(`Tahap: ${errBody.stage}`)
+              if (errBody.error_message && errBody.error_message !== errBody.error) {
+                diagParts.push(`Detail: ${errBody.error_message}`)
+              }
+              const diagStr = diagParts.length > 0 ? ` (${diagParts.join(', ')})` : ''
+              throw new Error(`${errBody.error}${diagStr}`)
             }
           } catch (parseErr) {
             // If the error we caught is already the Error we threw above, rethrow it
@@ -295,7 +312,14 @@ export default function TakeAttendanceModal({
           setStep('form')
           return
         }
-        throw new Error(data.error)
+        const diagParts: string[] = []
+        if (data.error_code) diagParts.push(`Kode: ${data.error_code}`)
+        if (data.stage) diagParts.push(`Tahap: ${data.stage}`)
+        if (data.error_message && data.error_message !== data.error) {
+          diagParts.push(`Detail: ${data.error_message}`)
+        }
+        const diagStr = diagParts.length > 0 ? ` (${diagParts.join(', ')})` : ''
+        throw new Error(`${data.error}${diagStr}`)
       }
 
       if (data?.success && data?.data) {

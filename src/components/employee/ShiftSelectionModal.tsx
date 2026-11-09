@@ -93,13 +93,17 @@ export default function ShiftSelectionModal({
     switch (opt) {
       case 'shift_1_reguler':
       case 'shift_1_panjang':
+      case 'shift_1':  // Mon–Thu Shift I / weekend Shift I Pagi
       case 'Shift I':
       case 'Sesi Pagi':
         return Sunrise
       case 'shift_2_malam':
+      case 'shift_3':  // Mon–Thu Shift III (overnight)
       case 'Shift III':
       case 'Sesi Malam':
         return Moon
+      case 'shift_2':  // Mon–Thu Shift II (afternoon) or weekend Shift II Malam
+        return isWeekendDay ? Moon : Sun
       case 'Shift II':
         return (isWeekendDay || isFriday) ? Moon : Sun
       default:

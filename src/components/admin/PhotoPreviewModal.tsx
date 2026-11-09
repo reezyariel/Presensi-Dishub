@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { X, ZoomIn, Loader2, ImageOff } from 'lucide-react'
 import { getSignedSelfieUrl } from '../../lib/selfieStorage'
-import { formatJakartaDate, formatJakartaTime } from '../../lib/scheduleEngine'
+import { formatJakartaDate, formatJakartaTime, getSecurityShiftDisplayLabel } from '../../lib/scheduleEngine'
 import { AttendanceStatusBadge, AttendanceTypeBadge } from './StatusBadges'
 import type { AttendanceRecord } from '../../types/attendance'
 
@@ -108,7 +108,7 @@ export default function PhotoPreviewModal({ isOpen, onClose, record }: Props) {
               <h4 className="text-sm font-bold text-neutral-900">{record.employee_name}</h4>
               <p className="text-xs text-neutral-500">
                 Divisi: <span className="font-semibold text-neutral-800">{record.category}</span>
-                {record.shift && <span> • {record.shift}</span>}
+                {record.shift && <span> • {getSecurityShiftDisplayLabel(record.shift, record.work_date)}</span>}
               </p>
             </div>
             <div className="flex items-center gap-1.5 flex-wrap justify-end">

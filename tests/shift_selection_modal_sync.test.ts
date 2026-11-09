@@ -28,6 +28,17 @@ import {
   getEffectiveNow,
   subscribeToMockClock,
 } from '../src/lib/mockClock'
+import { simulateMockSubmitAttendance } from '../src/lib/mockSandbox'
+
+// Polyfill sessionStorage in Node.js test environment
+const memoryStore = new Map<string, string>();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(globalThis as any).sessionStorage = {
+  getItem: (key: string) => memoryStore.get(key) || null,
+  setItem: (key: string, val: string) => memoryStore.set(key, val),
+  removeItem: (key: string) => memoryStore.delete(key),
+  clear: () => memoryStore.clear(),
+}
 
 let passed = 0
 let failed = 0
@@ -58,22 +69,22 @@ console.log('SKENARIO 1: Senin, 9 November 2026')
   const options = getSecurityAvailableOptions(MON)
 
   assert('1a. Pilihan shift hari Senin tepat berjumlah 3', options.length === 3)
-  assert('1b. Opsi pertama adalah Shift I', options[0] === 'Shift I')
-  assert('1c. Opsi kedua adalah Shift II', options[1] === 'Shift II')
-  assert('1d. Opsi ketiga adalah Shift III', options[2] === 'Shift III')
+  assert('1b. Opsi pertama adalah ID shift_1', options[0] === 'shift_1')
+  assert('1c. Opsi kedua adalah ID shift_2', options[1] === 'shift_2')
+  assert('1d. Opsi ketiga adalah ID shift_3', options[2] === 'shift_3')
 
   // Uji pada Pagi Hari (08:30 WIB) — Waktu saat bug sebelumnya terjadi
   setMockClock(`${MON}T08:30:00+07:00`)
   const now0830 = getEffectiveNow()
 
-  const st1_0830 = getSecurityShiftCheckInStatus('Shift I', MON, now0830)
-  const st2_0830 = getSecurityShiftCheckInStatus('Shift II', MON, now0830)
-  const st3_0830 = getSecurityShiftCheckInStatus('Shift III', MON, now0830)
+  const st1_0830 = getSecurityShiftCheckInStatus('shift_1', MON, now0830)
+  const st2_0830 = getSecurityShiftCheckInStatus('shift_2', MON, now0830)
+  const st3_0830 = getSecurityShiftCheckInStatus('shift_3', MON, now0830)
 
-  // Verifikasi Label
-  assert('1e. Shift I berlabel "Shift I"', st1_0830.label === 'Shift I')
-  assert('1f. Shift II berlabel "Shift II" (BUKAN Shift II — Malam)', st2_0830.label === 'Shift II')
-  assert('1g. Shift III berlabel "Shift III" (BUKAN Shift II — Malam)', st3_0830.label === 'Shift III')
+  // Verifikasi Label Tampilan Pengguna
+  assert('1e. shift_1 berlabel "Shift I"', st1_0830.label === 'Shift I')
+  assert('1f. shift_2 berlabel "Shift II" (BUKAN Shift II — Malam)', st2_0830.label === 'Shift II')
+  assert('1g. shift_3 berlabel "Shift III" (BUKAN Shift II — Malam)', st3_0830.label === 'Shift III')
 
   // Verifikasi Jendela Masuk
   assert('1h. Shift I jendela masuk 07.00 – 07.30', st1_0830.scheduledStart === '07:00' && st1_0830.scheduledEnd === '07:30')
@@ -93,17 +104,17 @@ console.log('SKENARIO 1: Senin, 9 November 2026')
   // Uji Auto-select saat Jendela Masuk Shift I aktif (07:15 WIB)
   setMockClock(`${MON}T07:15:00+07:00`)
   const auto0715 = getAutoSelectSecurityShift(MON, getEffectiveNow())
-  assert('1q. Pada 07:15 WIB: Auto-select memilih Shift I', auto0715 === 'Shift I')
+  assert('1q. Pada 07:15 WIB: Auto-select memilih ID shift_1', auto0715 === 'shift_1')
 
   // Uji Auto-select saat Jendela Masuk Shift II aktif (15:15 WIB)
   setMockClock(`${MON}T15:15:00+07:00`)
   const auto1515 = getAutoSelectSecurityShift(MON, getEffectiveNow())
-  assert('1r. Pada 15:15 WIB: Auto-select memilih Shift II', auto1515 === 'Shift II')
+  assert('1r. Pada 15:15 WIB: Auto-select memilih ID shift_2', auto1515 === 'shift_2')
 
   // Uji Auto-select saat Jendela Masuk Shift III aktif (19:45 WIB)
   setMockClock(`${MON}T19:45:00+07:00`)
   const auto1945 = getAutoSelectSecurityShift(MON, getEffectiveNow())
-  assert('1s. Pada 19:45 WIB: Auto-select memilih Shift III', auto1945 === 'Shift III')
+  assert('1s. Pada 19:45 WIB: Auto-select memilih ID shift_3', auto1945 === 'shift_3')
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -114,8 +125,8 @@ console.log('\nSKENARIO 2: Kamis (12 November 2026)')
   const THU = '2026-11-12'
   const options = getSecurityAvailableOptions(THU)
   assert('2a. Pilihan shift hari Kamis berjumlah 3', options.length === 3)
-  assert('2b. Opsi adalah Shift I, Shift II, Shift III',
-    options[0] === 'Shift I' && options[1] === 'Shift II' && options[2] === 'Shift III'
+  assert('2b. Opsi adalah ID shift_1, shift_2, shift_3',
+    options[0] === 'shift_1' && options[1] === 'shift_2' && options[2] === 'shift_3'
   )
 
   setMockClock(`${THU}T07:15:00+07:00`)
@@ -173,12 +184,12 @@ console.log('\nSKENARIO 4: Sabtu (14 November 2026)')
   const SAT = '2026-11-14'
   const options = getSecurityAvailableOptions(SAT)
   assert('4a. Pilihan shift Sabtu tepat berjumlah 2', options.length === 2)
-  assert('4b. Opsi adalah Shift I dan Shift II', options[0] === 'Shift I' && options[1] === 'Shift II')
+  assert('4b. Opsi adalah ID shift_1 dan shift_2', options[0] === 'shift_1' && options[1] === 'shift_2')
 
   setMockClock(`${SAT}T07:45:00+07:00`)
   const nowSat = getEffectiveNow()
-  const st1 = getSecurityShiftCheckInStatus('Shift I', SAT, nowSat)
-  const st2 = getSecurityShiftCheckInStatus('Shift II', SAT, nowSat)
+  const st1 = getSecurityShiftCheckInStatus('shift_1', SAT, nowSat)
+  const st2 = getSecurityShiftCheckInStatus('shift_2', SAT, nowSat)
 
   assert('4c. Shift I Sabtu berlabel "Shift I — Pagi"', st1.label === 'Shift I — Pagi')
   assert('4d. Shift II Sabtu berlabel "Shift II — Malam"', st2.label === 'Shift II — Malam')
@@ -199,14 +210,14 @@ console.log('\nSKENARIO 5: Minggu (15 November 2026)')
 
   setMockClock(`${SUN}T20:15:00+07:00`)
   const nowSun = getEffectiveNow()
-  const st1 = getSecurityShiftCheckInStatus('Shift I', SUN, nowSun)
-  const st2 = getSecurityShiftCheckInStatus('Shift II', SUN, nowSun)
+  const st1 = getSecurityShiftCheckInStatus('shift_1', SUN, nowSun)
+  const st2 = getSecurityShiftCheckInStatus('shift_2', SUN, nowSun)
 
   assert('5b. Shift I Minggu berlabel "Shift I — Pagi"', st1.label === 'Shift I — Pagi')
   assert('5c. Shift II Minggu berlabel "Shift II — Malam"', st2.label === 'Shift II — Malam')
   assert('5d. Pada 20:15 WIB: Shift II status tepat_waktu', st2.windowStatus === 'tepat_waktu')
   assert('5e. Pada 20:15 WIB: Shift I status jendela_selesai', st1.windowStatus === 'jendela_selesai')
-  assert('5f. Auto-select pada 20:15 WIB memilih Shift II', getAutoSelectSecurityShift(SUN, nowSun) === 'Shift II')
+  assert('5f. Auto-select pada 20:15 WIB memilih ID shift_2', getAutoSelectSecurityShift(SUN, nowSun) === 'shift_2')
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -268,6 +279,153 @@ console.log('\nSKENARIO 8: Integritas Jadwal CS')
   assert('8b. CS masuk ontime_deadline tetap 08:00', cs.masuk.ontime_deadline === '08:00')
   assert('8c. CS istirahat start tetap 12:00', cs.istirahat.start === '12:00')
   assert('8d. CS pulang start tetap 16:00', cs.pulang.start === '16:00')
+}
+
+// ─────────────────────────────────────────────────────────────
+// SKENARIO 9: Audit Payload Presensi Masuk & Keluar (Langsung ke Sandbox)
+// ─────────────────────────────────────────────────────────────
+console.log('\nSKENARIO 9: Audit Payload Presensi Masuk & Keluar')
+{
+  const officeCoords = { latitude: -6.175392, longitude: 106.827153 }
+
+  // 9a. Senin, 9 November 2026 — Check-in Shift II pukul 15.15 WIB menggunakan ID 'shift_2'
+  setMockClock('2026-11-09T15:15:00+07:00')
+  const resMonShift2 = simulateMockSubmitAttendance({
+    employee_name: 'Budi Santoso',
+    category: 'Security',
+    attendance_type: 'masuk',
+    shift: 'shift_2',
+    selfie_base64: 'data:image/jpeg;base64,sample',
+    idempotency_key: 'test-mon-shift-2',
+    work_date: '2026-11-09',
+    ...officeCoords,
+  })
+  assert('9a. Senin Shift II check-in dengan ID shift_2 berhasil', Boolean(resMonShift2.success) && !resMonShift2.error)
+  assert('9b. Shift tersimpan sebagai shift_2', resMonShift2.data?.shift === 'shift_2')
+
+  // 9c. Senin — Check-in Shift I pukul 07.15 WIB dengan ID 'shift_1'
+  setMockClock('2026-11-09T07:15:00+07:00')
+  const resMonShift1 = simulateMockSubmitAttendance({
+    employee_name: 'Andi Pratama',
+    category: 'Security',
+    attendance_type: 'masuk',
+    shift: 'shift_1',
+    selfie_base64: 'data:image/jpeg;base64,sample',
+    idempotency_key: 'test-mon-shift-1',
+    work_date: '2026-11-09',
+    ...officeCoords,
+  })
+  assert('9c. Senin Shift I check-in dengan ID shift_1 berhasil', Boolean(resMonShift1.success) && !resMonShift1.error)
+
+  // 9d. Senin — Check-in Shift III pukul 19.45 WIB dengan ID 'shift_3'
+  setMockClock('2026-11-09T19:45:00+07:00')
+  const resMonShift3 = simulateMockSubmitAttendance({
+    employee_name: 'Citra Dewi',
+    category: 'Security',
+    attendance_type: 'masuk',
+    shift: 'shift_3',
+    selfie_base64: 'data:image/jpeg;base64,sample',
+    idempotency_key: 'test-mon-shift-3',
+    work_date: '2026-11-09',
+    ...officeCoords,
+  })
+  assert('9d. Senin Shift III check-in dengan ID shift_3 berhasil', Boolean(resMonShift3.success) && !resMonShift3.error)
+
+  // 9e. Jumat — Uji ketiga varian shift
+  setMockClock('2026-11-13T07:15:00+07:00')
+  const resFriReg = simulateMockSubmitAttendance({
+    employee_name: 'Doni Kurnia',
+    category: 'Security',
+    attendance_type: 'masuk',
+    shift: 'shift_1_reguler',
+    selfie_base64: 'data:image/jpeg;base64,sample',
+    idempotency_key: 'test-fri-reg',
+    work_date: '2026-11-13',
+    ...officeCoords,
+  })
+  assert('9e. Jumat Shift I Reguler check-in berhasil', Boolean(resFriReg.success) && !resFriReg.error)
+
+  const resFriPjg = simulateMockSubmitAttendance({
+    employee_name: 'Eko Saputra',
+    category: 'Security',
+    attendance_type: 'masuk',
+    shift: 'shift_1_panjang',
+    selfie_base64: 'data:image/jpeg;base64,sample',
+    idempotency_key: 'test-fri-pjg',
+    work_date: '2026-11-13',
+    ...officeCoords,
+  })
+  assert('9f. Jumat Shift I Panjang check-in berhasil', Boolean(resFriPjg.success) && !resFriPjg.error)
+
+  setMockClock('2026-11-13T19:15:00+07:00')
+  const resFriMlm = simulateMockSubmitAttendance({
+    employee_name: 'Fajar Nugraha',
+    category: 'Security',
+    attendance_type: 'masuk',
+    shift: 'shift_2_malam',
+    selfie_base64: 'data:image/jpeg;base64,sample',
+    idempotency_key: 'test-fri-mlm',
+    work_date: '2026-11-13',
+    ...officeCoords,
+  })
+  assert('9g. Jumat Shift II Malam check-in berhasil', Boolean(resFriMlm.success) && !resFriMlm.error)
+
+  // 9h. Sabtu dan Minggu — Uji shift akhir pekan
+  setMockClock('2026-11-14T07:45:00+07:00')
+  const resSatPagi = simulateMockSubmitAttendance({
+    employee_name: 'Gilang Ramadhan',
+    category: 'Security',
+    attendance_type: 'masuk',
+    shift: 'shift_1',
+    selfie_base64: 'data:image/jpeg;base64,sample',
+    idempotency_key: 'test-sat-pagi',
+    work_date: '2026-11-14',
+    ...officeCoords,
+  })
+  assert('9h. Sabtu Shift I check-in dengan ID shift_1 berhasil', Boolean(resSatPagi.success) && !resSatPagi.error)
+
+  setMockClock('2026-11-14T20:15:00+07:00')
+  const resSatMlm = simulateMockSubmitAttendance({
+    employee_name: 'Hadi Wijaya',
+    category: 'Security',
+    attendance_type: 'masuk',
+    shift: 'shift_2',
+    selfie_base64: 'data:image/jpeg;base64,sample',
+    idempotency_key: 'test-sat-mlm',
+    work_date: '2026-11-14',
+    ...officeCoords,
+  })
+  assert('9i. Sabtu Shift II check-in dengan ID shift_2 berhasil', Boolean(resSatMlm.success) && !resSatMlm.error)
+
+  // 9j. Backward compatibility: Payload dengan label lama 'Shift II' tetap diterima secara konsisten
+  setMockClock('2026-11-09T15:20:00+07:00')
+  const resLegacyLabel = simulateMockSubmitAttendance({
+    employee_name: 'Indra Gunawan',
+    category: 'Security',
+    attendance_type: 'masuk',
+    shift: 'Shift II',
+    selfie_base64: 'data:image/jpeg;base64,sample',
+    idempotency_key: 'test-mon-legacy-shift-2',
+    work_date: '2026-11-09',
+    ...officeCoords,
+  })
+  assert('9j. Payload dengan label legacy "Shift II" tetap diterima (backward compatibility)', Boolean(resLegacyLabel.success) && !resLegacyLabel.error)
+
+  // 9k. Check-out menggunakan ID shift dari record check-in asli
+  setMockClock('2026-11-09T19:35:00+07:00')
+  const resCheckout = simulateMockSubmitAttendance({
+    employee_name: 'Budi Santoso',
+    category: 'Security',
+    attendance_type: 'pulang',
+    shift: resMonShift2.data?.shift,
+    check_in_record_id: resMonShift2.data?.id,
+    selfie_base64: 'data:image/jpeg;base64,sample',
+    idempotency_key: 'test-mon-shift-2-pulang',
+    work_date: '2026-11-09',
+    ...officeCoords,
+  })
+  assert('9k. Check-out menggunakan ID shift yang sama dengan record masuk berhasil', Boolean(resCheckout.success) && !resCheckout.error)
+  assert('9l. Check-out terhubung ke check_in_record_id asli', resCheckout.data?.check_in_record_id === resMonShift2.data?.id)
 }
 
 // Selesai pengujian: bersihkan mock clock

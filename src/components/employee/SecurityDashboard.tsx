@@ -25,6 +25,7 @@ import {
   getSecurityAvailableOptions,
   getSecurityShiftItem,
   getSecurityShiftDisplayLabel,
+  canonicalShiftName,
   getJakartaDayOfWeek,
   formatJakartaDate,
   type Security30DayRecap,
@@ -50,6 +51,9 @@ function getShiftTimeLabel(shift: SecurityShiftOption, workDateStr?: string): st
       case 'shift_1_reguler': return '07.00 – 16.00'
       case 'shift_1_panjang': return '07.00 – 19.00'
       case 'shift_2_malam':   return '19.00 – 07.00 (H+1)'
+      case 'shift_1': return '07.00 – 16.00'    // Mon–Thu Shift I / weekend Shift I Pagi
+      case 'shift_2': return '15.00 – 19.30'    // Mon–Thu Shift II (or 20.00–07.30 for weekend, needs date context)
+      case 'shift_3': return '19.30 – 07.30 (H+1)' // Mon–Thu Shift III
       case 'Shift I':   return '07.00 – 16.00'
       case 'Shift II':  return '15.00 – 19.30'
       case 'Shift III': return '19.30 – 07.30'
@@ -479,9 +483,10 @@ export function SecurityScheduleCard({
           sub  = 'Shift Operasional Jumat'
         }
       } else {
-        name = tab as string
-        sub = tab === 'Shift I' ? 'Pagi – Sore'
-            : tab === 'Shift II' ? 'Sore – Malam'
+        name = item.label || getSecurityShiftDisplayLabel(tab, workDateStr)
+        const canon = canonicalShiftName(tab)
+        sub = canon === 'Shift I' ? 'Pagi – Sore'
+            : canon === 'Shift II' ? 'Sore – Malam'
             : 'Malam – Pagi (Lintas Hari)'
       }
 

@@ -18,6 +18,7 @@ import {
   isOvernightCheckout,
   getSecurityShiftItem,
   shiftsCompatible,
+  canonicalShiftName,
 } from './scheduleEngine'
 import { DEFAULT_OFFICE_CONFIG, calculateDistanceMeters } from './officeLocation'
 import type {
@@ -470,11 +471,13 @@ export function simulateMockSubmitAttendance(
       'Shift I', 'Shift II', 'Shift III',
       'Sesi Pagi', 'Sesi Malam',
       'shift_1_reguler', 'shift_1_panjang', 'shift_2_malam',
+      // Mon–Thu and weekend internal IDs from day_groups
+      'shift_1', 'shift_2', 'shift_3',
     ]
 
     if (!shift || !validShifts.includes(shift)) {
       return {
-        error: 'Pilih shift yang valid untuk Security (Shift I, Shift II, Shift III, shift_1_reguler, shift_1_panjang, shift_2_malam).',
+        error: 'Pilih shift yang valid untuk Security (shift_1, shift_2, shift_3, shift_1_reguler, shift_1_panjang, shift_2_malam).',
       }
     }
   }
@@ -665,10 +668,11 @@ export function simulateMockSubmitAttendance(
     const allowed = isFriday
       ? ['shift_1_reguler', 'shift_1_panjang', 'shift_2_malam', 'Shift I', 'Shift II', 'Shift 1', 'Shift 2']
       : isWeekend
-        ? ['Shift I', 'Shift II', 'Shift 1', 'Shift 2', 'Sesi Pagi', 'Sesi Malam']
-        : ['Shift I', 'Shift II', 'Shift III', 'Shift 1', 'Shift 2', 'Shift 3']
+        ? ['shift_1', 'shift_2', 'Shift I', 'Shift II', 'Shift 1', 'Shift 2', 'Sesi Pagi', 'Sesi Malam']
+        : ['shift_1', 'shift_2', 'shift_3', 'Shift I', 'Shift II', 'Shift III', 'Shift 1', 'Shift 2', 'Shift 3']
 
-    if (!allowed.includes(shift)) {
+    const isAllowed = allowed.includes(shift) || allowed.includes(canonicalShiftName(shift))
+    if (!isAllowed) {
       const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
       return {
         error: `Pilihan shift ${shift} tidak sesuai dengan jadwal hari ${dayNames[workDayOfWeek]}. Shift yang tersedia: ${allowed.join(', ')}.`,

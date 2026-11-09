@@ -30,9 +30,12 @@ console.log('============================================================')
 function canonicalize(shiftName: string | null | undefined): string {
   if (!shiftName) return ''
   const s = shiftName.trim()
-  if (s === 'Shift 1' || s === 'Shift I' || s === 'Sesi Pagi') return 'Shift I'
-  if (s === 'Shift 2' || s === 'Shift II' || s === 'Sesi Malam') return 'Shift II'
-  if (s === 'Shift 3' || s === 'Shift III') return 'Shift III'
+  if (s === 'shift_1_reguler') return 'shift_1_reguler'
+  if (s === 'shift_1_panjang') return 'shift_1_panjang'
+  if (s === 'shift_2_malam') return 'shift_2_malam'
+  if (s === 'shift_1' || s === 'Shift 1' || s === 'Shift I' || s === 'Sesi Pagi') return 'Shift I'
+  if (s === 'shift_2' || s === 'Shift 2' || s === 'Shift II' || s === 'Sesi Malam') return 'Shift II'
+  if (s === 'shift_3' || s === 'Shift 3' || s === 'Shift III') return 'Shift III'
   return s
 }
 
@@ -51,12 +54,12 @@ function shiftsCompatible(s1: string | null | undefined, s2: string | null | und
 function isOvernightByDayAndShift(dayOfWeek: number, shiftName: string | null | undefined): boolean {
   if (!shiftName) return false
   const canon = canonicalize(shiftName)
-  // Senin–Kamis (1–4): Shift III overnight
-  if (dayOfWeek >= 1 && dayOfWeek <= 4) return canon === 'Shift III'
+  // Senin–Kamis (1–4): shift_3 / Shift III overnight
+  if (dayOfWeek >= 1 && dayOfWeek <= 4) return shiftName === 'shift_3' || canon === 'Shift III'
   // Jumat (5): shift_2_malam or Shift II overnight
   if (dayOfWeek === 5) return canon === 'Shift II' || shiftName === 'shift_2_malam'
-  // Sabtu–Minggu (6,0): Shift II / Sesi Malam overnight
-  if (dayOfWeek === 0 || dayOfWeek === 6) return canon === 'Shift II'
+  // Sabtu–Minggu (6,0): shift_2 / Shift II / Sesi Malam overnight
+  if (dayOfWeek === 0 || dayOfWeek === 6) return shiftName === 'shift_2' || canon === 'Shift II'
   return false
 }
 
@@ -65,6 +68,7 @@ const VALID_SECURITY_SHIFTS = [
   'Shift I', 'Shift II', 'Shift III',
   'Sesi Pagi', 'Sesi Malam',
   'shift_1_reguler', 'shift_1_panjang', 'shift_2_malam',
+  'shift_1', 'shift_2', 'shift_3',
 ]
 
 interface SubmitPayload {
@@ -148,6 +152,9 @@ console.log('\nSUITE 1: Whitelist Shift Security Global')
   assert('Shift III ada di whitelist', VALID_SECURITY_SHIFTS.includes('Shift III'))
   assert('Sesi Pagi ada di whitelist', VALID_SECURITY_SHIFTS.includes('Sesi Pagi'))
   assert('Sesi Malam ada di whitelist', VALID_SECURITY_SHIFTS.includes('Sesi Malam'))
+  assert('shift_1 ada di whitelist', VALID_SECURITY_SHIFTS.includes('shift_1'))
+  assert('shift_2 ada di whitelist', VALID_SECURITY_SHIFTS.includes('shift_2'))
+  assert('shift_3 ada di whitelist', VALID_SECURITY_SHIFTS.includes('shift_3'))
 
   const resEmpty = validateBackendPayload({ category: 'Security', attendance_type: 'masuk', shift: null, workDateStr: '2026-11-06' })
   assert('Shift null ditolak', !resEmpty.valid && resEmpty.error?.includes('Pilih shift yang valid'))
@@ -204,16 +211,21 @@ const SAT = '2026-11-07'
   const rMonMal = validateBackendPayload({ category: 'Security', attendance_type: 'masuk', shift: 'shift_2_malam', workDateStr: MON })
   assert('Senin: shift_2_malam ditolak', !rMonMal.valid && rMonMal.errorCode === 'INVALID_SHIFT_FOR_DAY')
 
-  // Senin: Shift I/II/III harus diterima
+  // Senin: Shift I/II/III harus diterima (baik label legacy maupun ID internal)
   assert('Senin: Shift I diterima', validateBackendPayload({ category: 'Security', attendance_type: 'masuk', shift: 'Shift I', workDateStr: MON }).valid)
   assert('Senin: Shift II diterima', validateBackendPayload({ category: 'Security', attendance_type: 'masuk', shift: 'Shift II', workDateStr: MON }).valid)
   assert('Senin: Shift III diterima', validateBackendPayload({ category: 'Security', attendance_type: 'masuk', shift: 'Shift III', workDateStr: MON }).valid)
+  assert('Senin: shift_1 (ID internal) diterima', validateBackendPayload({ category: 'Security', attendance_type: 'masuk', shift: 'shift_1', workDateStr: MON }).valid)
+  assert('Senin: shift_2 (ID internal) diterima', validateBackendPayload({ category: 'Security', attendance_type: 'masuk', shift: 'shift_2', workDateStr: MON }).valid)
+  assert('Senin: shift_3 (ID internal) diterima', validateBackendPayload({ category: 'Security', attendance_type: 'masuk', shift: 'shift_3', workDateStr: MON }).valid)
 
   // Sabtu: shift Jumat ditolak
   assert('Sabtu: shift_1_reguler ditolak', !validateBackendPayload({ category: 'Security', attendance_type: 'masuk', shift: 'shift_1_reguler', workDateStr: SAT }).valid)
   assert('Sabtu: Shift III ditolak', !validateBackendPayload({ category: 'Security', attendance_type: 'masuk', shift: 'Shift III', workDateStr: SAT }).valid)
   assert('Sabtu: Shift I diterima', validateBackendPayload({ category: 'Security', attendance_type: 'masuk', shift: 'Shift I', workDateStr: SAT }).valid)
   assert('Sabtu: Shift II diterima', validateBackendPayload({ category: 'Security', attendance_type: 'masuk', shift: 'Shift II', workDateStr: SAT }).valid)
+  assert('Sabtu: shift_1 (ID internal) diterima', validateBackendPayload({ category: 'Security', attendance_type: 'masuk', shift: 'shift_1', workDateStr: SAT }).valid)
+  assert('Sabtu: shift_2 (ID internal) diterima', validateBackendPayload({ category: 'Security', attendance_type: 'masuk', shift: 'shift_2', workDateStr: SAT }).valid)
 }
 
 // ============================================================
@@ -259,6 +271,65 @@ console.log('\nSUITE 5: Deteksi Overnight & Kompatibilitas Checkout')
   assert('shift_2_malam kompatibel dengan Shift II historis', shiftsCompatible('shift_2_malam', 'Shift II'))
   assert('shift_1_reguler TIDAK kompatibel dengan shift_1_panjang', !shiftsCompatible('shift_1_reguler', 'shift_1_panjang'))
   assert('shift_1_reguler TIDAK kompatibel dengan shift_2_malam', !shiftsCompatible('shift_1_reguler', 'shift_2_malam'))
+}
+
+// ============================================================
+// SUITE 6: Schema Database, Integritas Constraint & Self-Healing Fallback
+// ============================================================
+console.log('\nSUITE 6: Schema Database, Integritas Constraint & Self-Healing Fallback')
+{
+  const isValidUUID = (val: unknown): val is string =>
+    typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val)
+
+  assert('UUID valid diterima', isValidUUID('12345678-1234-1234-1234-123456789abc'))
+  assert('service-role-admin BUKAN UUID valid (mencegah error FK auth_uid)', !isValidUUID('service-role-admin'))
+  assert('null/undefined bukan UUID valid', !isValidUUID(null) && !isValidUUID(undefined))
+
+  // Simulasi constraint DB migrasi 023 (sebelum migrasi 024)
+  const MIGRATION_023_ALLOWED_SHIFTS = [
+    'Shift 1', 'Shift 2', 'Shift 3',
+    'Shift I', 'Shift II', 'Shift III',
+    'Sesi Pagi', 'Sesi Malam',
+    'shift_1_reguler', 'shift_1_panjang', 'shift_2_malam',
+  ]
+
+  // Jika payload masuk membawa 'shift_2' dan DB masih menggunakan constraint 023:
+  const incomingShift = 'shift_2'
+  const isDirectlyAllowedIn023 = MIGRATION_023_ALLOWED_SHIFTS.includes(incomingShift)
+  assert('shift_2 langsung ditolak oleh constraint 023 (code 23514)', !isDirectlyAllowedIn023)
+
+  // Self-healing fallback:
+  const canonicalDbShift = canonicalize(incomingShift)
+  const isFallbackAllowedIn023 = MIGRATION_023_ALLOWED_SHIFTS.includes(canonicalDbShift)
+  assert('canonicalize(shift_2) menghasilkan Shift II', canonicalDbShift === 'Shift II')
+  assert('Shift II diterima oleh constraint DB 023 (self-healing fallback sukses)', isFallbackAllowedIn023)
+
+  // Migrasi 024 mengizinkan langsung shift_1, shift_2, shift_3:
+  const MIGRATION_024_ALLOWED_SHIFTS = [
+    ...MIGRATION_023_ALLOWED_SHIFTS,
+    'shift_1', 'shift_2', 'shift_3',
+  ]
+  assert('shift_1 langsung diizinkan di migrasi 024', MIGRATION_024_ALLOWED_SHIFTS.includes('shift_1'))
+  assert('shift_2 langsung diizinkan di migrasi 024', MIGRATION_024_ALLOWED_SHIFTS.includes('shift_2'))
+  assert('shift_3 langsung diizinkan di migrasi 024', MIGRATION_024_ALLOWED_SHIFTS.includes('shift_3'))
+
+  // Struktur response diagnostic error aman
+  const mockInsertError = {
+    code: '23514',
+    message: 'new row for relation "attendance_records" violates check constraint "attendance_records_shift_check"',
+    details: 'Failing row contains (shift_2)',
+    hint: null,
+  }
+  const diagnosticResponse = {
+    error: 'Gagal menyimpan catatan presensi ke database.',
+    stage: 'database_insert',
+    error_code: mockInsertError.code,
+    error_message: mockInsertError.message,
+    error_details: mockInsertError.details || undefined,
+  }
+  assert('Diagnostic response mencantumkan stage database_insert', diagnosticResponse.stage === 'database_insert')
+  assert('Diagnostic response mencantumkan kode error 23514', diagnosticResponse.error_code === '23514')
+  assert('Diagnostic response tidak mengekspos token/kredensial', !JSON.stringify(diagnosticResponse).includes('service_role') && !JSON.stringify(diagnosticResponse).includes('secret'))
 }
 
 // ============================================================

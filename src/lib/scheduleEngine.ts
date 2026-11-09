@@ -303,6 +303,10 @@ export function canonicalShiftName(shift: string | null | undefined): string {
   if (s === 'shift_1_reguler' || s === 'Shift I — Reguler' || s === 'Shift I - Reguler' || s === 'Shift I Reguler') return 'shift_1_reguler'
   if (s === 'shift_1_panjang' || s === 'Shift I — Panjang (12 Jam)' || s === 'Shift I - Panjang (12 Jam)' || s === 'Shift I Panjang') return 'shift_1_panjang'
   if (s === 'shift_2_malam' || s === 'Shift II — Malam' || s === 'Shift II - Malam' || s === 'Shift II Malam') return 'shift_2_malam'
+  // Mon–Thu internal IDs (from DEFAULT_DAY_GROUPS and DB day_groups)
+  if (s === 'shift_1') return 'Shift I'
+  if (s === 'shift_2') return 'Shift II'
+  if (s === 'shift_3') return 'Shift III'
   if (s === 'Shift 1' || s === 'Shift I' || s === 'Sesi Pagi' || s === 'Shift I — Pagi' || s === 'Shift I - Pagi' || s === 'Shift I Pagi') return 'Shift I'
   if (s === 'Shift 2' || s === 'Shift II' || s === 'Sesi Malam') return 'Shift II'
   if (s === 'Shift 3' || s === 'Shift III') return 'Shift III'
@@ -355,27 +359,31 @@ export function getSecurityShiftDisplayLabel(
     }
   }
 
-  if (s === 'Shift 1' || s === 'Shift I') return 'Shift I'
-  if (s === 'Shift 2' || s === 'Shift II') return 'Shift II'
-  if (s === 'Shift 3' || s === 'Shift III') return 'Shift III'
+  if (s === 'shift_1' || s === 'Shift 1' || s === 'Shift I') return 'Shift I'
+  if (s === 'shift_2' || s === 'Shift 2' || s === 'Shift II') return 'Shift II'
+  if (s === 'shift_3' || s === 'Shift 3' || s === 'Shift III') return 'Shift III'
   return s
 }
 
 /**
  * Returns available SecurityShiftOptions for the given work date in Asia/Jakarta.
- * - Senin–Kamis: returns ['Shift I', 'Shift II', 'Shift III']
- * - Jumat: returns ['Shift I', 'Shift II']
- * - Sabtu–Minggu: returns ['Shift I', 'Shift II'] (dengan label Pagi dan Malam)
+ * Returns internal shift IDs (from DEFAULT_DAY_GROUPS) so the payload sent to the
+ * backend matches the IDs stored in day_groups.shifts[].id.
+ * - Senin–Kamis: returns ['shift_1', 'shift_2', 'shift_3'] (internal IDs)
+ * - Jumat:       returns ['shift_1_reguler', 'shift_1_panjang', 'shift_2_malam']
+ * - Sabtu–Minggu: returns ['shift_1', 'shift_2'] (internal IDs)
  */
 export function getSecurityAvailableOptions(workDateStr: string): SecurityShiftOption[] {
   const day = getJakartaDayOfWeek(workDateStr)
   if (day === 0 || day === 6) {
-    return ['Shift I', 'Shift II']
+    // Weekend: use IDs from DEFAULT_DAY_GROUPS.weekend
+    return ['shift_1', 'shift_2']
   }
   if (day === 5) {
     return ['shift_1_reguler', 'shift_1_panjang', 'shift_2_malam']
   }
-  return ['Shift I', 'Shift II', 'Shift III']
+  // Mon–Thu: use IDs from DEFAULT_DAY_GROUPS.mon_thu
+  return ['shift_1', 'shift_2', 'shift_3']
 }
 
 /**
@@ -395,9 +403,9 @@ export function getWeekendSessionSchedule(session: WeekendSession): WeekendSessi
 
 /**
  * Determines whether a specific shift on a given work date is an overnight (cross-midnight) shift.
- * - Senin–Kamis: Shift III (19:30 – 07:30 H+1)
+ * - Senin–Kamis: shift_3 / Shift III (19:30 – 07:30 H+1)
  * - Jumat: shift_2_malam / Shift II (19:00 – 07:00 H+1)
- * - Sabtu–Minggu: Shift II / Sesi Malam (20:00 – 07:30 H+1)
+ * - Sabtu–Minggu: shift_2 / Shift II / Sesi Malam (20:00 – 07:30 H+1)
  */
 export function isOvernightSecurityShift(
   workDateStr: string,
@@ -407,13 +415,15 @@ export function isOvernightSecurityShift(
   const day = getJakartaDayOfWeek(workDateStr)
   const canon = canonicalShiftName(shift)
   if (day >= 1 && day <= 4) {
-    return canon === 'Shift III'
+    // shift_3 is the internal ID for Shift III (Mon–Thu overnight)
+    return shift === 'shift_3' || canon === 'Shift III'
   }
   if (day === 5) {
     return shift === 'shift_2_malam' || canon === 'Shift II'
   }
   if (day === 0 || day === 6) {
-    return canon === 'Shift II' || shift === 'Sesi Malam'
+    // shift_2 is the internal ID for Shift II Malam (weekend overnight)
+    return shift === 'shift_2' || canon === 'Shift II' || shift === 'Sesi Malam'
   }
   return false
 }
@@ -421,10 +431,10 @@ export function isOvernightSecurityShift(
 /**
  * Determines whether a shift being checked out on checkoutDate (early morning, e.g. < 12:00 WIB)
  * is an overnight shift that started yesterday.
- * - Monday morning (< 12:00): Sunday's Shift II / Sesi Malam
- * - Tuesday-Friday morning (< 12:00): Mon-Thu's Shift III
+ * - Monday morning (< 12:00): Sunday's shift_2 / Shift II / Sesi Malam
+ * - Tuesday-Friday morning (< 12:00): Mon-Thu's shift_3 / Shift III
  * - Saturday morning (< 12:00): Friday's shift_2_malam / Shift II
- * - Sunday morning (< 12:00): Saturday's Shift II / Sesi Malam
+ * - Sunday morning (< 12:00): Saturday's shift_2 / Shift II / Sesi Malam
  */
 export function isOvernightCheckout(
   checkoutDateStr: string,
@@ -433,14 +443,14 @@ export function isOvernightCheckout(
   if (!shift) return false
   const day = getJakartaDayOfWeek(checkoutDateStr)
   const canon = canonicalShiftName(shift)
-  // If checkout is on Monday (1), the overnight shift from Sunday was Shift II (or Sesi Malam)
-  if (day === 1) return canon === 'Shift II' || shift === 'Sesi Malam'
-  // If checkout is on Tuesday-Friday (2..5), the overnight shift was Shift III
-  if (day >= 2 && day <= 5) return canon === 'Shift III'
+  // If checkout is on Monday (1), the overnight shift from Sunday was shift_2 / Shift II / Sesi Malam
+  if (day === 1) return shift === 'shift_2' || canon === 'Shift II' || shift === 'Sesi Malam'
+  // If checkout is on Tuesday-Friday (2..5), the overnight shift was shift_3 / Shift III
+  if (day >= 2 && day <= 5) return shift === 'shift_3' || canon === 'Shift III'
   // If checkout is on Saturday (6), the overnight shift from Friday was shift_2_malam or Shift II
   if (day === 6) return shift === 'shift_2_malam' || canon === 'Shift II'
-  // If checkout is on Sunday (0), the overnight shift from Saturday was Shift II (or Sesi Malam)
-  if (day === 0) return canon === 'Shift II' || shift === 'Sesi Malam'
+  // If checkout is on Sunday (0), the overnight shift from Saturday was shift_2 / Shift II / Sesi Malam
+  if (day === 0) return shift === 'shift_2' || canon === 'Shift II' || shift === 'Sesi Malam'
   return false
 }
 
@@ -1800,6 +1810,7 @@ export function getAttendanceButtonState(
   }
 
   const currentShift = (shift as SecurityShiftOption) || (completedRecords.masuk?.shift as SecurityShiftOption) || 'Shift I'
+  const displayLabel = getSecurityShiftDisplayLabel(currentShift, workDateStr)
   const item = getSecurityShiftItem(workDateStr, currentShift)
   const isOvernight = item.out_next_day || isOvernightSecurityShift(workDateStr, currentShift)
   const masukStartMins = getTimeInMinutes(item.in_start)
@@ -1814,7 +1825,7 @@ export function getAttendanceButtonState(
         status: 'waiting_masuk',
         title: `Presensi Masuk Dibuka Pukul ${item.in_start.replace(':', '.')} WIB`,
         startTime: item.in_start,
-        message: `Waktu check-in ${currentShift} belum dimulai. Tombol akan aktif pukul ${item.in_start.replace(':', '.')} WIB.`,
+        message: `Waktu check-in ${displayLabel} belum dimulai. Tombol akan aktif pukul ${item.in_start.replace(':', '.')} WIB.`,
       }
     }
 
@@ -1842,7 +1853,7 @@ export function getAttendanceButtonState(
         title: `Presensi berikutnya: Pulang pukul ${item.out_start.replace(':', '.')} WIB (H+1)`,
         startTime: item.out_start,
         note: '(H+1)',
-        message: `Check-in ${currentShift} tercatat. Tombol presensi pulang akan aktif besok pagi pukul ${item.out_start.replace(':', '.')} WIB.`,
+        message: `Check-in ${displayLabel} tercatat. Tombol presensi pulang akan aktif besok pagi pukul ${item.out_start.replace(':', '.')} WIB.`,
       }
     }
 
@@ -1851,7 +1862,7 @@ export function getAttendanceButtonState(
         status: 'waiting_pulang',
         title: `Presensi berikutnya: Pulang pukul ${item.out_start.replace(':', '.')} WIB`,
         startTime: item.out_start,
-        message: `Tombol presensi pulang ${currentShift} akan aktif pukul ${item.out_start.replace(':', '.')} WIB.`,
+        message: `Tombol presensi pulang ${displayLabel} akan aktif pukul ${item.out_start.replace(':', '.')} WIB.`,
       }
     }
 
@@ -1859,7 +1870,7 @@ export function getAttendanceButtonState(
       return {
         status: 'window_closed',
         title: 'Jendela Presensi Pulang Ditutup',
-        message: `Jendela presensi pulang ${currentShift} telah ditutup pada pukul ${item.out_end.replace(':', '.')} WIB (H+1). Presensi pulang di luar jendela waktu tidak dapat dilakukan.`,
+        message: `Jendela presensi pulang ${displayLabel} telah ditutup pada pukul ${item.out_end.replace(':', '.')} WIB (H+1). Presensi pulang di luar jendela waktu tidak dapat dilakukan.`,
       }
     }
 
@@ -1886,7 +1897,7 @@ export function getAttendanceButtonState(
     return {
       status: 'window_closed',
       title: 'Jendela Presensi Pulang Ditutup',
-      message: `Jendela presensi pulang ${currentShift} telah ditutup pada pukul ${item.out_end.replace(':', '.')} WIB. Presensi pulang di luar jendela waktu tidak dapat dilakukan.`,
+      message: `Jendela presensi pulang ${displayLabel} telah ditutup pada pukul ${item.out_end.replace(':', '.')} WIB. Presensi pulang di luar jendela waktu tidak dapat dilakukan.`,
     }
   }
 
