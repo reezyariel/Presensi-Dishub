@@ -444,7 +444,6 @@ export function simulateMockSubmitAttendance(
     employee_name,
     category,
     attendance_type,
-    shift,
     check_in_record_id,
     work_date,
     selfie_base64,
@@ -453,6 +452,7 @@ export function simulateMockSubmitAttendance(
     longitude,
     reason,
   } = payload
+  let shift = payload.shift
 
   // 1. Mandatory Selfie Validation
   if (!selfie_base64) {
@@ -492,14 +492,50 @@ export function simulateMockSubmitAttendance(
     if (attendance_type === 'pulang') {
       // Find check-in record
       if (check_in_record_id) {
-        matchedMasuk = existingRecords.find(r => r.id === check_in_record_id)
-        if (matchedMasuk) {
-          workDateStr = matchedMasuk.work_date
+        const byId = existingRecords.find(r => r.id === check_in_record_id)
+        if (!byId) {
+          return {
+            error: 'Presensi pulang ditolak: Catatan presensi masuk dengan ID tersebut tidak ditemukan.',
+            error_code: 'CHECKIN_NOT_FOUND',
+          }
         }
+        if (byId.employee_name !== employee_name) {
+          return {
+            error: 'Akses ditolak: Catatan presensi masuk ini bukan milik Anda.',
+            error_code: 'UNAUTHORIZED_CHECKIN_RECORD',
+          }
+        }
+        if (byId.category !== 'Security' || byId.attendance_type !== 'masuk') {
+          return {
+            error: 'Presensi pulang ditolak: Catatan yang dirujuk bukan merupakan presensi masuk Security.',
+            error_code: 'INVALID_CHECKIN_RECORD',
+          }
+        }
+        // Verify not already checked out
+        const alreadyClosed = existingRecords.some(r =>
+          r.category === 'Security' &&
+          r.attendance_type === 'pulang' &&
+          (r.check_in_record_id === byId.id || (r.work_date === byId.work_date && r.shift === byId.shift && r.employee_name === employee_name))
+        )
+        if (alreadyClosed) {
+          return {
+            error: 'Presensi pulang ditolak: Sesi presensi masuk ini sudah memiliki catatan presensi pulang (check-out ganda tidak diizinkan).',
+            error_code: 'DUPLICATE_CHECKOUT',
+          }
+        }
+        if (shift && !shiftsCompatible(byId.shift, shift)) {
+          return {
+            error: `Presensi pulang ditolak: Shift check-out (${shift}) tidak cocok dengan shift check-in (${byId.shift}).`,
+            error_code: 'INCOMPATIBLE_SHIFT_PAIR',
+          }
+        }
+        matchedMasuk = byId
+        workDateStr = byId.work_date
+        shift = byId.shift as SecurityShiftOption
       }
 
       if (!matchedMasuk) {
-        // Look up by employee and shift
+        // Look up by employee and shift (Active Record)
         // If today is morning (< 14:00) and shift is overnight checkout (e.g. Kamis Shift III -> Jumat pagi):
         const yesterdayDate = new Date(now)
         yesterdayDate.setDate(yesterdayDate.getDate() - 1)
@@ -516,12 +552,37 @@ export function simulateMockSubmitAttendance(
               r.category === 'Security' &&
               r.attendance_type === 'masuk' &&
               r.work_date === cDate &&
-              shiftsCompatible(r.shift, shift)
+              (!shift || shiftsCompatible(r.shift, shift)) &&
+              !existingRecords.some(p =>
+                p.employee_name === employee_name &&
+                p.category === 'Security' &&
+                p.attendance_type === 'pulang' &&
+                (p.check_in_record_id === r.id || (p.work_date === r.work_date && shiftsCompatible(p.shift, r.shift)))
+              )
           )
           if (found) {
             matchedMasuk = found
             workDateStr = found.work_date
+            shift = found.shift as SecurityShiftOption
             break
+          }
+        }
+
+        // If no unclosed masuk found, fallback to any closed masuk on candidate dates
+        // so that Step 8 Duplicate Check can return DUPLICATE_ATTENDANCE if already checked out
+        if (!matchedMasuk) {
+          const closedMasuk = existingRecords.find(
+            r =>
+              r.employee_name === employee_name &&
+              r.category === 'Security' &&
+              r.attendance_type === 'masuk' &&
+              candidateDates.includes(r.work_date) &&
+              (!shift || shiftsCompatible(r.shift, shift))
+          )
+          if (closedMasuk) {
+            matchedMasuk = closedMasuk
+            workDateStr = closedMasuk.work_date
+            shift = closedMasuk.shift as SecurityShiftOption
           }
         }
       }
@@ -534,25 +595,41 @@ export function simulateMockSubmitAttendance(
         }
       }
     } else if (attendance_type === 'masuk') {
-      // Check if user still has an active uncompleted overnight shift
+      // Check if user still has any active uncompleted shift (from today or yesterday overnight)
       const yesterdayDate = new Date(now)
       yesterdayDate.setDate(yesterdayDate.getDate() - 1)
       const yesterdayStr = yesterdayDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' })
 
-      const uncompletedOvernight = existingRecords.find(
+      const uncompletedActive = existingRecords.find(
         r =>
           r.employee_name === employee_name &&
           r.category === 'Security' &&
           r.attendance_type === 'masuk' &&
-          r.work_date === yesterdayStr &&
-          isOvernightSecurityShift(yesterdayStr, r.shift) &&
-          !existingRecords.some(p => p.employee_name === employee_name && p.work_date === yesterdayStr && p.attendance_type === 'pulang')
+          (
+            (r.work_date === todayStr) ||
+            (r.work_date === yesterdayStr && isOvernightSecurityShift(yesterdayStr, r.shift))
+          ) &&
+          !existingRecords.some(p =>
+            p.employee_name === employee_name &&
+            p.category === 'Security' &&
+            p.attendance_type === 'pulang' &&
+            (p.check_in_record_id === r.id || (p.work_date === r.work_date && shiftsCompatible(p.shift, r.shift)))
+          )
       )
 
-      if (uncompletedOvernight) {
+      if (uncompletedActive) {
+        if (uncompletedActive.work_date === (work_date || todayStr) && shiftsCompatible(uncompletedActive.shift, shift)) {
+          return {
+            error: `Pegawai ${employee_name} sudah melakukan presensi masuk untuk tanggal kerja ${work_date || todayStr}${shift ? ` (${shift})` : ''}.`,
+            error_code: 'DUPLICATE_ATTENDANCE',
+          }
+        }
+        const isOvernight = uncompletedActive.work_date === yesterdayStr && isOvernightSecurityShift(yesterdayStr, uncompletedActive.shift)
         return {
-          error: `Anda masih memiliki tugas aktif ${uncompletedOvernight.shift} yang belum melakukan presensi pulang. Selesaikan check-out terlebih dahulu sebelum memulai shift baru.`,
-          error_code: 'ACTIVE_OVERNIGHT_SHIFT_IN_PROGRESS',
+          error: isOvernight
+            ? `Anda masih memiliki tugas aktif ${uncompletedActive.shift} yang belum melakukan presensi pulang. Selesaikan check-out terlebih dahulu sebelum memulai shift baru.`
+            : `Anda masih memiliki sesi dinas aktif (${uncompletedActive.shift} - ${uncompletedActive.work_date}) yang belum melakukan check-out. Selesaikan presensi pulang terlebih dahulu sebelum memulai shift baru.`,
+          error_code: isOvernight ? 'ACTIVE_OVERNIGHT_SHIFT_IN_PROGRESS' : 'ACTIVE_SESSION_EXISTS',
         }
       }
 
@@ -725,14 +802,19 @@ export function simulateMockSubmitAttendance(
   const duplicate = existingRecords.find(
     r =>
       r.employee_name === employee_name &&
-      r.work_date === workDateStr &&
+      r.category === category &&
       r.attendance_type === attendance_type &&
-      (category === 'CS' || shiftsCompatible(r.shift, shift))
+      (
+        (attendance_type === 'pulang' && matchedMasuk && r.check_in_record_id === matchedMasuk.id) ||
+        (r.work_date === workDateStr && (category === 'CS' || shiftsCompatible(r.shift, shift)))
+      )
   )
 
   if (duplicate) {
     return {
-      error: `Presensi ${attendance_type} sudah tercatat sebelumnya untuk tanggal ${workDateStr}.`,
+      error: attendance_type === 'pulang'
+        ? `Presensi pulang sudah tercatat sebelumnya untuk sesi ini.`
+        : `Presensi ${attendance_type} sudah tercatat sebelumnya untuk tanggal ${workDateStr}.`,
       error_code: 'DUPLICATE_ATTENDANCE',
     }
   }

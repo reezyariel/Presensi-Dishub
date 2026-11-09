@@ -4,21 +4,20 @@ import {
   Sun, Moon, ArrowRight, X, AlertTriangle, CheckCircle2
 } from 'lucide-react'
 import {
-  isWeekend,
   getJakartaDayOfWeek,
   getSecurityAvailableOptions,
   getSecurityShiftCheckInStatus,
   getAutoSelectSecurityShift,
   formatJakartaTime,
   formatJakartaDate,
-  nowJakarta,
 } from '../../lib/scheduleEngine'
+import { getEffectiveNow, subscribeToMockClock } from '../../lib/mockClock'
 import type { SecurityShiftOption } from '../../types/attendance'
-import { parseISO } from 'date-fns'
 
 interface ShiftSelectionModalProps {
   isOpen: boolean
   workDateStr: string
+  currentTime?: Date
   currentShift?: SecurityShiftOption | null
   onClose: () => void
   onConfirm: (selected: SecurityShiftOption) => void
@@ -27,20 +26,49 @@ interface ShiftSelectionModalProps {
 export default function ShiftSelectionModal({
   isOpen,
   workDateStr,
+  currentTime: propCurrentTime,
   currentShift: _currentShift,
   onClose,
   onConfirm,
 }: ShiftSelectionModalProps) {
   const [selected, setSelected] = useState<SecurityShiftOption | null>(null)
-  const [now, setNow] = useState<Date>(() => nowJakarta())
+  const [internalNow, setInternalNow] = useState<Date>(() => propCurrentTime || getEffectiveNow())
   const hasUserInteracted = useRef(false)
 
-  // Determine if it is a weekend or weekday in Jakarta
-  const parsedDate = parseISO(workDateStr)
-  const isWeekendDay = isWeekend(parsedDate)
+  // Sync internalNow whenever propCurrentTime changes
+  useEffect(() => {
+    if (propCurrentTime) {
+      setInternalNow(propCurrentTime)
+    }
+  }, [propCurrentTime])
+
+  // Periodic live time tick and immediate reaction to DevClock while modal is open
+  useEffect(() => {
+    if (!isOpen) return
+
+    const unsub = subscribeToMockClock(() => {
+      setInternalNow(getEffectiveNow())
+    })
+
+    const timer = setInterval(() => {
+      setInternalNow(getEffectiveNow())
+    }, 1000)
+
+    return () => {
+      unsub()
+      clearInterval(timer)
+    }
+  }, [isOpen])
+
+  const now = propCurrentTime || internalNow
+
+  // Determine day in Asia/Jakarta
+  const dayOfWeek = getJakartaDayOfWeek(workDateStr)
+  const isWeekendDay = dayOfWeek === 0 || dayOfWeek === 6
+  const isFriday = dayOfWeek === 5
   const availableOptions = getSecurityAvailableOptions(workDateStr)
 
-  // Auto-selection and state reset on modal open
+  // Auto-selection and state reset on modal open or when time / date updates
   useEffect(() => {
     if (!isOpen) {
       setSelected(null)
@@ -48,35 +76,18 @@ export default function ShiftSelectionModal({
       return
     }
 
-    // Reset user interaction tracking on open
-    hasUserInteracted.current = false
-    const initialNow = nowJakarta()
-    setNow(initialNow)
-
-    // Evaluate active check-in window
-    const autoShift = getAutoSelectSecurityShift(workDateStr, initialNow)
-    if (autoShift && availableOptions.includes(autoShift)) {
-      setSelected(autoShift)
-    } else {
-      setSelected(null)
+    // If user hasn't manually selected an option, auto-select if exactly one window is open
+    if (!hasUserInteracted.current) {
+      const autoShift = getAutoSelectSecurityShift(workDateStr, now)
+      if (autoShift && availableOptions.includes(autoShift)) {
+        setSelected(autoShift)
+      } else {
+        setSelected(null)
+      }
     }
-  }, [isOpen, workDateStr])
-
-  // Periodic live time tick while modal is open (clean up on close)
-  useEffect(() => {
-    if (!isOpen) return
-
-    const timer = setInterval(() => {
-      setNow(nowJakarta())
-    }, 1000)
-
-    return () => clearInterval(timer)
-  }, [isOpen])
+  }, [isOpen, workDateStr, now, availableOptions])
 
   if (!isOpen) return null
-
-  const dayOfWeek = getJakartaDayOfWeek(workDateStr)
-  const isFriday = dayOfWeek === 5
 
   const getOptionIcon = (opt: SecurityShiftOption) => {
     switch (opt) {
@@ -124,7 +135,9 @@ export default function ShiftSelectionModal({
               <p className="text-xs text-neutral-500 mt-0.5">
                 {isWeekendDay
                   ? 'Sabtu & Minggu menggunakan format Shift I (Pagi) dan Shift II (Malam)'
-                  : 'Pilih shift kerja resmi Security untuk hari ini'}
+                  : isFriday
+                    ? 'Pilih varian shift kerja resmi Security untuk hari Jumat'
+                    : 'Pilih shift kerja resmi Security untuk hari ini'}
               </p>
             </div>
           </div>
@@ -141,7 +154,7 @@ export default function ShiftSelectionModal({
         <div className="px-6 py-2.5 bg-neutral-100/60 border-b border-neutral-200/60 flex items-center justify-between text-xs text-neutral-600">
           <div className="flex items-center gap-1.5 font-medium">
             <Clock size={13} className="text-neutral-500" />
-            <span>Tanggal: <strong className="text-neutral-900">{formatJakartaDate(parsedDate)}</strong></span>
+            <span>Tanggal: <strong className="text-neutral-900">{formatJakartaDate(workDateStr)}</strong></span>
           </div>
           <div className="font-mono text-neutral-700 bg-white px-2 py-0.5 rounded-md border border-neutral-200 text-[11px] font-semibold">
             {formatJakartaTime(now)} WIB

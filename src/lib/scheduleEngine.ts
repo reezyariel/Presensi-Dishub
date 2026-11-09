@@ -300,7 +300,10 @@ export const DEFAULT_SECURITY_WEEKEND_SCHEDULE: SecurityWeekendSchedule = {
 export function canonicalShiftName(shift: string | null | undefined): string {
   if (!shift) return ''
   const s = shift.trim()
-  if (s === 'Shift 1' || s === 'Shift I' || s === 'Sesi Pagi') return 'Shift I'
+  if (s === 'shift_1_reguler' || s === 'Shift I — Reguler' || s === 'Shift I - Reguler' || s === 'Shift I Reguler') return 'shift_1_reguler'
+  if (s === 'shift_1_panjang' || s === 'Shift I — Panjang (12 Jam)' || s === 'Shift I - Panjang (12 Jam)' || s === 'Shift I Panjang') return 'shift_1_panjang'
+  if (s === 'shift_2_malam' || s === 'Shift II — Malam' || s === 'Shift II - Malam' || s === 'Shift II Malam') return 'shift_2_malam'
+  if (s === 'Shift 1' || s === 'Shift I' || s === 'Sesi Pagi' || s === 'Shift I — Pagi' || s === 'Shift I - Pagi' || s === 'Shift I Pagi') return 'Shift I'
   if (s === 'Shift 2' || s === 'Shift II' || s === 'Sesi Malam') return 'Shift II'
   if (s === 'Shift 3' || s === 'Shift III') return 'Shift III'
   return s
@@ -528,16 +531,8 @@ export function getSecurityShiftCheckInStatus(
   const currentHour = jakartaNow.getHours()
   const currentMinutes = currentHour * 60 + jakartaNow.getMinutes()
 
-  const isOvernight =
-    isOvernightSecurityShift(workDateStr, option) ||
-    (workDateStr === todayJakartaStr && currentHour < 12 && isOvernightCheckout(todayJakartaStr, option))
-
-  // Determine effective work date: for overnight shift post-midnight (hour < 12),
-  // the shift that started yesterday evening belongs to yesterday.
-  let effectiveWorkDate = workDateStr
-  if (isOvernight && workDateStr === todayJakartaStr && currentHour < 12) {
-    effectiveWorkDate = determineOvernightWorkDate(now)
-  }
+  const isOvernight = isOvernightSecurityShift(workDateStr, option)
+  const effectiveWorkDate = workDateStr
 
   const shiftItem = getSecurityShiftItem(effectiveWorkDate, option)
   const sched: ShiftSchedule = {
@@ -553,16 +548,19 @@ export function getSecurityShiftCheckInStatus(
   const isFri = day === 5
 
   const canon = canonicalShiftName(option)
-  let label = option
+  let label = shiftItem.label || option
   let sublabel = ''
 
   if (isWeekendDay) {
     if (canon === 'Shift I' || option === 'Sesi Pagi') {
       label = 'Shift I — Pagi'
       sublabel = 'Sesi Akhir Pekan Pagi (07:30 – 20:00 WIB)'
-    } else {
+    } else if (canon === 'Shift II' || option === 'Sesi Malam') {
       label = 'Shift II — Malam'
       sublabel = 'Sesi Akhir Pekan Malam (20:00 – 07:30 WIB H+1)'
+    } else {
+      label = option
+      sublabel = 'Sesi Akhir Pekan'
     }
   } else if (isFri) {
     if (option === 'shift_1_reguler') {
@@ -1376,6 +1374,7 @@ export function checkAttendanceWindow(
   const todayStr = formatInTimeZone(current, TIMEZONE, 'yyyy-MM-dd')
   let effectiveWorkDateStr = workDateStr
   if (
+    attendanceType === 'pulang' &&
     current.getHours() < 12 &&
     (isOvernightSecurityShift(workDateStr, shift) || (workDateStr === todayStr && isOvernightCheckout(todayStr, shift)))
   ) {

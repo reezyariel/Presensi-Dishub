@@ -124,7 +124,7 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
     setWeekChartData([])
     setRecentRecords([])
     loadAttendanceData()
-  }, [category, user?.id, employeeProfile?.id, employeeProfile?.normalized_name])
+  }, [category, user?.id, employeeProfile?.id, employeeProfile?.normalized_name, today])
 
   async function loadAttendanceData() {
     setIsLoading(true)
@@ -169,86 +169,68 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
         let isOvernightCompleted = false
 
         if (category === 'Security') {
-          // 1. Is there an active on-duty (uncompleted) shift on today?
-          // (A masuk record on today where NO matching pulang exists)
-          const uncompletedToday = filtered.find(r =>
-            r.attendance_type === 'masuk' &&
-            r.work_date === today &&
-            !filtered.some(p =>
-              p.attendance_type === 'pulang' &&
-              p.work_date === today &&
-              (p.check_in_record_id === r.id || shiftsCompatible(p.shift, r.shift))
+          // Separate Security masuk and pulang lists
+          const secMasukList = filtered.filter(r => r.attendance_type === 'masuk')
+          const secPulangList = filtered.filter(r => r.attendance_type === 'pulang')
+
+          // Helper: is this check-in paired with any existing check-out?
+          const isClosed = (m: AttendanceRecord) => {
+            return secPulangList.some(p =>
+              (p.check_in_record_id && p.check_in_record_id === m.id) ||
+              (!p.check_in_record_id && p.work_date === m.work_date && shiftsCompatible(p.shift, m.shift))
             )
+          }
+
+          // Active Record Detection:
+          // An Active Record is an unclosed check-in from today OR yesterday overnight
+          const unclosedToday = secMasukList.find(r => r.work_date === today && !isClosed(r)) || null
+          const unclosedYesterdayOvernight = secMasukList.find(r =>
+            r.work_date === yesterdayStr &&
+            isOvernightSecurityShift(yesterdayStr, r.shift) &&
+            !isClosed(r)
           ) || null
 
-          if (uncompletedToday) {
-            masuk = uncompletedToday
+          // Priority: unclosed today, then unclosed yesterday overnight
+          const activeRecord = unclosedToday || unclosedYesterdayOvernight
+
+          if (activeRecord) {
+            masuk = activeRecord
             pulang = null
             setCompletedOvernightInfo(null)
           } else {
-            // 2. Check yesterday for an active uncompleted overnight shift (e.g. Shift III Mon-Thu, Shift II Fri/Sat/Sun)
-            const yMasuk = filtered.find(r => r.attendance_type === 'masuk' && r.work_date === yesterdayStr && isOvernightSecurityShift(yesterdayStr, r.shift)) || null
-            if (yMasuk) {
-              const yPulang = filtered.find(r =>
-                r.attendance_type === 'pulang' &&
-                r.work_date === yesterdayStr &&
-                (r.check_in_record_id === yMasuk.id || shiftsCompatible(r.shift, yMasuk.shift) || !r.shift)
+            // No active session in progress.
+            // Check if yesterday had an overnight shift that was completed today
+            const yOvernightMasuk = secMasukList.find(r =>
+              r.work_date === yesterdayStr &&
+              isOvernightSecurityShift(yesterdayStr, r.shift) &&
+              isClosed(r)
+            ) || null
+
+            if (yOvernightMasuk) {
+              const yPulang = secPulangList.find(p =>
+                (p.check_in_record_id && p.check_in_record_id === yOvernightMasuk.id) ||
+                (!p.check_in_record_id && p.work_date === yesterdayStr && shiftsCompatible(p.shift, yOvernightMasuk.shift))
               ) || null
 
-              if (!yPulang) {
-                // Yesterday's overnight shift is still active and awaiting checkout H+1!
-                masuk = yMasuk
-                pulang = null
-                setCompletedOvernightInfo(null)
-              } else {
-                // Yesterday's overnight shift is finished and complete!
-                setCompletedOvernightInfo({ masuk: yMasuk, pulang: yPulang })
+              if (yPulang) {
+                setCompletedOvernightInfo({ masuk: yOvernightMasuk, pulang: yPulang })
                 isOvernightCompleted = true
               }
             } else {
               setCompletedOvernightInfo(null)
             }
 
-            // 3. If no active uncompleted shift from yesterday or today:
-            if (!masuk) {
-              const autoShift = getAutoSelectSecurityShift(today, effectiveNow)
-              const targetShift = autoShift || (selectedShift && getSecurityAvailableOptions(today).includes(selectedShift) ? selectedShift : null)
-
-              if (targetShift) {
-                // Look for record belonging to this target shift on today
-                const targetMasuk = filtered.find(r =>
-                  r.attendance_type === 'masuk' &&
-                  r.work_date === today &&
-                  shiftsCompatible(r.shift, targetShift)
-                ) || null
-
-                if (targetMasuk) {
-                  masuk = targetMasuk
-                  pulang = filtered.find(p =>
-                    p.attendance_type === 'pulang' &&
-                    p.work_date === today &&
-                    (p.check_in_record_id === targetMasuk.id || shiftsCompatible(p.shift, targetMasuk.shift))
-                  ) || null
-                } else {
-                  masuk = null
-                  pulang = null
-                }
-              } else {
-                // No specific target shift window active: check if any completed shift exists on today
-                const todayMasukList = filtered.filter(r => r.attendance_type === 'masuk' && r.work_date === today)
-                if (todayMasukList.length > 0) {
-                  const latestMasuk = todayMasukList[0]
-                  masuk = latestMasuk
-                  pulang = filtered.find(p =>
-                    p.attendance_type === 'pulang' &&
-                    p.work_date === today &&
-                    (p.check_in_record_id === latestMasuk.id || shiftsCompatible(p.shift, latestMasuk.shift))
-                  ) || null
-                } else {
-                  masuk = null
-                  pulang = null
-                }
-              }
+            // Check if today has a completed shift (both masuk and pulang)
+            const todayCompletedMasuk = secMasukList.find(r => r.work_date === today && isClosed(r)) || null
+            if (todayCompletedMasuk) {
+              masuk = todayCompletedMasuk
+              pulang = secPulangList.find(p =>
+                (p.check_in_record_id && p.check_in_record_id === todayCompletedMasuk.id) ||
+                (!p.check_in_record_id && p.work_date === today && shiftsCompatible(p.shift, todayCompletedMasuk.shift))
+              ) || null
+            } else {
+              masuk = null
+              pulang = null
             }
           }
         } else {
@@ -398,18 +380,23 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
         pulang: fmt(cs.pulang.start, cs.pulang.end),
       }
     } else {
-      const sched = selectedShift ? getScheduleInfo('Security', 'masuk', selectedShift, today) : null
-      const schedEnd = selectedShift ? getScheduleInfo('Security', 'pulang', selectedShift, today) : null
+      const activeWorkDate = todayRecords.masuk?.work_date || today
+      const sched = selectedShift ? getScheduleInfo('Security', 'masuk', selectedShift, activeWorkDate) : null
+      const schedEnd = selectedShift ? getScheduleInfo('Security', 'pulang', selectedShift, activeWorkDate) : null
       return {
         masuk: sched ? `${sched.scheduledStart.replace(':', '.')} – ${sched.scheduledEnd.replace(':', '.')} WIB` : 'Pilih Shift',
         istirahat: 'Shift Kerja Berlanjut',
         pulang: schedEnd ? `${schedEnd.scheduledStart.replace(':', '.')}${schedEnd.isNextDay ? ' (H+1)' : ''} WIB` : 'Pilih Shift',
       }
     }
-  }, [category, selectedShift, today])
+  }, [category, selectedShift, today, todayRecords.masuk?.work_date])
 
   const handleOpenTakeModal = (type: 'masuk' | 'istirahat' | 'pulang') => {
     if (category === 'Security' && type === 'masuk') {
+      if (todayRecords.masuk && !todayRecords.pulang) {
+        // Sesi aktif sedang berjalan — tidak diperkenankan memilih shift baru atau absen masuk ulang
+        return
+      }
       setIsShiftPickerOpen(true)
       return
     }
@@ -755,6 +742,7 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
           {/* A. Main Attendance Card */}
           {category === 'Security' ? (
             <SecurityShiftStatusCard
+              isLoading={isLoading}
               status={
                 todayRecords.pulang
                   ? 'selesai'
@@ -786,9 +774,35 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
               waitingMessage={'message' in buttonState ? (buttonState as { message?: string }).message : buttonState.title}
               masukRecordId={todayRecords.masuk?.id}
               onOpenTakeModal={handleOpenTakeModal}
-              onChangeShiftClick={() => setIsShiftPickerOpen(true)}
-              onSelectShift={(shift) => setSelectedShift(shift)}
+              onChangeShiftClick={() => {
+                if (todayRecords.masuk && !todayRecords.pulang) return
+                setIsShiftPickerOpen(true)
+              }}
+              onSelectShift={(shift) => {
+                if (todayRecords.masuk && !todayRecords.pulang) return
+                setSelectedShift(shift)
+              }}
             />
+          ) : isLoading ? (
+            <div id="presensi-hari-ini-card" className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden scroll-mt-20 p-5 space-y-5 animate-pulse">
+              <div className="flex items-center justify-between pb-4 border-b border-neutral-100">
+                <div className="h-4 w-36 bg-neutral-200 rounded-md" />
+                <div className="h-3 w-24 bg-neutral-100 rounded-md" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-100 space-y-2">
+                  <div className="h-3 w-16 bg-neutral-200 rounded-md" />
+                  <div className="h-8 w-24 bg-neutral-200 rounded-md" />
+                </div>
+                <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-100 space-y-2">
+                  <div className="h-3 w-16 bg-neutral-200 rounded-md" />
+                  <div className="h-8 w-24 bg-neutral-200 rounded-md" />
+                </div>
+              </div>
+              <div className="w-full py-4 bg-neutral-100 border border-neutral-200 rounded-xl flex items-center justify-center text-xs font-semibold text-neutral-400">
+                Memuat data presensi...
+              </div>
+            </div>
           ) : (
             <div id="presensi-hari-ini-card" className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden scroll-mt-20">
               {/* Card header */}
@@ -1142,9 +1156,12 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
             <>
               <SecurityScheduleCard
                 currentShift={selectedShift}
-                workDateStr={today}
-                onSelectShift={(shift) => setSelectedShift(shift)}
-                canChangeShift={!todayRecords.masuk}
+                workDateStr={todayRecords.masuk?.work_date || today}
+                onSelectShift={(shift) => {
+                  if (todayRecords.masuk && !todayRecords.pulang) return
+                  setSelectedShift(shift)
+                }}
+                canChangeShift={!todayRecords.masuk || Boolean(todayRecords.pulang)}
               />
               <Security30DayRecapCard recap={securityRecap} />
               <SecurityWeeklyChartCard weekChartData={weekChartData} todayDateStr={today} />
@@ -1226,6 +1243,7 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
         <ShiftSelectionModal
           isOpen={isShiftPickerOpen}
           workDateStr={today}
+          currentTime={currentTime}
           currentShift={selectedShift}
           onClose={() => setIsShiftPickerOpen(false)}
           onConfirm={handleConfirmSecurityShift}
@@ -1237,7 +1255,7 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
         <TakeAttendanceModal
           category={category}
           attendanceType={attendanceTypeToTake}
-          shift={selectedShift || undefined}
+          shift={(todayRecords.masuk?.shift as SecurityShiftOption) || selectedShift || undefined}
           workDate={todayRecords.masuk?.work_date || today}
           checkInRecordId={todayRecords.masuk?.id}
           onClose={() => setIsTakeModalOpen(false)}

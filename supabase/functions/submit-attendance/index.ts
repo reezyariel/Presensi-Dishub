@@ -482,11 +482,14 @@ serve(async (req: Request) => {
     const authoritativeEmployeeName = matchedEmployee.full_name
     const authoritativeNormalizedName = matchedEmployee.normalized_name
 
-    // Canonical shift name helper (normalize Shift 1/2/3 and Sesi Pagi/Malam)
+    // Canonical shift name helper (normalize Shift 1/2/3, Friday variants, and Sesi Pagi/Malam)
     function canonicalize(s: string | null | undefined): string {
       if (!s) return ''
       const t = s.trim()
-      if (t === 'Shift 1' || t === 'Shift I' || t === 'Sesi Pagi') return 'Shift I'
+      if (t === 'shift_1_reguler' || t === 'Shift I — Reguler' || t === 'Shift I - Reguler' || t === 'Shift I Reguler') return 'shift_1_reguler'
+      if (t === 'shift_1_panjang' || t === 'Shift I — Panjang (12 Jam)' || t === 'Shift I - Panjang (12 Jam)' || t === 'Shift I Panjang') return 'shift_1_panjang'
+      if (t === 'shift_2_malam' || t === 'Shift II — Malam' || t === 'Shift II - Malam' || t === 'Shift II Malam') return 'shift_2_malam'
+      if (t === 'Shift 1' || t === 'Shift I' || t === 'Sesi Pagi' || t === 'Shift I — Pagi' || t === 'Shift I - Pagi' || t === 'Shift I Pagi') return 'Shift I'
       if (t === 'Shift 2' || t === 'Shift II' || t === 'Sesi Malam') return 'Shift II'
       if (t === 'Shift 3' || t === 'Shift III') return 'Shift III'
       return t
@@ -499,6 +502,7 @@ serve(async (req: Request) => {
       const c2 = canonicalize(s2)
       if (c1 === c2) return true
       // Friday backward compatibility mappings:
+      // Note: ONLY legacy 'Shift I' maps to 'shift_1_panjang', NEVER 'shift_1_reguler'
       if ((c1 === 'Shift I' && c2 === 'shift_1_panjang') || (c2 === 'Shift I' && c1 === 'shift_1_panjang')) return true
       if ((c1 === 'Shift II' && c2 === 'shift_2_malam') || (c2 === 'Shift II' && c1 === 'shift_2_malam')) return true
       return false
@@ -510,6 +514,7 @@ serve(async (req: Request) => {
     //   Jumat:       shift_2_malam / Shift II (19:00 – 07:00 H+1)
     //   Sabtu–Minggu: Shift II (20:00 – 07:30 H+1), Sesi Malam
     let workDate = jakartaDateToday
+    let resolvedCheckInRecordId: string | null = null
     const yesterday = new Date(serverNow.getTime() - 24 * 60 * 60 * 1000)
     const yesterdayDateStr = getJakartaDateString(yesterday)
 
@@ -548,9 +553,10 @@ serve(async (req: Request) => {
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           )
         }
+        resolvedCheckInRecordId = csMasuk.id
       }
     } else if (category === 'Security') {
-      const canonShift = canonicalize(shift)
+      let activeShiftToValidate = shift
 
       if (attendance_type === 'pulang') {
         let matchedMasuk: {
@@ -558,28 +564,90 @@ serve(async (req: Request) => {
           work_date: string
           recorded_at: string
           shift: string | null
+          normalized_name?: string
+          auth_uid?: string | null
+          employee_profile_id?: string | null
+          category?: string
+          attendance_type?: string
         } | null = null
 
         // Priority 1: Check by specific check_in_record_id if supplied
         if (check_in_record_id) {
-          const { data: byId } = await supabase
+          const { data: recById } = await supabase
             .from('attendance_records')
-            .select('id, work_date, recorded_at, shift')
+            .select('id, work_date, recorded_at, shift, normalized_name, category, attendance_type, auth_uid, employee_profile_id')
             .eq('id', check_in_record_id)
-            .eq('normalized_name', authoritativeNormalizedName)
-            .eq('category', 'Security')
-            .eq('attendance_type', 'masuk')
             .maybeSingle()
 
-          if (byId && shiftsCompatible(byId.shift, shift)) {
-            matchedMasuk = byId
+          if (!recById) {
+            return new Response(
+              JSON.stringify({
+                error: 'Presensi pulang ditolak: Catatan presensi masuk dengan ID tersebut tidak ditemukan.',
+                error_code: 'CHECKIN_NOT_FOUND',
+              }),
+              { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
           }
+
+          // Verify ownership: caller must match the record's employee
+          const isOwner = (recById.auth_uid && callerUser && recById.auth_uid === callerUser.id) ||
+            (recById.employee_profile_id && matchedEmployee && recById.employee_profile_id === matchedEmployee.id) ||
+            (recById.normalized_name === authoritativeNormalizedName)
+
+          if (!isOwner) {
+            return new Response(
+              JSON.stringify({
+                error: 'Akses ditolak: Catatan presensi masuk ini bukan milik Anda.',
+                error_code: 'UNAUTHORIZED_CHECKIN_RECORD',
+              }),
+              { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+          }
+
+          if (recById.category !== 'Security' || recById.attendance_type !== 'masuk') {
+            return new Response(
+              JSON.stringify({
+                error: 'Presensi pulang ditolak: Catatan yang dirujuk bukan merupakan presensi masuk Security.',
+                error_code: 'INVALID_CHECKIN_RECORD',
+              }),
+              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+          }
+
+          // Check if this check-in already has a paired check-out (prevent double check-out)
+          const { data: existingPulangForThisId } = await supabase
+            .from('attendance_records')
+            .select('id')
+            .eq('category', 'Security')
+            .eq('attendance_type', 'pulang')
+            .or(`check_in_record_id.eq.${recById.id},and(work_date.eq.${recById.work_date},shift.eq.${recById.shift},normalized_name.eq.${authoritativeNormalizedName})`)
+            .maybeSingle()
+
+          if (existingPulangForThisId) {
+            return new Response(
+              JSON.stringify({
+                error: 'Presensi pulang ditolak: Sesi presensi masuk ini sudah memiliki catatan presensi pulang (check-out ganda tidak diizinkan).',
+                error_code: 'DUPLICATE_CHECKOUT',
+              }),
+              { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+          }
+
+          if (shift && !shiftsCompatible(recById.shift, shift)) {
+            return new Response(
+              JSON.stringify({
+                error: `Presensi pulang ditolak: Shift check-out (${shift}) tidak cocok dengan shift check-in (${recById.shift}).`,
+                error_code: 'INCOMPATIBLE_SHIFT_PAIR',
+              }),
+              { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+          }
+
+          matchedMasuk = recById
         }
 
         // Priority 2: Look up open masuk for this employee in yesterday and today
         if (!matchedMasuk) {
-          // If yesterday had an overnight shift matching shift (e.g. Sunday Shift II ending Monday morning),
-          // search yesterday first, then today.
           const isYesterdayOvernight = isOvernightByDayAndShift(yesterdayDayNum, shift)
           const candidateDates = (currentHour < 14 && isYesterdayOvernight)
             ? [yesterdayDateStr, jakartaDateToday]
@@ -595,7 +663,7 @@ serve(async (req: Request) => {
             .order('recorded_at', { ascending: false })
 
           if (masukRecords && masukRecords.length > 0) {
-            const matchingShifts = masukRecords.filter(r => shiftsCompatible(r.shift, shift))
+            const matchingShifts = shift ? masukRecords.filter(r => shiftsCompatible(r.shift, shift)) : masukRecords
 
             // Pick the first matching record that doesn't already have a pulang
             for (const cand of matchingShifts) {
@@ -605,19 +673,13 @@ serve(async (req: Request) => {
                 .eq('normalized_name', authoritativeNormalizedName)
                 .eq('category', 'Security')
                 .eq('attendance_type', 'pulang')
-                .eq('work_date', cand.work_date)
-                .eq('shift', cand.shift)
+                .or(`check_in_record_id.eq.${cand.id},and(work_date.eq.${cand.work_date},shift.eq.${cand.shift})`)
                 .maybeSingle()
 
               if (!existingPulang) {
                 matchedMasuk = cand
                 break
               }
-            }
-
-            // Fallback to latest matching masuk if none unclosed
-            if (!matchedMasuk && matchingShifts.length > 0) {
-              matchedMasuk = matchingShifts[0]
             }
           }
         }
@@ -633,8 +695,62 @@ serve(async (req: Request) => {
           )
         }
 
+        resolvedCheckInRecordId = matchedMasuk.id
         workDate = matchedMasuk.work_date
+        shift = matchedMasuk.shift
+        activeShiftToValidate = matchedMasuk.shift
       } else if (attendance_type === 'masuk') {
+        // Prevent changing shift / starting new shift while an active session exists
+        const { data: activeMasuk } = await supabase
+          .from('attendance_records')
+          .select('id, work_date, shift')
+          .eq('normalized_name', authoritativeNormalizedName)
+          .eq('category', 'Security')
+          .eq('attendance_type', 'masuk')
+          .in('work_date', [jakartaDateToday, yesterdayDateStr])
+          .order('recorded_at', { ascending: false })
+
+        if (activeMasuk && activeMasuk.length > 0) {
+          for (const cand of activeMasuk) {
+            // If cand is from yesterday, only active if it's an overnight shift
+            const candDayNum = new Date(Date.UTC(Number(cand.work_date.slice(0, 4)), Number(cand.work_date.slice(5, 7)) - 1, Number(cand.work_date.slice(8, 10)))).getUTCDay()
+            if (cand.work_date === yesterdayDateStr && !isOvernightByDayAndShift(candDayNum, cand.shift)) {
+              continue
+            }
+
+            const { data: candPulang } = await supabase
+              .from('attendance_records')
+              .select('id')
+              .eq('normalized_name', authoritativeNormalizedName)
+              .eq('category', 'Security')
+              .eq('attendance_type', 'pulang')
+              .or(`check_in_record_id.eq.${cand.id},and(work_date.eq.${cand.work_date},shift.eq.${cand.shift})`)
+              .maybeSingle()
+
+            if (!candPulang) {
+              if (cand.work_date === workDate && shiftsCompatible(cand.shift, shift)) {
+                return new Response(
+                  JSON.stringify({
+                    error: `Pegawai ${authoritativeEmployeeName} sudah melakukan presensi MASUK untuk tanggal kerja ${workDate}${shift ? ` (${shift})` : ''}.`,
+                    error_code: 'DUPLICATE_ATTENDANCE',
+                  }),
+                  { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                )
+              }
+              const isCandOvernight = cand.work_date === yesterdayDateStr && isOvernightByDayAndShift(candDayNum, cand.shift)
+              return new Response(
+                JSON.stringify({
+                  error: isCandOvernight
+                    ? `Anda masih memiliki tugas aktif ${cand.shift} yang belum melakukan presensi pulang. Selesaikan check-out terlebih dahulu sebelum memulai shift baru.`
+                    : `Anda masih memiliki sesi dinas aktif (${cand.shift} - ${cand.work_date}) yang belum melakukan check-out. Selesaikan presensi pulang terlebih dahulu sebelum memulai shift baru.`,
+                  error_code: isCandOvernight ? 'ACTIVE_OVERNIGHT_SHIFT_IN_PROGRESS' : 'ACTIVE_SESSION_EXISTS',
+                }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              )
+            }
+          }
+        }
+
         // Post-midnight / early morning check-in (< 12:00 WIB) for overnight shift that started yesterday
         if (currentHour < 12 && isOvernightByDayAndShift(yesterdayDayNum, shift)) {
           workDate = yesterdayDateStr
@@ -1235,6 +1351,7 @@ serve(async (req: Request) => {
       category,
       attendance_type,
       shift: category === 'Security' ? shift : null,
+      check_in_record_id: attendance_type === 'pulang' ? resolvedCheckInRecordId : null,
       work_date: workDate,
       recorded_at: serverNow.toISOString(),
       scheduled_start: scheduledStart,

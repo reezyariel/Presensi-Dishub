@@ -83,6 +83,7 @@ interface SecurityShiftStatusCardProps {
   canTakePulang: boolean
   waitingMessage?: string
   masukRecordId?: string
+  isLoading?: boolean
   onOpenTakeModal: (type: 'masuk' | 'pulang') => void
   onChangeShiftClick?: () => void
   onSelectShift?: (shift: SecurityShiftOption) => void
@@ -100,10 +101,52 @@ export function SecurityShiftStatusCard({
   canTakePulang,
   waitingMessage,
   masukRecordId,
+  isLoading = false,
   onOpenTakeModal,
   onChangeShiftClick,
   onSelectShift,
 }: SecurityShiftStatusCardProps) {
+  if (isLoading) {
+    return (
+      <div id="presensi-hari-ini-card" className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden scroll-mt-20 p-5 space-y-5 animate-pulse">
+        {/* Header Skeleton */}
+        <div className="flex items-center justify-between pb-4 border-b border-neutral-100">
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 rounded bg-neutral-200" />
+            <div className="h-4 w-40 bg-neutral-200 rounded-md" />
+          </div>
+          <div className="h-5 w-28 bg-neutral-200 rounded-full" />
+        </div>
+        {/* Status Box Skeleton */}
+        <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-100 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-neutral-200 flex-shrink-0" />
+          <div className="space-y-2 flex-1">
+            <div className="h-4 w-44 bg-neutral-200 rounded-md" />
+            <div className="h-3 w-64 bg-neutral-100 rounded-md" />
+          </div>
+        </div>
+        {/* Check-In / Check-Out Overview Cards Skeleton */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-100 space-y-2">
+            <div className="h-3 w-16 bg-neutral-200 rounded-md" />
+            <div className="h-8 w-24 bg-neutral-200 rounded-md" />
+            <div className="h-4 w-20 bg-neutral-100 rounded-full" />
+          </div>
+          <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-100 space-y-2">
+            <div className="h-3 w-16 bg-neutral-200 rounded-md" />
+            <div className="h-8 w-24 bg-neutral-200 rounded-md" />
+            <div className="h-4 w-20 bg-neutral-100 rounded-full" />
+          </div>
+        </div>
+        {/* Action Button Skeleton */}
+        <div className="w-full py-4 bg-neutral-100 border border-neutral-200 rounded-xl flex items-center justify-center gap-2 text-xs font-semibold text-neutral-400">
+          <Clock size={16} className="animate-spin text-neutral-400" />
+          <span>Memeriksa status sesi presensi aktif...</span>
+        </div>
+      </div>
+    )
+  }
+
   const availableOptions = getSecurityAvailableOptions(workDateStr)
 
   const statusConfig = {
