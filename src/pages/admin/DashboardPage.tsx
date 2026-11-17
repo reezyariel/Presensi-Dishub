@@ -10,7 +10,8 @@ import {
   FileText, Calendar, Download,
   ChevronRight, Users, UserCheck, Clock,
   AlertCircle, UserX, RefreshCw,
-  ShieldCheck, ArrowUpRight
+  ShieldCheck, ArrowUpRight, Sparkles, Shield,
+  Search, X, Activity
 } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -29,13 +30,20 @@ import {
   formatJakartaTime,
   formatJakartaDate,
 } from '../../lib/scheduleEngine'
+import { getPreviousCalendarDate } from '../../lib/securityDateDisplay'
 import { exportRecapToExcel } from '../../lib/exportExcel'
 import type { AttendanceRecord } from '../../types/attendance'
 import {
   AttendanceStatusBadge,
   CategoryBadge,
   AttendanceTypeBadge,
+  OperationalStatusBadge,
 } from '../../components/admin/StatusBadges'
+import {
+  calculateAdminOperationalMonitoring,
+  type EmployeeMonitoringItem,
+  type DivisionOperationalSummary,
+} from '../../lib/operationalStatus'
 
 export default function DashboardPage() {
   const today = todayJakarta()
@@ -47,6 +55,24 @@ export default function DashboardPage() {
   const [isExporting, setIsExporting] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
+  // Operational Monitoring State (CS & Security)
+  const [csSummary, setCsSummary] = useState<DivisionOperationalSummary>({
+    sedangBertugas: 0,
+    belumCheckIn: 0,
+    tugasSelesai: 0,
+    total: 0,
+  })
+  const [securitySummary, setSecuritySummary] = useState<DivisionOperationalSummary>({
+    sedangBertugas: 0,
+    belumCheckIn: 0,
+    tugasSelesai: 0,
+    total: 0,
+  })
+  const [monitoringItems, setMonitoringItems] = useState<EmployeeMonitoringItem[]>([])
+  const [monitoringCategory, setMonitoringCategory] = useState<'ALL' | 'CS' | 'Security'>('ALL')
+  const [monitoringStatus, setMonitoringStatus] = useState<string>('ALL')
+  const [monitoringSearch, setMonitoringSearch] = useState<string>('')
+
   useEffect(() => {
     loadDashboard()
   }, [])
@@ -54,12 +80,25 @@ export default function DashboardPage() {
   async function loadDashboard() {
     setIsLoading(true)
     try {
-      // 1. Total active employees count
-      const { data: emps } = await supabase
-        .from('active_employees_directory')
-        .select('id')
+      // 1. Total active employees & profiles directory
+      let activeEmpsList: any[] = []
+      const { data: profiles, error: profErr } = await supabase
+        .from('employee_profiles')
+        .select('*')
+        .eq('is_active', true)
+        .order('full_name', { ascending: true })
 
-      const empCount = emps?.length || 0
+      if (!profErr && profiles && profiles.length > 0) {
+        activeEmpsList = profiles
+      } else {
+        const { data: dirEmps } = await supabase
+          .from('active_employees_directory')
+          .select('*')
+          .order('full_name', { ascending: true })
+        activeEmpsList = dirEmps || []
+      }
+
+      const empCount = activeEmpsList.length || 0
       setTotalEmployees(empCount)
 
       // 2. Today's attendance records
@@ -68,7 +107,29 @@ export default function DashboardPage() {
         .select('*')
         .eq('work_date', today)
 
-      if (todayList) setTodayRecords(todayList as AttendanceRecord[])
+      const todayRecs = (todayList as AttendanceRecord[]) || []
+      setTodayRecords(todayRecs)
+
+      // 2b. Yesterday's records for Security (overnight Shift III crossover)
+      const yesterday = getPreviousCalendarDate(today)
+      const { data: yestSecList } = await supabase
+        .from('attendance_records')
+        .select('*')
+        .eq('category', 'Security')
+        .eq('work_date', yesterday)
+
+      const yestRecs = (yestSecList as AttendanceRecord[]) || []
+
+      // 2c. Calculate operational monitoring for both CS and Security
+      const monitoringResult = calculateAdminOperationalMonitoring(
+        activeEmpsList,
+        todayRecs,
+        yestRecs,
+        new Date(),
+      )
+      setCsSummary(monitoringResult.csSummary)
+      setSecuritySummary(monitoringResult.securitySummary)
+      setMonitoringItems(monitoringResult.items)
 
       // 3. Recent attendance activities (latest 8)
       const { data: recentList } = await supabase
@@ -150,6 +211,21 @@ export default function DashboardPage() {
       { name: 'Belum Absen', value: stats.belumAbsen || 0, color: '#e4e4e7' },// neutral-200
     ]
   }, [stats])
+
+  // Filtered monitoring items for operational table
+  const filteredMonitoringItems = useMemo(() => {
+    return monitoringItems.filter(item => {
+      if (monitoringCategory !== 'ALL' && item.category !== monitoringCategory) return false
+      if (monitoringStatus !== 'ALL' && item.operationalStatus !== monitoringStatus) return false
+      if (monitoringSearch.trim()) {
+        const q = monitoringSearch.toLowerCase().trim()
+        const matchName = item.employeeName.toLowerCase().includes(q)
+        const matchCode = item.employeeCode?.toLowerCase().includes(q)
+        if (!matchName && !matchCode) return false
+      }
+      return true
+    })
+  }, [monitoringItems, monitoringCategory, monitoringStatus, monitoringSearch])
 
   const handleQuickExport = async () => {
     setIsExporting(true)
@@ -293,6 +369,436 @@ export default function DashboardPage() {
               {stats.belumAbsen}
             </p>
             <p className="text-[10px] sm:text-[11px] text-neutral-500 mt-1 truncate">Belum melakukan absen</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ───────────────────────────────────────────────────────── */}
+      {/* 1.5 MONITORING STATUS OPERASIONAL (CS & SECURITY) */}
+      {/* ───────────────────────────────────────────────────────── */}
+      <div className="space-y-4">
+        {/* Section Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse ring-2 ring-emerald-300/40" />
+              <h3 className="text-sm font-bold text-neutral-900 tracking-tight">
+                Monitoring Status Operasional Pegawai
+              </h3>
+            </div>
+            <p className="text-xs text-neutral-500 mt-0.5">
+              Pemantauan realtime status penugasan Cleaning Service &amp; Security hari ini
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-900 border border-emerald-200/90 shadow-2xs">
+              <Activity size={13} className="text-emerald-600" />
+              <span>Data Presensi Terverifikasi</span>
+            </span>
+          </div>
+        </div>
+
+        {/* 1. Kartu Ringkasan CS dan Security (Dua Kartu Terpisah) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Kartu Cleaning Service (CS) — Hijau Emerald */}
+          <div className="card p-5 border-emerald-200/90 bg-gradient-to-br from-white via-white to-emerald-50/20 shadow-2xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-emerald-100/80">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 border border-emerald-200 text-emerald-800 flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-2xs">
+                  <Sparkles size={16} className="text-emerald-700" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-emerald-950">Cleaning Service (CS)</h4>
+                  <p className="text-[11px] text-emerald-700 font-medium">Layanan Fasilitas &amp; Kebersihan</p>
+                </div>
+              </div>
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 font-mono">
+                {csSummary.total} Pegawai Aktif
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              {/* Sedang Bertugas */}
+              <div className="bg-white/80 p-3 rounded-xl border border-emerald-100 shadow-2xs space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ring-2 ring-emerald-300/40" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 truncate">
+                    Sedang Bertugas
+                  </span>
+                </div>
+                <p className="text-2xl font-extrabold text-neutral-900 font-mono">
+                  {csSummary.sedangBertugas}
+                </p>
+                <p className="text-[10px] text-neutral-500 truncate">Dinas aktif lapangan</p>
+              </div>
+
+              {/* Belum Check-In */}
+              <div className="bg-white/80 p-3 rounded-xl border border-emerald-100 shadow-2xs space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-amber-400" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 truncate">
+                    Belum Check-In
+                  </span>
+                </div>
+                <p className="text-2xl font-extrabold text-neutral-900 font-mono">
+                  {csSummary.belumCheckIn}
+                </p>
+                <p className="text-[10px] text-neutral-500 truncate">Belum absen masuk</p>
+              </div>
+
+              {/* Tugas Selesai */}
+              <div className="bg-white/80 p-3 rounded-xl border border-emerald-100 shadow-2xs space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-600" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-700 truncate">
+                    Tugas Selesai
+                  </span>
+                </div>
+                <p className="text-2xl font-extrabold text-neutral-900 font-mono">
+                  {csSummary.tugasSelesai}
+                </p>
+                <p className="text-[10px] text-neutral-500 truncate">Presensi lengkap</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Kartu Security — Biru Navy & Teal */}
+          <div className="card p-5 border-sky-200/90 bg-gradient-to-br from-white via-white to-sky-50/20 shadow-2xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-sky-100/80">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-sky-100 border border-sky-200 text-blue-900 flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-2xs">
+                  <Shield size={16} className="text-teal-600" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-blue-950">Security (Keamanan)</h4>
+                  <p className="text-[11px] text-sky-800 font-medium">Dinas Penjagaan &amp; Patroli</p>
+                </div>
+              </div>
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-sky-100 text-blue-950 border border-sky-200 font-mono">
+                {securitySummary.total} Petugas Aktif
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              {/* Sedang Bertugas */}
+              <div className="bg-white/80 p-3 rounded-xl border border-sky-100 shadow-2xs space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse ring-2 ring-teal-300/40" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-teal-900 truncate">
+                    Sedang Bertugas
+                  </span>
+                </div>
+                <p className="text-2xl font-extrabold text-neutral-900 font-mono">
+                  {securitySummary.sedangBertugas}
+                </p>
+                <p className="text-[10px] text-neutral-500 truncate">Dinas pos aktif</p>
+              </div>
+
+              {/* Belum Check-In */}
+              <div className="bg-white/80 p-3 rounded-xl border border-sky-100 shadow-2xs space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-amber-400" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 truncate">
+                    Belum Check-In
+                  </span>
+                </div>
+                <p className="text-2xl font-extrabold text-neutral-900 font-mono">
+                  {securitySummary.belumCheckIn}
+                </p>
+                <p className="text-[10px] text-neutral-500 truncate">Belum mulai shift</p>
+              </div>
+
+              {/* Tugas Selesai */}
+              <div className="bg-white/80 p-3 rounded-xl border border-sky-100 shadow-2xs space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-blue-600" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-700 truncate">
+                    Tugas Selesai
+                  </span>
+                </div>
+                <p className="text-2xl font-extrabold text-neutral-900 font-mono">
+                  {securitySummary.tugasSelesai}
+                </p>
+                <p className="text-[10px] text-neutral-500 truncate">Shift dinas selesai</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 2. Daftar Monitoring Pegawai */}
+        <div className="card overflow-hidden">
+          {/* Toolbar: Division Tabs & Search */}
+          <div className="p-4 border-b border-neutral-100 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-neutral-50/50">
+            {/* Division Filter Tabs */}
+            <div className="flex items-center gap-1.5 bg-neutral-100 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setMonitoringCategory('ALL')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  monitoringCategory === 'ALL'
+                    ? 'bg-white text-neutral-900 shadow-2xs border border-neutral-200/80'
+                    : 'text-neutral-600 hover:text-neutral-900'
+                }`}
+              >
+                Semua Divisi ({monitoringItems.length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMonitoringCategory('CS')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                  monitoringCategory === 'CS'
+                    ? 'bg-white text-emerald-800 shadow-2xs border border-neutral-200/80 font-bold'
+                    : 'text-neutral-600 hover:text-neutral-900'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span>CS ({csSummary.total})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMonitoringCategory('Security')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                  monitoringCategory === 'Security'
+                    ? 'bg-white text-blue-900 shadow-2xs border border-neutral-200/80 font-bold'
+                    : 'text-neutral-600 hover:text-neutral-900'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />
+                <span>Security ({securitySummary.total})</span>
+              </button>
+            </div>
+
+            {/* Search and Status Dropdown */}
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <div className="relative flex-1 sm:w-56">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+                <input
+                  type="text"
+                  value={monitoringSearch}
+                  onChange={e => setMonitoringSearch(e.target.value)}
+                  placeholder="Cari nama pegawai..."
+                  className="form-input pl-9 pr-7 text-xs py-1.5"
+                />
+                {monitoringSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setMonitoringSearch('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+
+              <select
+                value={monitoringStatus}
+                onChange={e => setMonitoringStatus(e.target.value)}
+                className="form-input text-xs py-1.5 w-auto"
+              >
+                <option value="ALL">Semua Status</option>
+                <option value="sedang_bertugas">Sedang Bertugas</option>
+                <option value="belum_bertugas">Belum Bertugas</option>
+                <option value="menunggu_jadwal">Menunggu Jadwal</option>
+                <option value="tugas_selesai">Tugas Selesai</option>
+                <option value="perlu_perhatian">Perlu Perhatian</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead>
+                <tr className="bg-neutral-50 border-b border-neutral-200 text-neutral-500 text-[11px] uppercase tracking-wider font-semibold">
+                  <th className="px-5 py-3 font-semibold">Pegawai</th>
+                  <th className="px-4 py-3 font-semibold">Divisi</th>
+                  <th className="px-4 py-3 font-semibold">Shift</th>
+                  <th className="px-4 py-3 font-semibold">Tanggal Kerja</th>
+                  <th className="px-4 py-3 font-semibold">Waktu Check-In</th>
+                  <th className="px-4 py-3 font-semibold">Waktu Check-Out</th>
+                  <th className="px-5 py-3 font-semibold text-center">Status Operasional</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100 text-neutral-800">
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-12 text-neutral-400">
+                      <div className="w-6 h-6 border-2 border-neutral-900 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                      <span>Memuat status operasional pegawai...</span>
+                    </td>
+                  </tr>
+                ) : filteredMonitoringItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-12 text-neutral-400">
+                      <p className="font-semibold text-neutral-700">Tidak ada pegawai yang sesuai dengan filter.</p>
+                      <p className="text-xs text-neutral-400 mt-0.5">Coba sesuaikan kata kunci pencarian atau divisi.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredMonitoringItems.map(item => (
+                    <tr key={item.employeeId} className="hover:bg-neutral-50/80 transition-colors">
+                      {/* Pegawai */}
+                      <td className="px-5 py-3 font-semibold text-neutral-900">
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-2xs ${
+                              item.category === 'CS'
+                                ? 'bg-emerald-100 border border-emerald-200 text-emerald-800'
+                                : 'bg-sky-50 border border-sky-200 text-blue-950'
+                            }`}
+                          >
+                            {item.employeeName.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <span className="block font-semibold text-neutral-900 leading-snug">
+                              {item.employeeName}
+                            </span>
+                            <span className="block text-[10px] text-neutral-400 font-mono">
+                              {item.employeeCode || `ID: ${item.employeeId.slice(0, 8)}`}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Divisi */}
+                      <td className="px-4 py-3">
+                        <CategoryBadge category={item.category} />
+                      </td>
+
+                      {/* Shift */}
+                      <td className="px-4 py-3">
+                        {item.shift ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-neutral-100 text-neutral-700 border border-neutral-200 text-[11px] font-medium">
+                            <Clock size={11} className="text-neutral-400" />
+                            <span>{item.shift}</span>
+                          </span>
+                        ) : (
+                          <span className="text-neutral-400 font-mono">-</span>
+                        )}
+                      </td>
+
+                      {/* Tanggal Kerja */}
+                      <td className="px-4 py-3 font-medium text-neutral-700">
+                        {formatJakartaDate(item.workDate)}
+                      </td>
+
+                      {/* Waktu Check-In */}
+                      <td className="px-4 py-3">
+                        {item.checkInTime ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono font-bold text-xs text-neutral-900">
+                              {item.checkInTime}
+                            </span>
+                            <span className="text-[10px] text-neutral-400">WIB</span>
+                          </div>
+                        ) : (
+                          <span className="text-neutral-400 font-mono text-xs">-</span>
+                        )}
+                      </td>
+
+                      {/* Waktu Check-Out */}
+                      <td className="px-4 py-3">
+                        {item.checkOutTime ? (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-mono font-bold text-xs text-neutral-900">
+                              {item.checkOutTime}
+                            </span>
+                            <span className="text-[10px] text-neutral-400">WIB</span>
+                            {item.isCheckoutNextDay && (
+                              <span
+                                className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-900 border border-sky-300"
+                                title="Presensi checkout dicatat pada hari berikutnya (H+1)"
+                              >
+                                H+1
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-neutral-400 font-mono text-xs">-</span>
+                        )}
+                      </td>
+
+                      {/* Status Operasional (Badge dengan titik berdenyut perlahan) */}
+                      <td className="px-5 py-3 text-center">
+                        <OperationalStatusBadge
+                          status={item.operationalStatus}
+                          category={item.category}
+                          size="md"
+                        />
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Card View (md:hidden) */}
+          <div className="md:hidden divide-y divide-neutral-100">
+            {isLoading ? (
+              <div className="p-8 text-center text-neutral-400 text-xs">
+                Memuat status operasional pegawai...
+              </div>
+            ) : filteredMonitoringItems.length === 0 ? (
+              <div className="p-8 text-center text-neutral-400 text-xs">
+                Tidak ada pegawai yang sesuai filter.
+              </div>
+            ) : (
+              filteredMonitoringItems.map(item => (
+                <div key={item.employeeId} className="p-4 space-y-2.5 bg-white">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-2xs ${
+                          item.category === 'CS'
+                            ? 'bg-emerald-100 border border-emerald-200 text-emerald-800'
+                            : 'bg-sky-50 border border-sky-200 text-blue-950'
+                        }`}
+                      >
+                        {item.employeeName.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <span className="block font-bold text-xs text-neutral-900 truncate">
+                          {item.employeeName}
+                        </span>
+                        <span className="block text-[10px] text-neutral-400 font-mono">
+                          {item.employeeCode || `ID: ${item.employeeId.slice(0, 8)}`}
+                        </span>
+                      </div>
+                    </div>
+                    <OperationalStatusBadge
+                      status={item.operationalStatus}
+                      category={item.category}
+                      size="sm"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-neutral-100">
+                    <div>
+                      <span className="text-neutral-400 block text-[10px]">Divisi &amp; Shift:</span>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <CategoryBadge category={item.category} />
+                        <span className="truncate text-neutral-700 font-medium">{item.shift || '-'}</span>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-neutral-400 block text-[10px]">Waktu Presensi:</span>
+                      <div className="mt-0.5 text-neutral-800 font-mono">
+                        <span>{item.checkInTime ? `${item.checkInTime}` : '-'}</span>
+                        <span className="text-neutral-400 mx-1">→</span>
+                        <span>{item.checkOutTime ? `${item.checkOutTime}` : '-'}</span>
+                        {item.isCheckoutNextDay && (
+                          <span className="ml-1 text-[9px] font-bold text-sky-800 bg-sky-100 px-1 rounded">H+1</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

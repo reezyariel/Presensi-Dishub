@@ -8,10 +8,16 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Calendar, Check, Clock, ChevronRight, Camera,
-  MapPin, AlertCircle, Sunrise, Sunset,
+  MapPin, AlertCircle, Sunrise, Sunset, Sparkles,
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
+import OperationalStatusBadge from '../common/OperationalStatusBadge'
+import {
+  deriveCSOperationalStatus,
+  deriveSecurityOperationalStatus,
+  type OperationalStatusType,
+} from '../../lib/operationalStatus'
 import {
   formatJakartaDate,
   formatJakartaTime,
@@ -461,12 +467,30 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
   // Clock display
   const timeStr = currentTime.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
 
-  // Status text
-  const attendanceStatus = todayRecords.pulang
-    ? 'Sudah Check-Out'
-    : todayRecords.masuk
-      ? 'Sudah Check-In'
-      : 'Belum Absen'
+  // Status Operasional Pegawai Dinamis (CS & Security)
+  const employeeOperationalStatus: OperationalStatusType = useMemo(() => {
+    if (category === 'CS') {
+      return deriveCSOperationalStatus(
+        todayRecords.masuk,
+        todayRecords.pulang,
+        currentTime,
+        todayRecords.masuk?.review_status || todayRecords.pulang?.review_status,
+      )
+    } else {
+      // Security
+      if (completedOvernightInfo && !todayRecords.masuk) {
+        return 'tugas_selesai'
+      }
+      return deriveSecurityOperationalStatus(
+        todayRecords.masuk,
+        todayRecords.pulang,
+        selectedShift,
+        todayRecords.masuk?.work_date || today,
+        currentTime,
+        todayRecords.masuk?.review_status || todayRecords.pulang?.review_status,
+      )
+    }
+  }, [category, todayRecords, completedOvernightInfo, selectedShift, today, currentTime])
 
   // Is action currently active?
   const isActionActive = buttonState.status === 'can_masuk' || buttonState.status === 'can_istirahat' || buttonState.status === 'can_pulang'
@@ -695,16 +719,15 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
                   {selectedShift ? getSecurityShiftDisplayLabel(selectedShift, todayRecords.masuk?.work_date || today) : 'Pilih Shift'}
                 </span>
               )}
-              <span className={`inline-flex items-center gap-1 text-xs font-semibold rounded-full px-2.5 py-1 ${todayRecords.pulang
-                  ? 'bg-neutral-200 text-neutral-700 border border-neutral-300'
-                  : todayRecords.masuk
-                    ? 'bg-neutral-900 text-white'
-                    : 'bg-white text-neutral-600 border border-neutral-300'
-                }`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${todayRecords.masuk ? 'bg-white' : 'bg-neutral-400'
-                  }`} />
-                {attendanceStatus}
-              </span>
+              {/* Animasi Status Operasional Pegawai (CS: emerald, Security: navy/teal) — Badge Perlu Perhatian dihilangkan pada dashboard pegawai */}
+              {employeeOperationalStatus !== 'perlu_perhatian' && (
+                <OperationalStatusBadge
+                  status={employeeOperationalStatus}
+                  category={category}
+                  size="md"
+                  hideIfPerluPerhatian
+                />
+              )}
             </div>
           </div>
 
@@ -806,9 +829,24 @@ export default function EmployeeHomeView({ category }: EmployeeHomeViewProps) {
           ) : (
             <div id="presensi-hari-ini-card" className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden scroll-mt-20">
               {/* Card header */}
-              <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between">
-                <h3 className="text-sm font-bold text-neutral-900">Presensi Hari Ini</h3>
-                <span className="text-xs text-neutral-400">{formatJakartaDate(currentTime)}</span>
+              <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-emerald-100 border border-emerald-200 text-emerald-800 flex items-center justify-center font-bold text-xs shadow-2xs">
+                    <Sparkles size={13} className="text-emerald-700" />
+                  </div>
+                  <h3 className="text-sm font-bold text-neutral-900">Presensi Hari Ini (CS)</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-neutral-400 font-medium">{formatJakartaDate(currentTime)}</span>
+                  {employeeOperationalStatus !== 'perlu_perhatian' && (
+                    <OperationalStatusBadge
+                      status={employeeOperationalStatus}
+                      category="CS"
+                      size="sm"
+                      hideIfPerluPerhatian
+                    />
+                  )}
+                </div>
               </div>
 
               <div className="p-5">

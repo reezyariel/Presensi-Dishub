@@ -8,8 +8,9 @@ import {
   User,
   Shield,
 } from 'lucide-react'
-import { formatJakartaTime, getSecurityShiftDisplayLabel } from '../../lib/scheduleEngine'
-import { formatSecurityDisplayDate } from '../../lib/securityDateDisplay'
+import { parseISO } from 'date-fns'
+import { formatInTimeZone } from 'date-fns-tz'
+import { formatJakartaTime, formatJakartaDate, getSecurityShiftDisplayLabel, isOvernightSecurityShift } from '../../lib/scheduleEngine'
 import { AttendanceStatusBadge, AttendanceTypeBadge, ReviewStatusBadge } from './StatusBadges'
 import AttendanceSelfieThumbnail from '../common/AttendanceSelfieThumbnail'
 import type { AttendanceRecord } from '../../types/attendance'
@@ -52,8 +53,8 @@ export default function SecurityAttendanceDetailModal({
         <div className="px-6 py-5 border-b border-neutral-100 flex items-start justify-between bg-neutral-50/70">
           <div>
             <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-neutral-900 text-white border border-neutral-800 uppercase flex items-center gap-1">
-                <Shield size={11} />
+              <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-sky-50 text-blue-950 border border-sky-200 uppercase flex items-center gap-1 shadow-2xs">
+                <Shield size={11} className="text-teal-600" />
                 Security
               </span>
               <span className="text-xs text-neutral-400">•</span>
@@ -63,15 +64,15 @@ export default function SecurityAttendanceDetailModal({
               <User size={18} className="text-neutral-700" />
               <span>{record.employee_name}</span>
             </h3>
-            <div className="flex items-center gap-3 text-xs text-neutral-600 mt-1">
-              <span className="flex items-center gap-1.5 font-medium">
+            <div className="flex items-center gap-3 text-xs text-neutral-600 mt-1 flex-wrap">
+              <span className="flex items-center gap-1.5 font-medium text-neutral-800">
                 <Calendar size={13} className="text-neutral-500" />
-                {formatSecurityDisplayDate(record.work_date, record.shift, record.attendance_type, record.category)}
+                <span>Tanggal Kerja: {formatJakartaDate(record.work_date)}</span>
               </span>
               {record.shift && (
                 <>
                   <span>•</span>
-                  <span className="px-2 py-0.5 rounded-md bg-neutral-200 text-neutral-800 font-bold text-[10px]">
+                  <span className="px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-800 font-bold text-[10px]">
                     {getSecurityShiftDisplayLabel(record.shift, record.work_date)}
                   </span>
                 </>
@@ -127,57 +128,75 @@ export default function SecurityAttendanceDetailModal({
           </div>
 
           {/* Time & Shift Details */}
-          <div className="grid grid-cols-2 gap-3 text-xs bg-white p-4 rounded-2xl border border-neutral-200 shadow-2xs">
-            <div>
-              <span className="text-neutral-400 block text-[10px] uppercase font-bold tracking-wider">
-                Waktu Transaksi
-              </span>
-              <span className="font-bold text-neutral-900 font-mono text-base block mt-0.5">
-                {formatJakartaTime(record.recorded_at)}
-              </span>
-              <span className="text-[11px] text-neutral-500">
-                {formatSecurityDisplayDate(record.work_date, record.shift, record.attendance_type, record.category)}
-              </span>
-            </div>
+          {(() => {
+            const isOvernight = record.category === 'Security' && record.attendance_type === 'pulang' && Boolean(record.shift && isOvernightSecurityShift(record.work_date, record.shift))
+            const recordedDateJakarta = record.recorded_at ? formatInTimeZone(parseISO(record.recorded_at), 'Asia/Jakarta', 'yyyy-MM-dd') : null
+            const isNextDayCheckout = isOvernight || (Boolean(recordedDateJakarta && recordedDateJakarta > record.work_date && record.attendance_type === 'pulang'))
 
-            <div>
-              <span className="text-neutral-400 block text-[10px] uppercase font-bold tracking-wider">
-                Shift & Jadwal
-              </span>
-              <span className="font-bold text-neutral-900 block mt-0.5">
-                {record.shift ? getSecurityShiftDisplayLabel(record.shift, record.work_date) : '-'}
-              </span>
-              {record.scheduled_start && (
-                <span className="text-[11px] text-neutral-500">
-                  Jadwal: {record.scheduled_start} {record.scheduled_end ? `- ${record.scheduled_end}` : ''}
-                </span>
-              )}
-            </div>
+            return (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-white p-4 rounded-2xl border border-neutral-200 shadow-2xs">
+                <div>
+                  <span className="text-neutral-400 block text-[10px] uppercase font-bold tracking-wider">
+                    Waktu Transaksi
+                  </span>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="font-bold text-neutral-900 font-mono text-base block">
+                      {formatJakartaTime(record.recorded_at)} WIB
+                    </span>
+                    {isNextDayCheckout && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-900 border border-sky-300">
+                        H+1
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[11px] text-neutral-600 font-medium block">
+                    Tanggal Aktual: {record.recorded_at ? formatInTimeZone(parseISO(record.recorded_at), 'Asia/Jakarta', 'dd MMMM yyyy') : '-'}
+                  </span>
+                  <span className="text-[10px] text-neutral-400 block">
+                    Tanggal Kerja Shift: {formatJakartaDate(record.work_date)}
+                  </span>
+                </div>
 
-            <div>
-              <span className="text-neutral-400 block text-[10px] uppercase font-bold tracking-wider">
-                Status Ketepatan
-              </span>
-              {record.late_minutes > 0 ? (
-                <span className="font-bold text-amber-700 block mt-0.5">
-                  Terlambat (+{record.late_minutes} menit)
-                </span>
-              ) : (
-                <span className="font-bold text-emerald-700 block mt-0.5">
-                  Tepat Waktu
-                </span>
-              )}
-            </div>
+                <div>
+                  <span className="text-neutral-400 block text-[10px] uppercase font-bold tracking-wider">
+                    Shift & Jadwal
+                  </span>
+                  <span className="font-bold text-neutral-900 block mt-0.5">
+                    {record.shift ? getSecurityShiftDisplayLabel(record.shift, record.work_date) : '-'}
+                  </span>
+                  {record.scheduled_start && (
+                    <span className="text-[11px] text-neutral-500">
+                      Jadwal: {record.scheduled_start} {record.scheduled_end ? `- ${record.scheduled_end}` : ''}
+                    </span>
+                  )}
+                </div>
 
-            <div>
-              <span className="text-neutral-400 block text-[10px] uppercase font-bold tracking-wider">
-                ID Transaksi
-              </span>
-              <span className="font-mono text-[11px] text-neutral-600 block mt-0.5 truncate" title={record.id}>
-                {record.id}
-              </span>
-            </div>
-          </div>
+                <div>
+                  <span className="text-neutral-400 block text-[10px] uppercase font-bold tracking-wider">
+                    Status Ketepatan
+                  </span>
+                  {record.late_minutes > 0 ? (
+                    <span className="font-bold text-amber-700 block mt-0.5">
+                      Terlambat (+{record.late_minutes} menit)
+                    </span>
+                  ) : (
+                    <span className="font-bold text-emerald-700 block mt-0.5">
+                      Tepat Waktu
+                    </span>
+                  )}
+                </div>
+
+                <div>
+                  <span className="text-neutral-400 block text-[10px] uppercase font-bold tracking-wider">
+                    ID Transaksi
+                  </span>
+                  <span className="font-mono text-[11px] text-neutral-600 block mt-0.5 truncate" title={record.id}>
+                    {record.id}
+                  </span>
+                </div>
+              </div>
+            )
+          })()}
 
           {/* GPS & Geofence Section */}
           <div className="bg-neutral-50 p-4 rounded-2xl border border-neutral-200 text-xs space-y-1.5">

@@ -168,24 +168,24 @@ export function SecurityShiftStatusCard({
     },
     sedang_bertugas: {
       badge: 'Sedang Bertugas',
-      badgeClass: 'bg-neutral-900 text-white border-neutral-800',
-      dotClass: 'bg-emerald-400 animate-pulse',
+      badgeClass: 'bg-sky-50 text-blue-950 border-sky-200/90 shadow-2xs font-bold',
+      dotClass: 'bg-teal-500 motion-safe:animate-pulse ring-2 ring-teal-300/40',
       headline: 'Dinas Aktif Berlangsung',
       desc: `Presensi masuk tercatat pukul ${masukTime} WIB. Masa dinas penjagaan sedang berjalan.`,
       icon: Shield,
     },
     menunggu_pulang: {
-      badge: 'Menunggu Absen Pulang',
-      badgeClass: 'bg-amber-100 text-amber-900 border-amber-300',
-      dotClass: 'bg-amber-500 animate-pulse',
+      badge: 'Waktunya Check-Out',
+      badgeClass: 'bg-teal-50 text-teal-900 border-teal-200 shadow-2xs font-bold',
+      dotClass: 'bg-teal-500 motion-safe:animate-pulse ring-2 ring-teal-300/40',
       headline: 'Waktunya Absen Pulang',
       desc: 'Jendela presensi pulang sedang dibuka. Silakan lakukan pengambilan foto selfie untuk check-out.',
       icon: Sunset,
     },
     selesai: {
       badge: 'Shift Selesai',
-      badgeClass: 'bg-emerald-100 text-emerald-900 border-emerald-300',
-      dotClass: 'bg-emerald-600',
+      badgeClass: 'bg-blue-50/80 text-blue-900 border-blue-200 font-semibold',
+      dotClass: 'bg-blue-600',
       headline: 'Tugas Shift Selesai',
       desc: 'Presensi masuk dan pulang telah lengkap tercatat. Terima kasih atas dedikasi dan pengabdian Anda.',
       icon: CheckCircle2,
@@ -199,7 +199,7 @@ export function SecurityShiftStatusCard({
       {/* Header */}
       <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          <Shield size={16} className="text-neutral-700" />
+          <Shield size={16} className="text-teal-600" />
           <h3 className="text-sm font-bold text-neutral-900">Status Operasional Shift</h3>
         </div>
         <div className="flex items-center gap-2">

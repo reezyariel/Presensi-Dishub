@@ -9,8 +9,10 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
   Search, Filter, Eye, X, ChevronLeft, ChevronRight,
   AlertCircle, RefreshCw, Calendar, Download, ChevronDown,
-  FileText, Shield, Sparkles
+  FileText, Shield, Sparkles, Clock
 } from 'lucide-react'
+import { parseISO } from 'date-fns'
+import { formatInTimeZone } from 'date-fns-tz'
 import { supabase } from '../../lib/supabase'
 import {
   AttendanceStatusBadge,
@@ -18,9 +20,14 @@ import {
   AttendanceTypeBadge,
   ReviewStatusBadge,
 } from '../../components/admin/StatusBadges'
-import { formatJakartaTime, todayJakarta, formatJakartaDate, getSecurityShiftDisplayLabel } from '../../lib/scheduleEngine'
 import {
-  formatSecurityDisplayDate,
+  formatJakartaTime,
+  todayJakarta,
+  formatJakartaDate,
+  getSecurityShiftDisplayLabel,
+  isOvernightSecurityShift,
+} from '../../lib/scheduleEngine'
+import {
   getPreviousCalendarDate,
   subtractCalendarDays,
   isSecurityOvernightCheckoutInRange,
@@ -355,12 +362,12 @@ export default function AttendanceListPage() {
               onClick={() => { setFilters(f => ({ ...f, category: 'Security' })); setPage(0) }}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                 filters.category === 'Security'
-                  ? 'bg-white text-neutral-900 shadow-2xs border border-neutral-200/80'
+                  ? 'bg-white text-blue-950 shadow-2xs border border-sky-300'
                   : 'text-neutral-600 hover:text-neutral-900'
               }`}
             >
-              <Shield size={14} className={filters.category === 'Security' ? 'text-neutral-900' : 'text-neutral-400'} />
-              <span>Security (Format Asli)</span>
+              <Shield size={14} className={filters.category === 'Security' ? 'text-teal-600' : 'text-neutral-400'} />
+              <span>Security</span>
             </button>
 
             <button
@@ -383,8 +390,9 @@ export default function AttendanceListPage() {
               </span>
             )}
             {filters.category === 'Security' && (
-              <span className="text-neutral-700 bg-neutral-100 border border-neutral-200 px-2.5 py-1 rounded-lg">
-                Mode Transaksi Shift Individual Aktif
+              <span className="text-slate-800 bg-sky-50 border border-sky-200/80 px-2.5 py-1 rounded-lg font-medium flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />
+                <span>Mode Transaksi Shift Individual Aktif</span>
               </span>
             )}
           </div>
@@ -838,96 +846,131 @@ export default function AttendanceListPage() {
                     </td>
                   </tr>
                 ) : (
-                  paginatedSecurityRecords.map(rec => (
-                    <tr key={rec.id} className="hover:bg-neutral-50/80 transition-colors">
-                      {/* Foto Selfie Asli */}
-                      <td className="px-4 py-3.5 text-center">
-                        <div className="flex justify-center">
-                          <AttendanceSelfieThumbnail
-                            storagePath={rec.selfie_storage_path}
-                            alt={`Selfie ${rec.employee_name}`}
-                            size="md"
-                            onClick={() => setActivePhotoRecord(rec)}
-                          />
-                        </div>
-                      </td>
+                  paginatedSecurityRecords.map(rec => {
+                    const isOvernight = rec.category === 'Security' && rec.attendance_type === 'pulang' && Boolean(rec.shift && isOvernightSecurityShift(rec.work_date, rec.shift))
+                    const recordedDateJakarta = rec.recorded_at ? formatInTimeZone(parseISO(rec.recorded_at), 'Asia/Jakarta', 'yyyy-MM-dd') : null
+                    const isNextDayCheckout = isOvernight || (Boolean(recordedDateJakarta && recordedDateJakarta > rec.work_date && rec.attendance_type === 'pulang'))
 
-                      {/* Pegawai */}
-                      <td className="px-5 py-3.5 font-semibold text-neutral-900">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-neutral-900 text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
-                            {rec.employee_name.charAt(0).toUpperCase()}
+                    return (
+                      <tr key={rec.id} className="hover:bg-neutral-50/80 transition-colors">
+                        {/* Foto Selfie Asli */}
+                        <td className="px-4 py-3.5 text-center">
+                          <div className="flex justify-center">
+                            <AttendanceSelfieThumbnail
+                              storagePath={rec.selfie_storage_path}
+                              alt={`Selfie ${rec.employee_name}`}
+                              size="md"
+                              onClick={() => setActivePhotoRecord(rec)}
+                            />
                           </div>
-                          <div>
-                            <span className="block font-semibold text-neutral-900 leading-snug">
-                              {rec.employee_name}
-                            </span>
-                            <span className="block text-[10px] text-neutral-400 font-mono">
-                              ID: {rec.id.slice(0, 8)}
-                            </span>
+                        </td>
+
+                        {/* Pegawai */}
+                        <td className="px-5 py-3.5 font-semibold text-neutral-900">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-sky-50 border border-sky-200 text-blue-950 flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-2xs">
+                              {rec.employee_name.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <span className="block font-semibold text-neutral-900 leading-snug">
+                                {rec.employee_name}
+                              </span>
+                              <span className="block text-[10px] text-slate-500 font-mono">
+                                Security • ID: {rec.id.slice(0, 8)}
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* Divisi */}
-                      <td className="px-4 py-3.5">
-                        <CategoryBadge category={rec.category} />
-                      </td>
+                        {/* Divisi */}
+                        <td className="px-4 py-3.5">
+                          <CategoryBadge category={rec.category} />
+                        </td>
 
-                      {/* Tipe Absen */}
-                      <td className="px-4 py-3.5">
-                        <AttendanceTypeBadge type={rec.attendance_type} />
-                      </td>
+                        {/* Tipe Absen */}
+                        <td className="px-4 py-3.5">
+                          <AttendanceTypeBadge type={rec.attendance_type} />
+                        </td>
 
-                      {/* Shift */}
-                      <td className="px-4 py-3.5">
-                        {rec.shift ? (
-                          <span className="px-2 py-0.5 rounded-md bg-neutral-100 border border-neutral-200 text-neutral-800 text-[11px] font-bold">
-                            {getSecurityShiftDisplayLabel(rec.shift, rec.work_date)}
-                          </span>
-                        ) : (
-                          <span className="text-neutral-400 font-mono">-</span>
-                        )}
-                      </td>
+                        {/* Shift */}
+                        <td className="px-4 py-3.5">
+                          {rec.shift ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-slate-800 text-[11px] font-semibold">
+                              <Clock size={12} className="text-slate-500" />
+                              <span>{getSecurityShiftDisplayLabel(rec.shift, rec.work_date)}</span>
+                            </span>
+                          ) : (
+                            <span className="text-neutral-400 font-mono">-</span>
+                          )}
+                        </td>
 
-                      {/* Tanggal Kerja */}
-                      <td className="px-4 py-3.5 text-neutral-700 font-medium">
-                        {formatSecurityDisplayDate(rec.work_date, rec.shift, rec.attendance_type, rec.category)}
-                      </td>
+                        {/* Tanggal Kerja (Konsisten & Tidak Berubah) */}
+                        <td className="px-4 py-3.5 text-neutral-800 font-medium font-sans">
+                          {formatJakartaDate(rec.work_date)}
+                        </td>
 
-                      {/* Waktu Tercatat */}
-                      <td className="px-4 py-3.5 font-mono text-neutral-700">
-                        {rec.recorded_at ? formatJakartaTime(rec.recorded_at) : '--:--'}
-                        {rec.late_minutes > 0 && (
-                          <span className="block text-[10px] text-amber-600 font-sans font-semibold">
-                            +{rec.late_minutes} mnt
-                          </span>
-                        )}
-                      </td>
+                        {/* Waktu Tercatat (Menampilkan jam aktual, tanggal aktual H+1, dan penanda H+1 jika lintas hari) */}
+                        <td className="px-4 py-3.5">
+                          {rec.recorded_at ? (
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-mono font-bold text-xs text-neutral-900">
+                                  {formatJakartaTime(rec.recorded_at)}
+                                </span>
+                                {isNextDayCheckout && (
+                                  <span
+                                    className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-900 border border-sky-300"
+                                    title="Presensi pulang tercatat pada hari berikutnya (H+1)"
+                                  >
+                                    H+1
+                                  </span>
+                                )}
+                              </div>
+                              {isNextDayCheckout ? (
+                                <span className="block text-[11px] text-neutral-500 font-medium font-sans">
+                                  {formatInTimeZone(parseISO(rec.recorded_at), 'Asia/Jakarta', 'dd MMM yyyy')}
+                                </span>
+                              ) : (
+                                <span className="block text-[10px] text-neutral-400 font-sans">
+                                  WIB
+                                </span>
+                              )}
+                              {rec.late_minutes > 0 && (
+                                <span className="block text-[10px] text-amber-700 font-sans font-semibold">
+                                  +{rec.late_minutes} mnt
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-neutral-400 font-mono">--:--</span>
+                          )}
+                        </td>
 
-                      {/* Ketepatan Waktu */}
-                      <td className="px-4 py-3.5 text-center">
-                        <AttendanceStatusBadge status={rec.attendance_status} />
-                      </td>
+                        {/* Ketepatan Waktu */}
+                        <td className="px-4 py-3.5 text-center">
+                          <AttendanceStatusBadge status={rec.attendance_status} />
+                        </td>
 
-                      {/* Status Review */}
-                      <td className="px-4 py-3.5 text-center">
-                        <ReviewStatusBadge status={rec.review_status} />
-                      </td>
+                        {/* Status Review */}
+                        <td className="px-4 py-3.5 text-center">
+                          <ReviewStatusBadge status={rec.review_status} />
+                        </td>
 
-                      {/* Aksi Detail */}
-                      <td className="px-5 py-3.5 text-right">
-                        <button
-                          type="button"
-                          onClick={() => setActiveSecurityModalRecord(rec)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-neutral-200 text-neutral-700 hover:text-black hover:border-neutral-900 hover:bg-neutral-50 transition-all font-semibold text-[11px]"
-                        >
-                          <Eye size={12} />
-                          <span>Detail</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                        {/* Aksi Detail */}
+                        <td className="px-5 py-3.5 text-right">
+                          <button
+                            type="button"
+                            onClick={() => setActiveSecurityModalRecord(rec)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-neutral-200 text-neutral-700 hover:text-blue-900 hover:border-sky-400 hover:bg-sky-50/60 transition-all font-semibold text-[11px] shadow-2xs"
+                            title="Lihat rincian lengkap transaksi absensi Security"
+                          >
+                            <Eye size={12} />
+                            <span>Detail</span>
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })
                 )}
               </tbody>
             </table>
@@ -1001,38 +1044,50 @@ export default function AttendanceListPage() {
                       </tr>
                     ))}
                     {/* Render Security Transactions */}
-                    {securityRecords.slice(0, 15).map(r => (
-                      <tr key={r.id} className="hover:bg-neutral-50/80 transition-colors">
-                        <td className="px-4 py-3 text-center">
-                          <AttendanceSelfieThumbnail
-                            storagePath={r.selfie_storage_path}
-                            alt={r.employee_name}
-                            size="md"
-                            onClick={() => setActivePhotoRecord(r)}
-                          />
-                        </td>
-                        <td className="px-5 py-3 font-semibold text-neutral-900">{r.employee_name}</td>
-                        <td className="px-4 py-3"><CategoryBadge category="Security" /></td>
-                        <td className="px-4 py-3 text-neutral-600">
-                          <span className="font-medium text-[11px] uppercase">{r.attendance_type}</span>
-                          {r.shift && <span className="ml-1 text-neutral-400">({getSecurityShiftDisplayLabel(r.shift, r.work_date)})</span>}
-                        </td>
-                        <td className="px-4 py-3 text-neutral-700 font-medium">
-                          {formatSecurityDisplayDate(r.work_date, r.shift, r.attendance_type, r.category)}
-                        </td>
-                        <td className="px-4 py-3 text-center"><AttendanceStatusBadge status={r.attendance_status} /></td>
-                        <td className="px-4 py-3 text-center"><ReviewStatusBadge status={r.review_status} /></td>
-                        <td className="px-5 py-3 text-right">
-                          <button
-                            type="button"
-                            onClick={() => setActiveSecurityModalRecord(r)}
-                            className="btn-secondary text-xs py-1 px-3"
-                          >
-                            Detail
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {securityRecords.slice(0, 15).map(r => {
+                      const isOvernight = r.category === 'Security' && r.attendance_type === 'pulang' && Boolean(r.shift && isOvernightSecurityShift(r.work_date, r.shift))
+                      const recordedDateJakarta = r.recorded_at ? formatInTimeZone(parseISO(r.recorded_at), 'Asia/Jakarta', 'yyyy-MM-dd') : null
+                      const isNextDay = isOvernight || (Boolean(recordedDateJakarta && recordedDateJakarta > r.work_date && r.attendance_type === 'pulang'))
+
+                      return (
+                        <tr key={r.id} className="hover:bg-neutral-50/80 transition-colors">
+                          <td className="px-4 py-3 text-center">
+                            <AttendanceSelfieThumbnail
+                              storagePath={r.selfie_storage_path}
+                              alt={r.employee_name}
+                              size="md"
+                              onClick={() => setActivePhotoRecord(r)}
+                            />
+                          </td>
+                          <td className="px-5 py-3 font-semibold text-neutral-900">{r.employee_name}</td>
+                          <td className="px-4 py-3"><CategoryBadge category="Security" /></td>
+                          <td className="px-4 py-3 text-neutral-600">
+                            <span className="font-medium text-[11px] uppercase">{r.attendance_type}</span>
+                            {r.shift && <span className="ml-1 text-neutral-500">({getSecurityShiftDisplayLabel(r.shift, r.work_date)})</span>}
+                            <span className="ml-1.5 font-mono font-bold text-neutral-900">
+                              {r.recorded_at ? formatJakartaTime(r.recorded_at) : '-'}
+                            </span>
+                            {isNextDay && (
+                              <span className="ml-1.5 px-1 py-0.2 rounded text-[9px] font-bold bg-sky-100 text-sky-900 border border-sky-300">
+                                H+1
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-neutral-800 font-medium">{formatJakartaDate(r.work_date)}</td>
+                          <td className="px-4 py-3 text-center"><AttendanceStatusBadge status={r.attendance_status} /></td>
+                          <td className="px-4 py-3 text-center"><ReviewStatusBadge status={r.review_status} /></td>
+                          <td className="px-5 py-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => setActiveSecurityModalRecord(r)}
+                              className="btn-secondary text-xs py-1 px-3"
+                            >
+                              Detail
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </>
                 )}
               </tbody>
