@@ -29,9 +29,26 @@ function jakartaDayOfWeek(workDateStr: string): number {
 function canonicalShift(shift: string | null | undefined): string {
   if (!shift) return ''
   const s = shift.trim()
-  if (s === 'Shift 1' || s === 'Shift I' || s === 'Sesi Pagi') return 'Shift I'
-  if (s === 'Shift 2' || s === 'Shift II' || s === 'Sesi Malam') return 'Shift II'
-  if (s === 'Shift 3' || s === 'Shift III') return 'Shift III'
+  if (
+    s === 'Shift 1' ||
+    s === 'Shift I' ||
+    s === 'Sesi Pagi' ||
+    s === 'shift_1' ||
+    s === 'shift_1_reguler' ||
+    s === 'shift_1_panjang'
+  ) return 'Shift I'
+  if (
+    s === 'Shift 2' ||
+    s === 'Shift II' ||
+    s === 'Sesi Malam' ||
+    s === 'shift_2' ||
+    s === 'shift_2_malam'
+  ) return 'Shift II'
+  if (
+    s === 'Shift 3' ||
+    s === 'Shift III' ||
+    s === 'shift_3'
+  ) return 'Shift III'
   return s
 }
 
@@ -52,13 +69,13 @@ export function isOvernightSecurityShift(
   const canon = canonicalShift(shift)
 
   // Mon–Thu (1–4): Shift III is overnight
-  if (day >= 1 && day <= 4) return canon === 'Shift III'
+  if (day >= 1 && day <= 4) return canon === 'Shift III' || shift === 'shift_3'
 
   // Fri (5): shift_2_malam is overnight; Shift II for backward compat
   if (day === 5) return shift === 'shift_2_malam' || canon === 'Shift II'
 
   // Sat (6) or Sun (0): Shift II or Sesi Malam is overnight
-  if (day === 0 || day === 6) return canon === 'Shift II' || shift === 'Sesi Malam'
+  if (day === 0 || day === 6) return canon === 'Shift II' || shift === 'Sesi Malam' || shift === 'shift_2'
 
   return false
 }
@@ -216,12 +233,29 @@ export function isSecurityOvernightCheckoutInRange(
   // 2. Must be 'pulang' attendance type
   if (record.attendance_type !== 'pulang') return false
 
-  // 3. Must have a shift and be recognized as overnight shift on its work_date
+  // 3. Priority check: Actual recorded_at timestamp in Asia/Jakarta timezone
+  if (record.recorded_at) {
+    try {
+      const recordedDate = formatInTimeZone(parseISO(record.recorded_at), TIMEZONE, 'yyyy-MM-dd')
+      const inRange = (!dateFrom || recordedDate >= dateFrom) && (!dateTo || recordedDate <= dateTo)
+      if (inRange) {
+        // Must be cross-day (recordedDate > work_date) OR an overnight shift
+        const isOvernight = Boolean(record.shift && isOvernightSecurityShift(record.work_date, record.shift))
+        if (recordedDate > record.work_date || isOvernight) {
+          return true
+        }
+      }
+    } catch {
+      // fallback to work_date arithmetic below
+    }
+  }
+
+  // 4. Fallback check: work_date arithmetic via isOvernightSecurityShift
   if (!record.shift || !isOvernightSecurityShift(record.work_date, record.shift)) {
     return false
   }
 
-  // 4. Actual checkout calendar date (work_date + 1 day)
+  // 5. Actual checkout calendar date (work_date + 1 day)
   const { displayDate, isNextDay } = getSecurityDisplayDate(
     record.work_date,
     record.shift,
@@ -235,6 +269,72 @@ export function isSecurityOvernightCheckoutInRange(
   if (dateTo && displayDate > dateTo) return false
 
   return true
+}
+
+/**
+ * Resolves Security records from the previous date (work_date = prevDate)
+ * that qualify to appear in the filter range [dateFrom, dateTo].
+ *
+ * Implements:
+ * 1. Check-out ('pulang') records from prevDate that occurred in [dateFrom, dateTo] (or H+1 display date).
+ * 2. Paired check-in ('masuk') records from prevDate whose check-out occurred in [dateFrom, dateTo].
+ * 3. Unclosed overnight check-in ('masuk') records from prevDate that are still active on dateFrom.
+ */
+export function getQualifyingSecurityOvernightRecords(
+  prevDayRecords: AttendanceRecord[],
+  dateFrom: string,
+  dateTo: string,
+  attendanceTypeFilter?: string,
+): AttendanceRecord[] {
+  if (!dateFrom) return []
+
+  const secRecords = prevDayRecords.filter(r => r.category === 'Security')
+  const pulangCandidates = secRecords.filter(r => r.attendance_type === 'pulang')
+  const masukCandidates = secRecords.filter(r => r.attendance_type === 'masuk')
+
+  // 1. Qualifying pulang records (checkout happened on or crosses into [dateFrom, dateTo])
+  const qualifyingPulang = pulangCandidates.filter(p =>
+    isSecurityOvernightCheckoutInRange(p, dateFrom, dateTo)
+  )
+
+  // 2. Qualifying masuk records:
+  // - Belong to a completed overnight shift whose checkout is in qualifyingPulang
+  // - OR is an unclosed overnight shift running into dateFrom
+  const qualifyingMasuk: AttendanceRecord[] = []
+
+  for (const m of masukCandidates) {
+    const isOvernight = Boolean(m.shift && isOvernightSecurityShift(m.work_date, m.shift))
+
+    // Check if paired with any qualifying pulang record
+    const hasQualifyingPulang = qualifyingPulang.some(p =>
+      (p.check_in_record_id && p.check_in_record_id === m.id) ||
+      (!p.check_in_record_id && p.work_date === m.work_date && (p.shift === m.shift || !p.shift))
+    )
+
+    if (hasQualifyingPulang) {
+      qualifyingMasuk.push(m)
+      continue
+    }
+
+    // Check if unclosed overnight shift: guard checked in on overnight shift yesterday and hasn't checked out yet
+    const hasAnyPulang = pulangCandidates.some(p =>
+      (p.check_in_record_id && p.check_in_record_id === m.id) ||
+      (!p.check_in_record_id && p.work_date === m.work_date)
+    )
+
+    if (isOvernight && !hasAnyPulang) {
+      qualifyingMasuk.push(m)
+    }
+  }
+
+  // Filter by attendanceType if requested by user filter
+  if (attendanceTypeFilter === 'pulang') {
+    return qualifyingPulang
+  }
+  if (attendanceTypeFilter === 'masuk') {
+    return qualifyingMasuk
+  }
+  return [...qualifyingPulang, ...qualifyingMasuk]
 }
 
 /**

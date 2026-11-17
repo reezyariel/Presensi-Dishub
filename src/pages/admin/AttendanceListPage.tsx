@@ -30,7 +30,7 @@ import {
 import {
   getPreviousCalendarDate,
   subtractCalendarDays,
-  isSecurityOvernightCheckoutInRange,
+  getQualifyingSecurityOvernightRecords,
   mergeAndDeduplicateAttendance,
 } from '../../lib/securityDateDisplay'
 import { exportAttendanceListExcel } from '../../lib/exportExcel'
@@ -123,18 +123,17 @@ export default function AttendanceListPage() {
       const regularRecords = (regularData ?? []) as AttendanceRecord[]
 
       // ─────────────────────────────────────────────────────────
-      // QUERY B: Additional Security H+1 Pulang transactions from prev day
+      // QUERY B: Additional Security H+1 records from prev day
       // ─────────────────────────────────────────────────────────
       let qualifyingH1Records: AttendanceRecord[] = []
 
-      // Only query H+1 if:
+      // Query prev day records if:
       // 1. Not filtering exclusively for CS
       // 2. An effective start date exists (so there is a preceding day to check)
-      // 3. User didn't filter exclusively for 'masuk' or 'istirahat' (since H+1 is always 'pulang')
+      // 3. User didn't filter exclusively for 'istirahat' (since Security has no istirahat)
       const canHaveH1 =
         filters.category !== 'CS' &&
         Boolean(effectiveDateFrom) &&
-        filters.attendance_type !== 'masuk' &&
         filters.attendance_type !== 'istirahat'
 
       if (canHaveH1 && effectiveDateFrom) {
@@ -144,7 +143,6 @@ export default function AttendanceListPage() {
           .from('attendance_records')
           .select('*')
           .eq('category', 'Security')
-          .eq('attendance_type', 'pulang')
           .eq('work_date', prevDate)
 
         if (filters.name) qH1 = qH1.ilike('employee_name', `%${filters.name}%`)
@@ -154,12 +152,18 @@ export default function AttendanceListPage() {
 
         const { data: h1Data, error: h1Error } = await qH1
         if (h1Error) {
-          throw new Error(`Gagal memuat transaksi Pulang Security (H+1): ${h1Error.message}`)
+          throw new Error(`Gagal memuat transaksi Security (H+1): ${h1Error.message}`)
         }
         const candidates = (h1Data ?? []) as AttendanceRecord[]
-        // Strictly filter only qualifying overnight checkouts whose display date is in range
-        qualifyingH1Records = candidates.filter(r =>
-          isSecurityOvernightCheckoutInRange(r, effectiveDateFrom, effectiveDateTo)
+        // Resolves:
+        // 1. Check-outs on prevDate whose actual transaction date is today (or display date in range)
+        // 2. Paired check-ins on prevDate for overnight shifts completed today
+        // 3. Unclosed overnight check-ins on prevDate still active today
+        qualifyingH1Records = getQualifyingSecurityOvernightRecords(
+          candidates,
+          effectiveDateFrom,
+          effectiveDateTo,
+          filters.attendance_type
         )
       }
 
